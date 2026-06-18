@@ -1,0 +1,264 @@
+name: App Deploy To VPS
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref to deploy
+        required: false
+        default: main
+      deploy_scope:
+        description: "Deployment scope: app, full, rustfs, or status"
+        required: false
+        default: app
+  workflow_run:
+    workflows:
+      - Build and Push Website
+    types:
+      - completed
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: app-deploy-vps
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ${{ fromJSON(vars.DEPLOY_RUNNER_LABELS || '["self-hosted","linux","website-deploy","private-network"]') }}
+    env:
+      DEPLOY_PATH: /srv/website/app
+      PROJECT_NAME: website
+      DEPLOY_MODE: ${{ vars.DEPLOY_MODE || 'local' }}
+      DEPLOY_PORT: ${{ vars.DEPLOY_PORT || '22' }}
+      SSH_OPTS: -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=2
+      BOOTSTRAP_ON_FAILURE: exit
+      USE_LOCAL_RUSTFS_NETWORK: ${{ vars.USE_LOCAL_RUSTFS_NETWORK || 'true' }}
+      APP_EXTRA_COMPOSE_FILES: ${{ vars.APP_EXTRA_COMPOSE_FILES || '' }}
+      RUSTFS_EXTRA_COMPOSE_FILES: ${{ vars.RUSTFS_EXTRA_COMPOSE_FILES || '' }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Validate deployment secrets
+        if: env.DEPLOY_MODE == 'ssh'
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+          DEPLOY_SSH_PRIVATE_KEY_B64: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY_B64 }}
+          DEPLOY_SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_SSH_KNOWN_HOSTS }}
+          DEPLOY_SSH_KNOWN_HOSTS_B64: ${{ secrets.DEPLOY_SSH_KNOWN_HOSTS_B64 }}
+        run: |
+          test -n "$DEPLOY_HOST" || { echo "Missing secret DEPLOY_HOST"; exit 1; }
+          test -n "$DEPLOY_USER" || { echo "Missing secret DEPLOY_USER"; exit 1; }
+          test -n "$DEPLOY_SSH_PRIVATE_KEY" || test -n "$DEPLOY_SSH_PRIVATE_KEY_B64" || { echo "Missing secret DEPLOY_SSH_PRIVATE_KEY or DEPLOY_SSH_PRIVATE_KEY_B64"; exit 1; }
+          test -n "$DEPLOY_SSH_KNOWN_HOSTS" || test -n "$DEPLOY_SSH_KNOWN_HOSTS_B64" || { echo "Missing secret DEPLOY_SSH_KNOWN_HOSTS or DEPLOY_SSH_KNOWN_HOSTS_B64"; exit 1; }
+
+      - name: Configure SSH key
+        if: env.DEPLOY_MODE == 'ssh'
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+          SSH_PRIVATE_KEY_B64: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY_B64 }}
+          SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_SSH_KNOWN_HOSTS }}
+          SSH_KNOWN_HOSTS_B64: ${{ secrets.DEPLOY_SSH_KNOWN_HOSTS_B64 }}
+        run: |
+          install -m 700 -d ~/.ssh
+          if test -n "$SSH_PRIVATE_KEY_B64"; then
+            printf '%s' "$SSH_PRIVATE_KEY_B64" | base64 -d > ~/.ssh/id_ed25519
+          else
+            printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          fi
+          chmod 600 ~/.ssh/id_ed25519
+          if test -n "$SSH_KNOWN_HOSTS_B64"; then
+            printf '%s' "$SSH_KNOWN_HOSTS_B64" | base64 -d > ~/.ssh/known_hosts
+          else
+            printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          fi
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Resolve deployment ref
+        id: ref
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+            echo "ref=${{ github.event.workflow_run.head_branch }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=${{ github.event.inputs.ref || 'main' }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Resolve deployment scope
+        id: scope
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+            echo "scope=app" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          scope="${{ github.event.inputs.deploy_scope || 'app' }}"
+          case "$scope" in
+            app|full|rustfs|status)
+              echo "scope=$scope" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "Invalid deploy_scope: $scope" >&2
+              exit 1
+              ;;
+          esac
+
+      - name: Provision VPS if needed
+        if: env.DEPLOY_MODE == 'ssh'
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          REPO_URL: https://github.com/${{ github.repository }}.git
+          REPO_REF: ${{ steps.ref.outputs.ref }}
+        run: |
+          # shellcheck disable=SC2086
+          if ! ssh ${SSH_OPTS} -p "${DEPLOY_PORT}" ${DEPLOY_USER}@${DEPLOY_HOST} "test -x /usr/bin/docker && test -d /srv/website/app/.git"; then
+            # shellcheck disable=SC2086
+            ssh ${SSH_OPTS} -p "${DEPLOY_PORT}" ${DEPLOY_USER}@${DEPLOY_HOST} "sudo REPO_URL='${REPO_URL}' REPO_REF='${REPO_REF}' DEPLOY_USER='${DEPLOY_USER}' bash -s" < scripts/provision-app-vps.sh
+          fi
+
+      - name: Update app repo on VPS
+        if: env.DEPLOY_MODE == 'ssh'
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          REPO_REF: ${{ steps.ref.outputs.ref }}
+        run: |
+          # shellcheck disable=SC2086
+          ssh ${SSH_OPTS} -p "${DEPLOY_PORT}" ${DEPLOY_USER}@${DEPLOY_HOST} "cd '${DEPLOY_PATH}' && sudo git config --global --add safe.directory '${DEPLOY_PATH}' && sudo git fetch --all --tags --prune && sudo git checkout '${REPO_REF}' && if sudo git show-ref --verify --quiet 'refs/remotes/origin/${REPO_REF}'; then sudo git reset --hard 'origin/${REPO_REF}'; else sudo git reset --hard '${REPO_REF}'; fi"
+
+      - name: Update app repo locally
+        if: env.DEPLOY_MODE == 'local'
+        env:
+          REPO_REF: ${{ steps.ref.outputs.ref }}
+        run: |
+          cd "${DEPLOY_PATH}"
+          sudo git config --global --add safe.directory "${DEPLOY_PATH}"
+          sudo git fetch --all --tags --prune
+          sudo git checkout "${REPO_REF}"
+          if sudo git show-ref --verify --quiet "refs/remotes/origin/${REPO_REF}"; then
+            sudo git reset --hard "origin/${REPO_REF}"
+          else
+            sudo git reset --hard "${REPO_REF}"
+          fi
+
+      - name: Bootstrap secrets on VPS
+        if: env.DEPLOY_MODE == 'ssh'
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          # shellcheck disable=SC2086
+          ssh ${SSH_OPTS} -p "${DEPLOY_PORT}" ${DEPLOY_USER}@${DEPLOY_HOST} "cd '${DEPLOY_PATH}' && sudo BOOTSTRAP_ON_FAILURE='${BOOTSTRAP_ON_FAILURE}' PROJECT_ROOT='${DEPLOY_PATH}' PROJECT_NAME='${PROJECT_NAME}' bash scripts/website-stack-vps.sh bootstrap" || {
+            echo 'VPS bootstrap requires valid AppRole credentials. SSH to the VPS over your admin path and run:'
+            echo '  cd /srv/website/app && sudo PROJECT_ROOT=/srv/website/app PROJECT_NAME=website bash scripts/website-stack-vps.sh bootstrap'
+            exit 1
+          }
+
+      - name: Bootstrap secrets locally
+        if: env.DEPLOY_MODE == 'local'
+        run: |
+          cd "${DEPLOY_PATH}"
+          sudo BOOTSTRAP_ON_FAILURE="${BOOTSTRAP_ON_FAILURE}" PROJECT_ROOT="${DEPLOY_PATH}" PROJECT_NAME="${PROJECT_NAME}" bash scripts/website-stack-vps.sh bootstrap
+
+      - name: Converge CAId locally when present
+        if: env.DEPLOY_MODE == 'local'
+        run: |
+          if test ! -d /srv/caid/.git; then
+            echo "CAId repo is not present on this runner; skipping CAId converge."
+            exit 0
+          fi
+
+          cd /srv/caid
+          sudo git config --global --add safe.directory /srv/caid
+          sudo git fetch --all --tags --prune
+          sudo git checkout main
+          sudo git reset --hard origin/main
+          set +e
+          sudo bash scripts/caid-converge.sh --mode noninteractive
+          status="$?"
+          set -e
+          if test "$status" = "20"; then
+            echo "CAId converge published pending human config requests."
+            exit 0
+          fi
+          exit "$status"
+
+      - name: Deploy requested stack on VPS
+        if: env.DEPLOY_MODE == 'ssh'
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SCOPE: ${{ steps.scope.outputs.scope }}
+        run: |
+          case "$DEPLOY_SCOPE" in
+            app)
+              remote_command="app"
+              ;;
+            full)
+              remote_command="deploy"
+              ;;
+            rustfs)
+              remote_command="rustfs"
+              ;;
+            status)
+              remote_command="status"
+              ;;
+            *)
+              echo "Invalid deploy scope: $DEPLOY_SCOPE" >&2
+              exit 1
+              ;;
+          esac
+
+          # shellcheck disable=SC2086
+          ssh ${SSH_OPTS} -p "${DEPLOY_PORT}" ${DEPLOY_USER}@${DEPLOY_HOST} "cd '${DEPLOY_PATH}' && sudo PROJECT_ROOT='${DEPLOY_PATH}' PROJECT_NAME='${PROJECT_NAME}' USE_LOCAL_RUSTFS_NETWORK='${USE_LOCAL_RUSTFS_NETWORK}' APP_EXTRA_COMPOSE_FILES='${APP_EXTRA_COMPOSE_FILES}' RUSTFS_EXTRA_COMPOSE_FILES='${RUSTFS_EXTRA_COMPOSE_FILES}' bash scripts/website-stack-vps.sh '${remote_command}'"
+
+      - name: Deploy requested stack locally
+        if: env.DEPLOY_MODE == 'local'
+        env:
+          DEPLOY_SCOPE: ${{ steps.scope.outputs.scope }}
+        run: |
+          case "$DEPLOY_SCOPE" in
+            app)
+              remote_command="app"
+              ;;
+            full)
+              remote_command="deploy"
+              ;;
+            rustfs)
+              remote_command="rustfs"
+              ;;
+            status)
+              remote_command="status"
+              ;;
+            *)
+              echo "Invalid deploy scope: $DEPLOY_SCOPE" >&2
+              exit 1
+              ;;
+          esac
+
+          cd "${DEPLOY_PATH}"
+          sudo PROJECT_ROOT="${DEPLOY_PATH}" PROJECT_NAME="${PROJECT_NAME}" USE_LOCAL_RUSTFS_NETWORK="${USE_LOCAL_RUSTFS_NETWORK}" APP_EXTRA_COMPOSE_FILES="${APP_EXTRA_COMPOSE_FILES}" RUSTFS_EXTRA_COMPOSE_FILES="${RUSTFS_EXTRA_COMPOSE_FILES}" bash scripts/website-stack-vps.sh "${remote_command}"
+
+      - name: Verify deployment status
+        if: env.DEPLOY_MODE == 'ssh'
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          # shellcheck disable=SC2086
+          ssh ${SSH_OPTS} -p "${DEPLOY_PORT}" ${DEPLOY_USER}@${DEPLOY_HOST} "cd '${DEPLOY_PATH}' && sudo PROJECT_ROOT='${DEPLOY_PATH}' PROJECT_NAME='${PROJECT_NAME}' USE_LOCAL_RUSTFS_NETWORK='${USE_LOCAL_RUSTFS_NETWORK}' APP_EXTRA_COMPOSE_FILES='${APP_EXTRA_COMPOSE_FILES}' RUSTFS_EXTRA_COMPOSE_FILES='${RUSTFS_EXTRA_COMPOSE_FILES}' bash scripts/website-stack-vps.sh status"
+
+      - name: Verify deployment status locally
+        if: env.DEPLOY_MODE == 'local'
+        run: |
+          cd "${DEPLOY_PATH}"
+          sudo PROJECT_ROOT="${DEPLOY_PATH}" PROJECT_NAME="${PROJECT_NAME}" USE_LOCAL_RUSTFS_NETWORK="${USE_LOCAL_RUSTFS_NETWORK}" APP_EXTRA_COMPOSE_FILES="${APP_EXTRA_COMPOSE_FILES}" RUSTFS_EXTRA_COMPOSE_FILES="${RUSTFS_EXTRA_COMPOSE_FILES}" bash scripts/website-stack-vps.sh status

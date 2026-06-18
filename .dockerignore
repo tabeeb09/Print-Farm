@@ -1,0 +1,14 @@
+.git
+.github
+.next
+node_modules
+npm-debug.log*
+.env*
+!.env.example
+coverage
+README.md
+docs
+my-app-artifact.tar
+my-app-artifact.tar.zip
+my-app-prod-9ee65ddca7a2.tar
+my-app-prod.tar

@@ -1,0 +1,18 @@
+services:
+  openbao:
+    image: openbao/openbao:2.3.1
+    command: server -dev -dev-root-token-id=${BAO_DEV_ROOT_TOKEN:-dev-only-root-token}
+    restart: unless-stopped
+    cap_add:
+      - IPC_LOCK
+    ports:
+      - "8200:8200"
+    environment:
+      BAO_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
+      BAO_ADDR: http://127.0.0.1:8200
+      BAO_API_ADDR: http://127.0.0.1:8200
+    volumes:
+      - openbao_dev_data:/openbao/data
+
+volumes:
+  openbao_dev_data:

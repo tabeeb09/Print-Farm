@@ -1,0 +1,11 @@
+{$MEDIA_HOST} {
+  reverse_proxy rustfs:9000
+}
+
+{$OAUTH2_PROXY_HOST} {
+  reverse_proxy oauth2-proxy:4180
+}
+
+{$RUSTFS_ADMIN_HOST} {
+  reverse_proxy oauth2-proxy:4180
+}

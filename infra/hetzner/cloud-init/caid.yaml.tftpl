@@ -1,0 +1,18 @@
+#cloud-config
+package_update: true
+package_upgrade: false
+packages:
+  - ca-certificates
+  - curl
+  - git
+  - jq
+  - openssl
+  - sudo
+
+runcmd:
+  - test -x /usr/bin/docker || curl -fsSL https://get.docker.com | sh
+  - systemctl enable --now docker
+  - mkdir -p /srv
+  - if [ ! -d /srv/caid/.git ]; then git clone --branch '${caid_repo_ref}' '${caid_repo_url}' /srv/caid; else git -C /srv/caid fetch --all --tags && git -C /srv/caid checkout '${caid_repo_ref}' && git -C /srv/caid pull --ff-only origin '${caid_repo_ref}'; fi
+  - chmod +x /srv/caid/scripts/*.sh || true
+  - echo 'CAId repo ready at /srv/caid. Run setup-caid-vps.sh with generated environment.' > /root/CAID-NEXT-STEPS.txt

@@ -1,0 +1,18 @@
+#cloud-config
+package_update: true
+package_upgrade: false
+packages:
+  - ca-certificates
+  - curl
+  - git
+  - jq
+  - openssl
+  - sudo
+
+runcmd:
+  - test -x /usr/bin/docker || curl -fsSL https://get.docker.com | sh
+  - systemctl enable --now docker
+  - mkdir -p /srv/website
+  - if [ ! -d /srv/website/app/.git ]; then git clone --branch '${website_repo_ref}' '${website_repo_url}' /srv/website/app; else git -C /srv/website/app fetch --all --tags && git -C /srv/website/app checkout '${website_repo_ref}' && git -C /srv/website/app pull --ff-only origin '${website_repo_ref}'; fi
+  - chmod +x /srv/website/app/scripts/*.sh || true
+  - echo 'Website repo ready at /srv/website/app. Run website-stack-vps.sh bootstrap/deploy with generated environment.' > /root/WEBSITE-NEXT-STEPS.txt

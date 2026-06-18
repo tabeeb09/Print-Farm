@@ -1,0 +1,75 @@
+services:
+  rustfs:
+    image: ${RUSTFS_IMAGE:-rustfs/rustfs:latest}
+    command: server
+    restart: unless-stopped
+    environment:
+      RUSTFS_ACCESS_KEY: ${S3_ACCESS_KEY_ID}
+      RUSTFS_SECRET_KEY: ${S3_SECRET_ACCESS_KEY}
+    expose:
+      - "9000"
+      - "9001"
+    volumes:
+      - rustfs_data:/data
+    networks:
+      rustfs:
+        aliases:
+          - rustfs
+
+  oauth2-proxy:
+    image: ${OAUTH2_PROXY_IMAGE:-quay.io/oauth2-proxy/oauth2-proxy:v7.8.1}
+    restart: unless-stopped
+    command:
+      - --http-address=0.0.0.0:4180
+      - --provider=keycloak-oidc
+      - --oidc-issuer-url=${KEYCLOAK_ISSUER}
+      - --client-id=${OAUTH2_PROXY_CLIENT_ID}
+      - --client-secret=${OAUTH2_PROXY_CLIENT_SECRET}
+      - --cookie-secret=${OAUTH2_PROXY_COOKIE_SECRET}
+      - --cookie-secure=true
+      - --cookie-httponly=true
+      - --cookie-samesite=lax
+      - --email-domain=*
+      - --redirect-url=${OAUTH2_PROXY_REDIRECT_URL}
+      - --upstream=http://rustfs:9001
+      - --scope=openid profile email roles
+      - --skip-provider-button=true
+      - --set-xauthrequest=true
+      - --pass-access-token=true
+      - --allowed-role=${OAUTH2_PROXY_ALLOWED_ROLE:-infra_admin}
+      - --reverse-proxy=true
+    expose:
+      - "4180"
+    depends_on:
+      - rustfs
+    networks:
+      - rustfs
+
+  caddy:
+    image: ${CADDY_IMAGE:-caddy:2.9-alpine}
+    restart: unless-stopped
+    environment:
+      MEDIA_HOST: ${MEDIA_HOST}
+      RUSTFS_ADMIN_HOST: ${RUSTFS_ADMIN_HOST}
+      OAUTH2_PROXY_HOST: ${OAUTH2_PROXY_HOST}
+    ports:
+      - "${RUSTFS_HTTP_PORT:-8082}:80"
+      - "${RUSTFS_HTTPS_PORT:-9443}:443"
+    volumes:
+      - ./caddyfile.rustfs:/etc/caddy/Caddyfile:ro
+      - rustfs_caddy_data:/data
+      - rustfs_caddy_config:/config
+    depends_on:
+      - rustfs
+      - oauth2-proxy
+    networks:
+      - rustfs
+
+networks:
+  rustfs:
+    name: ${RUSTFS_NETWORK:-rustfs_internal}
+
+volumes:
+  rustfs_data:
+  rustfs_caddy_data:
+  rustfs_caddy_config:

@@ -1,0 +1,2211 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!DOCTYPE article PUBLIC "-//NLM//DTD JATS (Z39.96) Journal Archiving and Interchange DTD v1.2 20190208//EN"
+                  "JATS-archivearticle1.dtd">
+<article xmlns:mml="http://www.w3.org/1998/Math/MathML" xmlns:xlink="http://www.w3.org/1999/xlink" dtd-version="1.2" article-type="other">
+<front>
+<journal-meta>
+<journal-id></journal-id>
+<journal-title-group>
+</journal-title-group>
+<issn></issn>
+<publisher>
+<publisher-name></publisher-name>
+</publisher>
+</journal-meta>
+<article-meta>
+<permissions>
+</permissions>
+</article-meta>
+</front>
+<body>
+<disp-quote>
+  <p>Memristive STDP Synapses and Unsupervised Learning</p>
+  <p>Tabeeb Rahman, Bsc Mathematics and Physics, Department of Physics,
+  University of Bath, Bath UK</p>
+</disp-quote>
+<p><bold><italic>Abstract</italic>—In the field of machine learning,
+Artificial Neural Networks (ANNs of the generalised perceptron type [1])
+model synapses as scalars (for a generic synaptic strength variable),
+and typically relies on updating the value of the synapse (synaptic
+plasticity) in a globally coordinated (synchronous), iterative process
+(Gradient Descent [2]) to train the model. In the currently prevalent
+Von Neumann computer hardware paradigm, such computations are energy
+expensive. Motivated by the energy efficiency of biological brains, the
+spike-timing-dependent plasticity (STDP) rule supposes synaptic
+plasticity be modelled asynchronously for a biologically inspired
+autonomous synapse, with strength change dependent on the relative spike
+timing between a pair of connected biologically inspired spiking
+neurons. These neurons differ from fixed scalar representations of
+neurons in ANNs by emitting discrete voltage spikes when sufficiently
+stimulated, and networks of such are called Spiking Neural Networks
+(SNNs).</bold></p>
+<p><bold>This project computationally simulated the AIST (Ag-In-Sb-Te)
+memristor to investigate the claim that it can act as an artificial STDP
+synapse to support learning inside of an SNN. Memristors are compact
+resistive devices that can have their conductances (storing the STDP
+synaptic strength variable) pro­grammed with external voltages, known as
+pulse programming. A pair of spiking-type neurons were situated pre- and
+post- strongly, with</bold> 1 −|𝑟| <bold>(Pearson’s r) found to be on
+the order</bold></p>
+<p><bold>reproduction. These non-idealities were not used in the AIST
+simulation model for simplicity. For this reason, hardware
+im­plementations of large memristive SNNs remain elusive.</bold></p>
+<p><bold>The project also assessed the claim that the STDP rule is
+sufficient to effectively train SNNs with unlabelled training data
+(unsupervised learning). A full-scale ideal STDP SNN with</bold></p>
+<p><bold>claim, though falls short of the 99</bold>%<bold>+ accuracy of
+Gradient</bold> I. Introduction</p>
+<disp-quote>
+  <p>Biological neural systems continue to motivate the search</p>
+</disp-quote>
+<p>for more energy-efficient Machine learning approaches. Many</p>
+<p>conventional machine learning methods including Gradient</p>
+<p>Descent are made to run iterative plasticity updates that</p>
+<p>require global coordination with the rest of the network, in</p>
+<p>order to adhere to the in order (serial) nature of the Von</p>
+<p>Neumann computational paradigm that most computers since</p>
+<p>the dawn of the transistor age uses. The bottlenecks found in</p>
+<p>the Von Neumann architecture is fundamental to its synchrony</p>
+<disp-quote>
+  <p>and serial command execution nature. Iterations must be
+  synchronised and carried out serially. Results of prior itera­tions are
+  shuttled serially to and from the place where results are physically
+  stored (memory) to the circuits responsible for mathematical
+  computation and program execution, via serial data buss circuits. Each
+  result in an iterative approach relies on the accuracy of prior
+  results, so the signal integrity needed over these data busses is
+  high. Additionally, larger networks require more data to be shuttled
+  and synchronised over these serial busses than current data busses can
+  handle. This Von neumann Bottleneck is fundamental to machine learning
+  tasks, since in the context of neural networks, they are represented
+  by graphs of edge (representing the synapse and associated strength)
+  connected nodes (neurons). In densely connected graphs adding nodes
+  makes the number of synapses grow quadratically, whereas scaling data
+  throughput through serial data busses demands exponentially higher
+  signal-to-noise ratios [3], requiring an increase in the number of
+  more inefficient higher accuracy signal amplifiers. Also, Gradient
+  Descent allows for synaptic updates to be done independently of one
+  another (in parallel) on a proper subset of neurons and synapses at
+  once, with each set being called a layer of neurons. Doing layer level
+  computations simultaneously is poorly suited for the serial nature of
+  these data busses, and is hard to scale for layers with more neurons
+  in them. Adding more busses in parallel only grows the data throughput
+  linearly but is prohibitively expensive to manufacture since adding
+  more data busses takes up die space on silicon wafers, that would
+  otherwise have been populated with mathematical logic circuits.</p>
+  <p>By contrast, biological brains are thought to implement synaptic
+  plasticity by autonomous self-updating synapses acting locally on
+  themselves, allowing for parallel computa­tion at a per neuron-pair
+  synapse level, vastly increasing the scalability of neural
+  computations compared to Von Neumann based Gradient Descent
+  approaches. Biological brains are also far more noise tolerant, with
+  each synapse in, for example a human brain existing in a very noisy
+  environment. Humans still consistently outperform state of the art
+  Reasoning Lan­guage models [4] whilst consuming just 20 Watts of power
+  [5]. The high noise tolerance and parallel native architecture of
+  human and biological brains are thought to be primarily responsible
+  for the currently inaccessible task-performance per watt capabilities
+  they possess. This is the primary motivation for research into
+  neuromorphic (inspired by neuroscience) hardware.</p>
+  <p>For the purposes of the SNN section and the pulse program­ming used
+  in Memristive STDP synapse simulations, Various biological neuron
+  models were researched. Hodgkin Huxley</p>
+</disp-quote>
+<p>(HH), Morris-Lecar [6] and Leaky Integrate and Fire (LIF) [7] models
+were used extensively here due to them being standard models in the
+field of computational neuroscience. All share the feature that with
+sufficient stimulation, these neurons produce voltage spikes, that
+transmit onto other neurons via synapses whose strength dictates the
+amount of stimulation neurons downstream of them experience. Neurons
+with greater stimulation have a higher chance of themselves firing.
+Neurons that provide positive stimulus to neurons downstream of it are
+are known as excitatory neurons, and unless stated otherwise, all
+neurons going forward should be assumed as such.</p>
+<p>Following the work of Lindner and Schimansky-Geier [8], it was found
+that stimulating certain neurons with a Gaussian noise-voltage waveform
+of a particular optimum amplitude produced the strongest periodicity in
+the emitted spike timings of the neuron. This is known as Coherence
+Resonance (CR) and is explained by Lindner as the intensity of noise
+enhancing the excitability of the neuron, as higher intensities
+increases the probability for a transient voltage being sufficiently
+high to illicit a spike. Too little amplitude and the chance of the
+noise producing enough voltage for the neuron to fire is unlikely. Too
+much noise amplitude and the neuron fires too often and stochastically.
+This forms the basis of the related phenomena known as Stochastic
+Resonance (SR), where in certain systems there exists an ideal amount of
+noise that maximises the correlation between upstream and downstream
+neurons spiking. This is important because spikes encode information in
+an snn so this corresponds to maximising the distance information
+encoded with spikes, can travel through the network. This motivated the
+use of some form of intrinsic noise inside of the SNN architecture by
+encoding intensities of input image data with frequency modulation, but
+instead of a deterministic frequency, spikes occurred randomly being
+Poisson distributed about the interval between a deterministic frequency
+signal. Instead of explicitly computing the optimum amount of noise
+(prohibitively expensive for large networks), the intensity of the noise
+was increased by shifting the entire frequency modulation range up by
+5Hz any time fewer than 5 neurons in the network spiked during a
+training example [9]. An analytical treatment of CR and SR is provided
+in their original paper [8] for a noisy excitable FitzHugh-Nagumo type
+neuron system. This project primarily deals in demonstrating CR on the
+simplified Leaky Integrate Fire model [7] (the neuron used in the SNN
+section) for computational efficiency. Additionally Bio-plausible
+deterministic yet chaotic sources of pseudorandom aperiodic drive were
+also demonstrated using a ring of three coupled oscillators, made out of
+Morris-Lecar style neurons.</p>
+<p>Device-level and simulation-level work on memristive synaptic
+circuits [10] in the literature describes AIST-type threshold memristors
+as two-terminal resistive devices that are plausible candidates for
+artificial STDP synapses [11]. Their conductance depends on non-volatile
+(persistent even ages, 𝑉set or equivalently 𝑉+ Only when the voltage
+applied across the terminals exceeds either threshold, there is a change
+of opposing sign in the 𝑇, and 𝑉reset or equivalently 𝑉−𝑇. when powered
+off) internal state variables that evolve under electrical stimulation.
+They possess two suprathreshold volt­</p>
+<disp-quote>
+  <p>observed conductance of the memristor. Zhang et. al specifies an
+  explicit voltage threshold model to explain the empirical findings of
+  a fabricated AIST memristor by Y li et al. [10]. This group also
+  reproduced STDP directly on the fabricated memristor, agreeing with
+  STDP on average with non negli­gible stochasticity for any isolated
+  update. This forms the backbone of the pulse programming scheme
+  described in the memristor STDP synapse section.</p>
+  <p>Finally, the STDP LIF SNN section based its work on that done by
+  Diehl and Cook in 2015 [9]. They were the first to demonstrate, using
+  pure unmodified STDP, higher accuracy than older approaches with
+  simplified STDP rule proxies. Crucially, this architecture was fully
+  unsupervised, marking a genuine milestone in neuromorphic machine
+  learning.</p>
+  <p>This project computationally simulated the AIST memristor to
+  investigate the claim that it can act as an artificial STDP synapse to
+  support learning inside of an SNN. The project also assessed the claim
+  that the STDP rule was sufficient to perform unsupervised learning on
+  an SNN.</p>
+  <p>This paper is structured as follows: Firstly STDP is defined,
+  moving on to the memristor simulation model used, where pulse
+  programming and STDP is reproduced. Following that, an exploration of
+  legacy biological neuron models that can both oscillate and fire only
+  when sufficiently externally stimu­lated, are explored. These models
+  explain the simplifications made in the more contemporarily relevant
+  LIF non-oscillatory neuron model used in the SNN section. Then CR was
+  inves­tigated on an LIF neuron, with a brief explanation of SR followed
+  by simulating three neuron ring oscillators using Morris-Lecar
+  neurons, to produce aperiodic and synchronised oscillations between
+  them. Finally the STDP SNN section is presented, incorporating all
+  sections before it: STDP synapses, LIF Neurons and SR. 100-, 400- and
+  1600-neuron SNNs were trained and evaluated. Network specific
+  mechanisms such as sparsity and homeostasis were also introduced, and
+  explored. These findings are discussed in the broader context of
+  memris­tor and neuromorphic literature, before the main conclusions and
+  possible directions for future work are summarised.</p>
+</disp-quote>
+<p>II. Simulating STDP</p>
+<disp-quote>
+  <p>biological synapse). When Δ𝑡&gt; 0, the pre neuron fires before
+  (LTP). This is interpreted as reinforcing synapses when the pre
+  neurons activity stimulated and thus is a candidate for being (Δ𝑡&lt;
+  0), the synapse experiences what is called Long Term</p>
+</disp-quote>
+<table-wrap>
+  <table>
+    <colgroup>
+      <col width="33%" />
+      <col width="33%" />
+      <col width="33%" />
+    </colgroup>
+    <thead>
+      <tr>
+        <th>Δ𝑤(Δ𝑡) =</th>
+        <th><p specific-use="wrapper">
+          <disp-quote>
+            <p>{𝐴+
+            exp(−<strike><underline>Δ𝑡</underline></strike>−𝐴−exp(<strike>Δ𝑡𝜏−</strike>)
+            for Δ𝑡&lt; 0<strike><underline>𝜏+</underline></strike>) for
+            Δ𝑡&gt; 0</p>
+          </disp-quote>
+        </p></th>
+        <th>(1)</th>
+      </tr>
+    </thead>
+    <tbody>
+    </tbody>
+  </table>
+</table-wrap>
+<p>(<bold>biphasic</bold>) of opposite sign with a discontinuity at Δ𝑡=
+0.</p>
+<p>pairs while weakening anti-causal pairings. In this sense it provides
+a task-agnostic mechanism by which temporally consistent spike
+relationships may be reinforced over repeated stimulus presentations.
+This is explored in the discussion.</p>
+<disp-quote>
+  <graphic mimetype="image" mime-subtype="png" xlink:href="vertopal_eeafef3e038144a7a1457352de4d5cea/media/image1.png" />
+</disp-quote>
+<p>Fig. 1. Idealized Biphasic STDP curve showing LTP and LTD
+regions.</p>
+<p><italic>B. Memristor model</italic></p>
+<p>The memristor that was investigated was modelled using the
+voltage-controlled threshold formulation proposed by Zhang, Wang [11],
+to fit empirically observed AIST memristor be­haviour by Li [11]. This
+model introduces voltage thresholds, and defines suprathreshold
+(exceeding either threshold) con­ductance change dynamics that taper as
+either end of the range of conductances a given memristor chemistry can
+possess, is approached, known as saturation. This model remains compact
+enough for repeated device-level and network-level simulation, but omits
+device stochasticity for simplicity.</p>
+<p>a) <italic>Suprathreshold Voltages and the state variable:</italic>
+On a microscopic level, the AIST memristor contains silver electrodes
+for its two terminals, with a solid polycrys­talline Ag-In-Sb-Te
+substrate sandwiched in the gap between ductances). 𝑅on = 10 Ω and 𝑅off
+= 420 Ω correspond to the</p>
+<table-wrap>
+  <table>
+    <colgroup>
+      <col width="100%" />
+    </colgroup>
+    <thead>
+      <tr>
+        <th><p specific-use="wrapper">
+          <disp-quote>
+            <p>the overall resistance 𝑅 is given by the linear
+            interpolation (2) where 𝑡 is a time variable (see next
+            section).𝑅(𝑡) = 𝑅on(<strike>𝑤(𝑡)𝐷</strike>) + 𝑅off(1
+            −<strike>𝑤(𝑡)𝐷</strike>). (2)𝑉+𝑇= 0.37 𝑉 the resistance
+            changes in one direction (in­when the applied voltage is less
+            than 𝑉−filamentary phase crystals start growing, reducing
+            resistance 𝑇= −0.19 𝑉 more</p>
+            <p>𝑖on are current parameters with units of A. These are all
+            fitted 𝜇𝑣 is a mobility parameter with units of
+            <strike>m2</strike> d𝑤d𝑡= 𝜇𝑣= 1.6 × 10−12, 𝑖on = 1, 𝑖off =
+            10−5<strike>,</strike> 𝑖0 = 10−3 { 𝜇𝑣(𝑅on
+            0𝜇𝑣(𝑅on𝐷)(𝐷)(𝑖(𝑡)𝑖(𝑡)−𝑖0)𝑓(𝑤(𝑡)) if 𝑣(𝑡) &gt; 𝑉+𝑖on)𝑓(𝑤(𝑡))
+            if 𝑉−if 𝑣(𝑡) &lt; 𝑉−𝑇≤𝑣(𝑡) ≤𝑉+ <strike>s</strike>Ω. 𝑖0,
+            𝑖off, and 𝑇,𝑇.𝑇, (3)</p>
+            <p>interval 𝑉−device state remains unchanged, providing the
+            non-volatile behaviour necessary for use in synaptic
+            circuits. Positive and 𝑇≤𝑣(𝑡) ≤𝑉+𝑇 defines a dead zone in
+            which the the symbols used. They shouldn’t be interpreted as
+            corre­sponding directly to any specific microscopic
+            phenomena. The</p>
+            <p>negative suprathreshold voltages therefore drive the
+            state in opposite directions, allowing independent
+            directional control of the memristors resistance
+            (memristance) during pulse pro­gramming. And will form the
+            basis of producing Biphasic lobes in the memristor STDP
+            section.</p>
+            <p>𝑤= 0 and 𝑤= 𝐷, the state equation was multiplied by a
+            𝑓(𝑤(𝑡)) = 1 −(2<strike>𝑤(𝑡)𝐷</strike> −1) 2𝑝, (4)</p>
+            <p>and then substituting 𝑤 into (2), to get a final
+            resistance because Zhang et. al uses memristance, however in
+            the STDP memristor section, conductances will be used
+            exclusively. Conductance is the reciprocal of
+            resistance.</p>
+          </disp-quote>
+        </p></th>
+      </tr>
+    </thead>
+    <tbody>
+    </tbody>
+  </table>
+</table-wrap>
+<graphic mimetype="image" mime-subtype="png" xlink:href="vertopal_eeafef3e038144a7a1457352de4d5cea/media/image6.png" />
+<p><italic>C. Pulse Programming Results</italic></p>
+<p>a) <italic>Pulse Programming:</italic>
+In Fig. 2 the conductance is dictated by the slope of resistances 𝑅on
+(shallower line) and 𝑅off (steeper line) are where the voltage exceeds
+𝑉+ into a line that doesn’t intersect the origin, thus describing an
+evolving conductance as suprathreshold memristance pro­𝑇 and 𝑉−𝑇, does
+the curve evolve conductance and resistance. It’s only in the parts of
+I-V sweep</p>
+<p>gramming is happening. the top right curve demonstrates an increasing
+conductance and therefore a decreasing resis­tance, which is associated
+with filament formation. By the same argument the bottom left most non
+origin intersecting segment of the I-V curve represents filament
+dissolution, as the resistance is increasing. This paragraph assumes a
+counter clockwise rotation around the curve.</p>
+<disp-quote>
+  <p>−0.02</p>
+</disp-quote>
+<p>−0.04
+0.00<inline-graphic mimetype="image" mime-subtype="png" xlink:href="vertopal_eeafef3e038144a7a1457352de4d5cea/media/image2.png" /></p>
+<disp-quote>
+  <p>0.04</p>
+  <p>0.02</p>
+</disp-quote>
+<p>) A ( <italic>I</italic></p>
+<disp-quote>
+  <p>−0.4 −0.2 0.0 0.2 0.4</p>
+</disp-quote>
+<p><italic>V</italic> ( V )</p>
+<p>a ±0.5 V sinusoid at 500 Hz integration timestep used was Δ𝑡= 0.1𝜇s,
+with 𝑉+ the simulated 𝐼–𝑉 trajectory in amperes. The slope of the line
+from the 𝑇= 0.37 V, and 𝑉−𝑇= −0.19 V thresholds. The solid black loop
+is</p>
+<p>changing internal state of the AIST memristor.</p>
+<p>of the threshold memristor. The device is driven by a ±0.6 V,</p>
+<p>the lower resistance 𝑅on = 10 Ω (see (2)). As a result the the square
+wave). The converse is true during the negative edge of the square
+voltage, where the opposite threshold is exceeded, resulting in an
+increasing resistance approaching</p>
+<p>𝑅off = 420 Ω. It is clear from the curves seen in Fig. 2, Fig. 4 the
+filamentary phase saturation resistance 𝑅on. It is clear the (a)</p>
+<disp-quote>
+  <p>0.6</p>
+</disp-quote>
+<table-wrap>
+  <table>
+    <colgroup>
+      <col width="50%" />
+      <col width="50%" />
+    </colgroup>
+    <thead>
+      <tr>
+        <th><p specific-use="wrapper">
+          <disp-quote>
+            <p>0.4</p>
+          </disp-quote>
+        </p></th>
+        <th><italic>V</italic> +</th>
+      </tr>
+    </thead>
+    <tbody>
+    </tbody>
+  </table>
+</table-wrap>
+<disp-quote>
+  <p>0.2</p>
+</disp-quote>
+<table-wrap>
+  <table>
+    <colgroup>
+      <col width="33%" />
+      <col width="33%" />
+      <col width="33%" />
+    </colgroup>
+    <thead>
+      <tr>
+        <th>)</th>
+        <th rowspan="4"><p specific-use="wrapper">
+          <disp-quote>
+            <p>0.0</p>
+          </disp-quote>
+        </p></th>
+        <th rowspan="5"><italic>V</italic>−</th>
+      </tr>
+      <tr>
+        <th>V</th>
+      </tr>
+      <tr>
+        <th>(</th>
+      </tr>
+      <tr>
+        <th rowspan="2"><italic>V</italic></th>
+      </tr>
+      <tr>
+        <th><p specific-use="wrapper">
+          <disp-quote>
+            <p>−0.2</p>
+          </disp-quote>
+        </p></th>
+      </tr>
+    </thead>
+    <tbody>
+    </tbody>
+  </table>
+</table-wrap>
+<disp-quote>
+  <p>−0.4</p>
+  <p>−0.6</p>
+  <p>(b)</p>
+  <p>−10</p>
+  <p>−15−5
+  0<inline-graphic mimetype="image" mime-subtype="png" xlink:href="vertopal_eeafef3e038144a7a1457352de4d5cea/media/image3.png" /></p>
+  <p>15</p>
+  <p>10</p>
+  <p>5
+  ) A m ( <italic>I</italic></p>
+  <p>0.0 0.2 0.4 0.6 0.8 1.0 <italic>t</italic> ( m s )</p>
+</disp-quote>
+<p>𝑅on = 10Ω, 𝑅off = 420Ω, 𝑉+±0.6 V square wave at 2 kHz over 0–1 ms
+using a fixed 0.1𝜇s integration 𝑇= 0.37 V, and 𝑉−𝑇= −0.19 V, driven by a
+Fig. 3. Square-wave pulse programming exceeds the update thresholds
+and</p>
+<disp-quote>
+  <p>1.0</p>
+  <p>0.4</p>
+  <p>0.2</p>
+  <p>0.0<inline-graphic mimetype="image" mime-subtype="png" xlink:href="vertopal_eeafef3e038144a7a1457352de4d5cea/media/image4.png" /></p>
+  <p>0.8</p>
+  <p>0.6
+  <italic>wD</italic> ) S m ( <italic>G</italic>
+  10</p>
+  <p>5<inline-graphic mimetype="image" mime-subtype="png" xlink:href="vertopal_eeafef3e038144a7a1457352de4d5cea/media/image5.png" /></p>
+  <p>25</p>
+  <p>20</p>
+  <p>15</p>
+  <p>0.0 0.2 0.4 0.6 0.8 1.0 <italic>t</italic> ( m s )
+  conductance trajectory. Same pulse-programming run as Fig. 3, with 𝑅on
+  = 10Ω, 𝑅off = 420Ω, 𝑉+ at 2 kHz. Solid black trace is the normalised
+  state <strike>𝑤</strike>grey trace is conductance 𝐺= and the
+  corresponding nonlinear change in 𝐺. proportion of the terminal gap
+  occupied by the filamentary phase. dashed 𝑇= 0.37 V, and 𝑉−
+  <strike>𝑀</strike> in mS. Note the stepwise updates in
+  <strike>𝑤</strike> 𝑇= −0.19 V, and a ±0.6 V drive 𝐷, representing
+  the</p>
+</disp-quote>
+<p>Fig. 4 normalises the internal state variable, showing the changes
+that occur during supra-threshold parts of the stim­ulating square wave
+changing the filament width and thus resistance. The slope of the
+changing filaments begin to flatten as it approaches the bounded
+switching limits. The nonlinearity and asymetry in the suprathreshold
+memristance update explains the pinch seen on the left of the I-V
+curve.</p>
+<p><italic>D. Implementing STDP on a memristor Results</italic></p>
+<p>suprathreshold voltages are exceeded. Thus the Δ𝑤 variable</p>
+<p>described in the <italic>Model Agnostic Spike Kernel</italic> section
+with 50 ms and 150 ms time constants for depolarisation and the
+memristor according to 𝑉post −𝑉pre, known as diffusive</p>
+<p>some small 𝛿𝑉, then the diffusive coupling voltage becomes the
+voltages). Since The AIST memristor has |𝑉−</p>
+<p>This also motivated the choice of using exponentials to define |𝑉+𝑇|
+in order to make the potentiation 𝑇| &lt; |𝑉+𝑇|,</p>
+<p>the kernel, since the duration of time for which the diffusive
+overlap remains surpassing either threshold voltage is invari­ant if both
+pre- and post- synaptic spikes are scaled by the ating Δ𝐺 across three
+separate initial conductances, as the</p>
+<p>The behaviour very close to |Δ𝑡| = 0 (&lt; 7ms) is the tran­preted as
+the discontinuity at Δ𝑡= 0 defined in (1), but since</p>
+<p>such discontinuities is un-physical, a sign transition occurs</p>
+<disp-quote>
+  <p>over a narrow range.</p>
+</disp-quote>
+<graphic mimetype="image" mime-subtype="png" xlink:href="vertopal_eeafef3e038144a7a1457352de4d5cea/media/image7.png" />
+<p>Fig. 5. Pre/post spike overlap converts spike timing into a memristor
+pro­</p>
+<p>coupling 𝑉Post −𝑉Pre. Note that the negative coefficient for 𝑉Pre has
+allready</p>
+<disp-quote>
+  <p>LTP and LTD.</p>
+</disp-quote>
+<graphic mimetype="image" mime-subtype="png" xlink:href="vertopal_eeafef3e038144a7a1457352de4d5cea/media/image8.png" />
+<disp-quote>
+  <graphic mimetype="image" mime-subtype="png" xlink:href="vertopal_eeafef3e038144a7a1457352de4d5cea/media/image9.png" />
+</disp-quote>
+<graphic mimetype="image" mime-subtype="png" xlink:href="vertopal_eeafef3e038144a7a1457352de4d5cea/media/image10.png" />
+<disp-quote>
+  <p><inline-graphic mimetype="image" mime-subtype="png" xlink:href="vertopal_eeafef3e038144a7a1457352de4d5cea/media/image11.png" />
+  <inline-graphic mimetype="image" mime-subtype="png" xlink:href="vertopal_eeafef3e038144a7a1457352de4d5cea/media/image12.png" />
+  <inline-graphic mimetype="image" mime-subtype="png" xlink:href="vertopal_eeafef3e038144a7a1457352de4d5cea/media/image13.png" />
+  <inline-graphic mimetype="image" mime-subtype="png" xlink:href="vertopal_eeafef3e038144a7a1457352de4d5cea/media/image14.png" />
+  <inline-graphic mimetype="image" mime-subtype="png" xlink:href="vertopal_eeafef3e038144a7a1457352de4d5cea/media/image15.png" />
+  <inline-graphic mimetype="image" mime-subtype="png" xlink:href="vertopal_eeafef3e038144a7a1457352de4d5cea/media/image16.png" /></p>
+</disp-quote>
+<graphic mimetype="image" mime-subtype="png" xlink:href="vertopal_eeafef3e038144a7a1457352de4d5cea/media/image17.png" />
+<p>approximately exponential tails. AIST threshold-memristor model with
+𝑅on = 10Ω, 𝑅off = 420Ω, 𝑉+𝑇= 0.37 V, and 𝑉−𝑇= −0.19 V, driven by a
+pre/post</p>
+<graphic mimetype="image" mime-subtype="png" xlink:href="vertopal_eeafef3e038144a7a1457352de4d5cea/media/image24.png" />
+<p>(the conductance band), has on the amplitude of Δ𝐺 and time while the
+time constant described how quickly |Δ𝐺| decayed</p>
+<p>transitionary points of the 𝐺0-centred STDP sweeps. Here,</p>
+<p>a strong coordinate transform of 𝜏 or equivalently Δ𝑡. Fig. 9 shows
+the linear fits of 𝜏+ &amp; 𝜏−. It give gradients of +2.055 ×very strong
+with |𝑟| &gt; 0.99 in both cases. The small gradients</p>
+<p>window function attenuated conductance updates as the device
+approached either limiting state. This confirmed that the model
+preserved bounded conductance while still permitting STDP-like
+plasticity within the interior of the conductance band.</p>
+<p>The same fitted-amplitude curve in Fig. 8 also quantified the usable
+update scale. The largest conductance updates occurred around the middle
+of the conductance band, where the attenuation from either boundary was
+weakest. Using the full 2.381 to 100 mS conductance range, whose width
+is 97.619 mS, the maximum fitted conductance update was 0.3296 mS,
+corresponding to approximately 0.338% of the full conductance-band
+width.</p>
+<p>If attention is restricted to the broad central update region,
+roughly 30 to 78 mS, whose width was about 48 mS, the same update
+corresponded to approximately 0.687% of that effec­</p>
+<disp-quote>
+  <p>tive range. This sub-percent scale is consistent with multi-level
+  memristive synapse simulations that assume hundreds of resolvable
+  conductance states; for example, 256 states imply a characteristic
+  update quantum of about 0.39% of the available range [12].</p>
+</disp-quote>
+<graphic mimetype="image" mime-subtype="png" xlink:href="vertopal_eeafef3e038144a7a1457352de4d5cea/media/image18.png" />
+<graphic mimetype="image" mime-subtype="png" xlink:href="vertopal_eeafef3e038144a7a1457352de4d5cea/media/image19.png" />
+<graphic mimetype="image" mime-subtype="png" xlink:href="vertopal_eeafef3e038144a7a1457352de4d5cea/media/image20.png" />
+<graphic mimetype="image" mime-subtype="png" xlink:href="vertopal_eeafef3e038144a7a1457352de4d5cea/media/image21.png" />
+<disp-quote>
+  <p>tance in the single-pair regime. For each 𝐺0, Pearson’s 𝑟 is
+  computed between |𝑟|, where 0 indicates a perfect linearised
+  exponential. Open circles are the conductance-dependent drift.</p>
+</disp-quote>
+<graphic mimetype="image" mime-subtype="png" xlink:href="vertopal_eeafef3e038144a7a1457352de4d5cea/media/image22.png" />
+<graphic mimetype="image" mime-subtype="png" xlink:href="vertopal_eeafef3e038144a7a1457352de4d5cea/media/image23.png" />
+<table-wrap>
+  <table>
+    <colgroup>
+      <col width="100%" />
+    </colgroup>
+    <thead>
+      <tr>
+        <th><p>are fitted independently to the positive and negative
+        outer lobes of Δ𝐺(Δ𝑡) for 50 initial conductances 𝐺0 sampled
+        over [1 denote the positive-lobe fit; open squares denote the
+        negative-lobe fit. Note 𝑅off,</p>
+        <p specific-use="wrapper">
+          <disp-quote>
+            <p>the suppression of |𝐴| (see (1)) near the conductance
+            extremes.</p>
+          </disp-quote>
+        </p>
+        <p><strike>|𝐴+−𝐴−|𝐴++𝐴−</strike> across the same 50-point
+        initial conductance sweep.</p>
+        <p>endpoints, but it remained small across the sweep (10−3
+        order</p>
+        <p>tentiation or depression. This balance was important
+        because</p></th>
+      </tr>
+    </thead>
+    <tbody>
+    </tbody>
+  </table>
+</table-wrap>
+<p>a strong systematic bias in either direction would have made learning
+unstable.</p>
+<graphic mimetype="image" mime-subtype="png" xlink:href="vertopal_eeafef3e038144a7a1457352de4d5cea/media/image25.png" />
+<graphic mimetype="image" mime-subtype="png" xlink:href="vertopal_eeafef3e038144a7a1457352de4d5cea/media/image26.png" />
+<disp-quote>
+  <graphic mimetype="image" mime-subtype="png" xlink:href="vertopal_eeafef3e038144a7a1457352de4d5cea/media/image27.png" />
+</disp-quote>
+<graphic mimetype="image" mime-subtype="png" xlink:href="vertopal_eeafef3e038144a7a1457352de4d5cea/media/image28.png" />
+<p>a weak conductance dependence. Time constants 𝜏+ and 𝜏− are extracted
+from omitted. Open circles denote 𝜏+; open squares denote 𝜏−. The fitted
+values</p>
+<disp-quote>
+  <graphic mimetype="image" mime-subtype="png" xlink:href="vertopal_eeafef3e038144a7a1457352de4d5cea/media/image29.png" />
+</disp-quote>
+<graphic mimetype="image" mime-subtype="png" xlink:href="vertopal_eeafef3e038144a7a1457352de4d5cea/media/image30.png" />
+<p>conductance range. From the same 50-sample STDP sweep, the plotted
+metric while peaks indicate conductance regions where set/reset
+nonlinearity breaks symmetry.</p>
+<disp-quote>
+  <p>III. anatomy of a Neuron</p>
+</disp-quote>
+<p>In the previous section, STDP was demonstrated on a memristor using a
+<italic>Model Agnostic spike Kernel</italic> for pre- and post-neuron
+spike voltage waveforms shown in Fig. 14, applied over a sweep of
+discrete relative spike times. This section aims to motivate the usage
+of Fig. 14, by investigating the qualitative shapes of the spikes
+produced by various Dynamical Neuron models. By analysing the stability
+of the stable points of a simplified 2D Dynamical Morris-Lecar Neuron,
+these qualitative voltage waveform characteristics were demonstrated, to
+justify Fig. 14. The main points demon­strated will be that neurons can
+be assumed to be charge</p>
+<disp-quote>
+  <p>leaking capacitors (equivalent to RC circuits), and the firing of a
+  neuron corresponds to a sudden discharging of this capacitor and a
+  part of the energy inside of a chemical battery store. The stable
+  points of these dynamical systems dictate that such spikes are
+  triggered by the neuron’s capacitor voltage exceeding a threshold
+  (suprathreshold voltage crossing). The accumulation of charge in a
+  neuron that slowly leaks is known as leaky integration. The Leaky
+  Integrate and Fire (LIF) neuron is then introduced, which simplifies
+  such models by forgoing multidimensional dynamics and instead
+  modelling each qualitative behavior of spiking neurons independently,
+  switching between regimes when appropriate. Then CR is demonstrated on
+  LIF neurons, discussing its implications for using stochasticity in
+  the SNN section and aperiodic oscil­lators are shown as an alternative
+  non-stochastic form of aperiodic drive.</p>
+  <p>Neuron models span a broad range of abstraction. At one extreme are
+  biophysically detailed models, such as Hodgkin–Huxley (HH) type
+  formulations, which reproduce electrophys­iological behaviour with high
+  fidelity but are comparatively costly to analyse and simulate. At the
+  other extreme lies the artificial neurons which are modeled as simply
+  the sum of a linear combination of scalar neuron values feeding into
+  it in ANNs as described in the abstract. Between these ends sits the
+  leaky integrate-and-fire (LIF) neuron, which retains much of the
+  qualitative behaviour of biologically faithful neuron models while
+  remaining relatively computationally efficient, and easy to implement
+  in hardware. This balance made it a suitable candidate for the present
+  work, where spike timing and synaptic interaction were of greater
+  interest. However, starting with the detailed differential equation
+  geometry that governs neurotransmitter and ionic channel kinetics, in
+  more biologically accurate models, explains the pragmatic choices that
+  inspire the LIF model.</p>
+  <p>a) <italic>Conductance-based neuron background:</italic>
+  A biological neuron is an electrically excitable cell that
+  communicates by emitting short voltage pulses called spikes, with a
+  peak amplitude referred to as an action potential. To understand how
+  all of this arises, first consider that the ion permeable insulating
+  lipid membrane of a neuron acts as the plates of a capacitor that
+  contain gated holes, that form resistive ion flow channels between the
+  conductive charged intracellular and extracellular solutions,
+  providing a resistive charge leakage pathway. This reduces A neuron to
+  a Capacitor Resistor circuit. A change in the balance of ions across
+  the membrane therefore changes the membrane capacitor voltage. The
+  charge imbalance between the solutions also forms a electro-chemical
+  battery in series with these resistive ion channels.</p>
+  <p>The HH model is the benchmark for the most biologically realistic
+  mechanistic neuron model in neuroscience, given by (5) describing the
+  specifics of this leaky capacitor behaviour, with the opening and
+  closing of three primary ion channel gating proteins modelled as
+  voltage dependent variable resis­tors.</p>
+</disp-quote>
+<graphic mimetype="image" mime-subtype="png" xlink:href="vertopal_eeafef3e038144a7a1457352de4d5cea/media/image31.png" />
+<table-wrap>
+  <table>
+    <colgroup>
+      <col width="33%" />
+      <col width="33%" />
+      <col width="33%" />
+    </colgroup>
+    <thead>
+      <tr>
+        <th>𝐶m</th>
+        <th><p specific-use="wrapper">
+          <disp-quote>
+            <p>d𝑉d𝑡= 𝑔Na𝑚3ℎ(𝐸Na −𝑉) + 𝑔K𝑛4(𝐸K −𝑉) +𝑔L(𝐸L −𝑉) + 𝐼ext.</p>
+          </disp-quote>
+        </p></th>
+        <th>(5)</th>
+      </tr>
+    </thead>
+    <tbody>
+    </tbody>
+  </table>
+</table-wrap>
+<p>with a membrane voltage 𝑉, with several proteins that gate</p>
+<p>ions flowing into the cell via sodium channels which are</p>
+<p>out of the potassium channels, gated by a third 𝑛 type protein.</p>
+<p>channel sites.</p>
+<table-wrap>
+  <table>
+    <colgroup>
+      <col width="100%" />
+    </colgroup>
+    <thead>
+      <tr>
+        <th><p>dictated by the concentrations of the ions in and around
+        the</p>
+        <p>cell.</p>
+        <p specific-use="wrapper">
+          <disp-quote>
+            <p>Each gate variable evolves according to a first-order
+            equa­</p>
+            <p>where 𝑥∈{𝑚, ℎ, 𝑛} and 𝛼𝑥(𝑉) and 𝛽𝑥(𝑉) are the voltage-d𝑡=
+            <strike>𝑥∞(𝑉) −𝑥</strike>= 𝛼𝑥(𝑉)(1 −𝑥) −𝛽𝑥(𝑉)𝑥, (6)</p>
+          </disp-quote>
+        </p>
+        <p>tion of the form</p>
+        <p specific-use="wrapper">
+          <disp-quote>
+            <p>𝑥∞(𝑉) =𝛼𝑥(𝑉) + 𝛽𝑥(𝑉).𝛼𝑥(𝑉) (7)</p>
+          </disp-quote>
+        </p>
+        <p>toward the steady-state equilibrium</p></th>
+      </tr>
+    </thead>
+    <tbody>
+    </tbody>
+  </table>
+</table-wrap>
+<table-wrap>
+  <table>
+    <colgroup>
+      <col width="100%" />
+    </colgroup>
+    <thead>
+      <tr>
+        <th><p>𝑚∞(𝑉), ℎ≈1, since empirically 𝑚 reaches equilibrium</p>
+        <p>phenomenological Eyring-type exponential law [13], [14]
+        in</p>
+        <p specific-use="wrapper">
+          <disp-quote>
+            <p>The opening and closing rates were approximated by a</p>
+            <p>𝐶d𝑉 <strike>d𝑛d𝑡</strike>= <strike>𝑛∞(𝑉) −𝑛</strike> d𝑡=
+            𝐼in + 𝐼out + 𝐼ext = 𝑔Na𝑚∞(𝑉)(𝐸Na −𝑉) +<underline>𝑔K𝑛(𝐸K
+            −</underline>𝑉) + 𝑔L(𝐸L −𝑉) + 𝐼ext, = 𝛼𝑛(𝑉)(1 −𝑛) −𝛽𝑛(𝑉)𝑛.
+            (8) (9) Lecar model:</p>
+          </disp-quote>
+        </p>
+        <p>the gate closing 𝛽𝑛, opening 𝛼𝑛 transition rates
+        exponential</p>
+        <p specific-use="wrapper">
+          <disp-quote>
+            <p>curves of <strike>𝑑𝑉</strike>gives
+            <strike>𝑑𝑛</strike></p>
+            <p>its equivalent hyperbolic-tangent form.</p>
+            <p>where 𝑉𝑛 is a chosen parameter that gives 𝑛∞(𝑉𝑛)
+            =<strike>1</strike></p>
+            <p>By inferring the expression for 𝑛∞(𝑉) from (7) ,
+            substi­</p>
+            <p>The right-hand side is a logistic sigmoid, written here
+            in 𝑛=
+            𝑑𝑉= 0 when both curves intersect, producing a stable</p>
+            <p><strike>𝛼𝑛(𝑉) + 𝛽𝑛(𝑉)</strike>= <strike>1</strike>
+            𝑑𝑡= 0 and 𝑑𝑛</p>
+            <p>𝛽𝑛(𝑉) = 𝐴𝑛exp(−𝑉−𝑉𝑛𝛼𝑛(𝑉) = 𝐴𝑛exp(<strike>𝑉−𝑉𝑛</strike>
+            <strike>𝑑𝑡</strike>= 0 (the n and V nullclines). This</p>
+            <p><strike>d𝑡</strike>= 0, (9) produces the
+            <underline>𝑛</underline>-nullcline: 2(1 +
+            tanh(<strike>𝑉−𝑉𝑛</strike> 𝑘𝑛𝑘𝑛 ), ), )). (11) (10) 2.</p>
+            <p>𝑛 yields: Setting d𝑉</p>
+            <p>In the following section the flow of 𝑛 w.r.t 𝑉 given by
+            the 𝑛= 𝐼ext + 𝑔L(𝐸L −𝑉) + 𝑔Na𝑚∞(𝑉)(𝐸Na −𝑉) d𝑡= 0 in (8)
+            gives the 𝑉-nullcline. Solving for</p>
+            <p>𝑔k(𝑉−𝐸K) . (12) <italic>A. Monostable Dynamical Neuron
+            Results</italic></p>
+          </disp-quote>
+        </p></th>
+      </tr>
+    </thead>
+    <tbody>
+    </tbody>
+  </table>
+</table-wrap>
+<disp-quote>
+  <p>Depending on the set parameters, the nullclines describe different
+  neuron types. The two that will be the focus of this</p>
+</disp-quote>
+<p>known as the excitable regime. Since 𝑛 evolves more slowly</p>
+<graphic mimetype="image" mime-subtype="png" xlink:href="vertopal_eeafef3e038144a7a1457352de4d5cea/media/image37.png" />
+<p>faces is modelled by transient voltage perturbations from the resting
+state.</p>
+<disp-quote>
+  <graphic mimetype="image" mime-subtype="png" xlink:href="vertopal_eeafef3e038144a7a1457352de4d5cea/media/image32.png" />
+</disp-quote>
+<graphic mimetype="image" mime-subtype="png" xlink:href="vertopal_eeafef3e038144a7a1457352de4d5cea/media/image33.png" />
+<p>34.5𝜇 A/cm2, 𝑔𝐾= 8.0 mS/cm2, 𝐸𝐾= −84.0 mV, 𝑔Na = 4.4 mS/cm2, 𝐸Na =
+120.0 mV, 𝑔𝐿= 2.0 mS/cm2, 𝐸𝐿= −60.0 mV, 𝜏𝑛= 10.0 ms. acts to set a
+firing threshold voltage. If the perturbation remains on the resting
+potential side of this separatrix, the trajectory decays back to it. The
+accumulation of subsequent transient voltage perturbations, that slowly
+decay back to the resting potential is known as leaky integration. If
+the ampli­tude and frequency of these perturbations are sufficient to
+cross the separatrix, the trajectory cannot return directly via the
+decay path and instead makes a large excursion through phase space,
+which can be seen in the yellow sample trajectory in Fig. 12. The
+trajectory flows to the right and up, where voltage rise rapidly past
+the threshold voltage, first arriving at the action potential. This step
+is called depolarisation, and is the initial voltage rise seen in Fig.
+13. The trajectory then traverses up and then left very quickly,
+reducing the voltage to an overshoot potential, in a process known as
+repolarisation. The slower outward recovery current pulls the trajectory
+back down to the resting potential, known as hyperpolarisation. This
+part of the trajectory hugs the much slower V null-cline, and thus
+hyperpolarisation is always slower than re- and de- polarisation. Note
+that any perturbation during the large voltage excursion, doesn’t
+meaningfully change the qualitative behaviour of the trajectory until
+the resting potential is reached again. This can be seen from the flow
+lines where all excursion trajectories flow alongside each other towards
+rest. This makes the duration of spiking, a refractory period, where
+excitations can’t prematurely trigger another action potential, before
+the resting potential is returned to first. Such a spiking regime is</p>
+<disp-quote>
+  <p>known as burst firing and Neurons that are current biased to behave
+  like this are known as monostable neurons.</p>
+</disp-quote>
+<graphic mimetype="image" mime-subtype="png" xlink:href="vertopal_eeafef3e038144a7a1457352de4d5cea/media/image34.png" />
+<graphic mimetype="image" mime-subtype="png" xlink:href="vertopal_eeafef3e038144a7a1457352de4d5cea/media/image35.png" />
+<disp-quote>
+  <p>Fig. 13. In the excitable regime, only suprathreshold perturbations
+  trigger a full spike-and-recovery excursion. Voltage time series are
+  shown for initial conditions chosen relative to the phase-plane
+  threshold boundary. Light grey traces show subthreshold trajectories
+  that return to rest; the solid black trace is a suprathreshold
+  excursion producing a typical biological neuron spike kernel.</p>
+  <p><italic>B. Model Agnostic Spike Kernel</italic></p>
+  <p>The spike waveform shown in Fig. 14 was modelled by a piecewise
+  exponent kernel intended to approximate and capture the qualitative
+  regions found in the voltage spikes</p>
+  <p>decay back to the resting potential 𝑉rest (not to be confused with
+  the time translation 𝑡−𝜏.</p>
+</disp-quote>
+<graphic mimetype="image" mime-subtype="png" xlink:href="vertopal_eeafef3e038144a7a1457352de4d5cea/media/image36.png" />
+<p>to build pre/post waveforms for the STDP sweeps, with 𝜏spike = 50 ms
+and 𝜏tail = 150 ms. Solid black curve is the kernel voltage; dashed and
+dotted horizontal guides indicate the memristor thresholds 𝑉+ = 0.37 V
+and 𝑉−=</p>
+<p><italic>C. The LIF Model</italic></p>
+<p>The preceding sections introduced mechanistic conductance gated
+models for the membrane voltage, of a continuous dy­namical system
+neuron. Leaky integration, threshold potential spiking and Spike kernels
+were established. In this section the multidimensional dynamical systems
+seen prior will be reduced to produce a monostable neuron, known as the
+Leaky Integrate and Fire (LIF) model first introduced in 1907 by Lapique
+[7].</p>
+<disp-quote>
+  <graphic mimetype="image" mime-subtype="png" xlink:href="vertopal_eeafef3e038144a7a1457352de4d5cea/media/image38.png" />
+</disp-quote>
+<p>Fig. 15. The LIF circuit reduces membrane dynamics to leakage,
+capaci­</p>
+<table-wrap>
+  <table>
+    <colgroup>
+      <col width="100%" />
+    </colgroup>
+    <thead>
+      <tr>
+        <th><p>represented by an input current 𝐼in(𝑡) corresponding to
+        𝐼ext in (5) &amp; (8). Let 𝑉(𝑡) be the membrane voltage relative
+        to the resting potential 𝑉rest. Current conservation gives</p>
+        <p>the passive membrane equation becomes</p>
+        <p specific-use="wrapper">
+          <disp-quote>
+            <p>Using Ohm’s law and capacitor voltage charge equation,
+            𝐼in(𝑡) = 𝐼𝑅(𝑡) + 𝐼𝐶(𝑡). (13)</p>
+          </disp-quote>
+        </p>
+        <p>can instead be written as
+        Multiplying by 𝑅𝑚 and defining 𝜏𝑚= 𝑅𝑚𝐶𝑚 gives</p>
+        <p specific-use="wrapper">
+          <disp-quote>
+            <p>If the input is written as an effective drive
+            voltage,</p>
+            <p>then</p>
+            <p>For a conductance-based synaptic input, the input current
+            𝜏𝑚</p>
+            <p>𝜏𝑚
+            𝐼in(𝑡) = 𝑉(𝑡) −𝑉rest</p>
+          </disp-quote>
+        </p>
+        <p><strike>𝑑𝑉𝑑𝑡</strike>= 𝑉rest −𝑉(𝑡) + 𝑅𝑚𝐼in(𝑡).</p>
+        <p specific-use="wrapper">
+          <disp-quote>
+            <p>𝑑𝑉𝑑𝑡= 𝑉rest −𝑉(𝑡) + 𝑉drive(𝑡). 𝑉drive(𝑡) = 𝑅𝑚𝐼in(𝑡),
+            + 𝐶𝑚𝑑𝑉𝑑𝑡(14)</p>
+          </disp-quote>
+        </p>
+        <p>(15)</p>
+        <p>(16)</p>
+        <p>(17)</p>
+        <p specific-use="wrapper">
+          <disp-quote>
+            <p>Substituting this into the LIF equation gives</p>
+            <p>𝜏𝑚𝑑𝑉𝑑𝑡= 𝑉rest −𝑉(𝑡) + 𝑅𝑚𝑔syn(𝑡)(𝐸syn −𝑉(𝑡)). (19) 𝐼syn(𝑡)
+            = 𝑔syn(𝑡)(𝐸syn −𝑉(𝑡)). (18)</p>
+          </disp-quote>
+        </p></th>
+      </tr>
+    </thead>
+    <tbody>
+    </tbody>
+  </table>
+</table-wrap>
+<table-wrap>
+  <table>
+    <colgroup>
+      <col width="100%" />
+    </colgroup>
+    <thead>
+      <tr>
+        <th><p specific-use="wrapper">
+          <disp-quote>
+            <p>this becomes</p>
+            <p>𝜏𝑚𝑑𝑉𝑑𝑡= −(𝑉(𝑡) −𝑉rest) + 𝑞(𝑡)(𝐸syn −𝑉(𝑡)). 𝑞(𝑡) =
+            𝑅𝑚𝑔syn(𝑡), (20)</p>
+            <p>(21) Defining the dimensionless conductance drive</p>
+          </disp-quote>
+        </p>
+        <p>the passive membrane decay pathway corresponding to 𝑔𝐿 in</p>
+        <p>stimulation, decaying back to the resting potential. Only
+        this</p>
+        <p specific-use="wrapper">
+          <disp-quote>
+            <p>Leaky Integration phenomena is being modelled by
+            (15).</p>
+            <p>b) <italic>Threshold Firing and reset:</italic></p>
+            <p>To extend and include the qualitative spiking behaviour
+            of</p>
+            <p>𝑆[𝑡] = {1 if 𝑉[𝑡] ≥𝑉thr + 𝜃[𝑡] otherwise (22)</p>
+            <p>neurons, the LIF neuron models a binary event
+            variable</p>
+            <p>event (𝑉&gt; 𝑉thr + 𝜃[𝑡]) occurs at time 𝑡, a spike is
+            recorded at voltage 𝑉rst:𝑉[𝑡] →𝑉[𝑡] −𝑆[𝑡]𝑉rst. (23)</p>
+          </disp-quote>
+        </p>
+        <p>potential. It is often set to 𝑉thr or just below to
+        simulate</p>
+        <p specific-use="wrapper">
+          <disp-quote>
+            <p>𝑛, 𝑛+ 1 is𝜃[𝑡𝑛+ 1] = 𝜆𝜃(𝜃[𝑡𝑛] + 𝑆[𝑡𝑛]), (24)</p>
+          </disp-quote>
+        </p>
+        <p>dominating the competitive network. In hardware, again 𝜃</p>
+        <p>voltage compared to the Membrane capacitor, feeding into</p>
+        <p>the circuit block responsible for classifying a
+        suprathreshold</p>
+        <p specific-use="wrapper">
+          <disp-quote>
+            <p>crossing event.</p>
+            <p>c) <italic>spike shaping:</italic></p>
+            <p>Spike times are recorded, but to produce an actual
+            spike</p>
+          </disp-quote>
+        </p>
+        <p>kernel, LIF is optionally extended with an external pulse</p>
+        <p>shaping circuit where the spike kernel is free to be
+        chosen,</p>
+        <p specific-use="wrapper">
+          <disp-quote>
+            <p>such as Fig. 14 used in the memristor STDP section.</p>
+          </disp-quote>
+        </p>
+        <p>synaptic neuron so the input current to post synaptic neuron
+        𝑖</p>
+        <p specific-use="wrapper">
+          <disp-quote>
+            <p>𝐼in[𝑡] = ∑𝑤𝑖𝑗𝑥𝑗[𝑡], (25)</p>
+          </disp-quote>
+        </p></th>
+      </tr>
+    </thead>
+    <tbody>
+    </tbody>
+  </table>
+</table-wrap>
+<graphic mimetype="image" mime-subtype="png" xlink:href="vertopal_eeafef3e038144a7a1457352de4d5cea/media/image43.png" />
+<table-wrap>
+  <table>
+    <colgroup>
+      <col width="20%" />
+      <col width="20%" />
+      <col width="20%" />
+      <col width="20%" />
+      <col width="20%" />
+    </colgroup>
+    <thead>
+      <tr>
+        <th rowspan="5">synaptic neuron i and the pre synaptic neurons
+        j. 𝑥𝑗[𝑡] is the</th>
+        <th rowspan="5">(a)</th>
+        <th rowspan="2"><italic>m</italic></th>
+        <th>0</th>
+        <th rowspan="5"><p specific-use="wrapper">
+          <disp-quote>
+            <graphic mimetype="image" mime-subtype="png" xlink:href="vertopal_eeafef3e038144a7a1457352de4d5cea/media/image39.png" />
+          </disp-quote>
+        </p></th>
+      </tr>
+      <tr>
+        <th>−20</th>
+      </tr>
+      <tr>
+        <th rowspan="3"><italic>V</italic></th>
+        <th>−40</th>
+      </tr>
+      <tr>
+        <th>−60</th>
+      </tr>
+      <tr>
+        <th>−80</th>
+      </tr>
+    </thead>
+    <tbody>
+    </tbody>
+  </table>
+</table-wrap>
+<disp-quote>
+  <p>In this section Coherence Resonance in the LIF neuron is</p>
+</disp-quote>
+<p>demonstrated motivating the use of Poisson spike encoding</p>
+<p>centered around 0V of intensity 𝜎. For each 𝜎, 12 independent</p>
+<p>This produces a decaying random walk of the LIF Mem­𝐶ISI = Var(ISI)
+(26) (ISI) variance (see Fig. 16):</p>
+<p>Lecar, The LIF parameters used were: 𝑉rest = −65 mV, −50 mV, 𝜏𝑚= 20
+ms (note this eliminates the need to spec­ify 𝑅𝑚, 𝐶𝑚 explicitly, with a
+current density being sufficient for any 𝑅 in the system, see (15)),
+integration step Δ𝑡= 0.1 ms, and constant subthreshold drive 𝑉in = 13.7
+mV [6]. this is added to 𝑉rest in (15), eliminating the need to specify
+−51.3 mV, just below the −50mV firing threshold potential,</p>
+<p><italic>E. Coherence Resonance Results</italic></p>
+<disp-quote>
+  <p>e covariance</p>
+</disp-quote>
+<table-wrap>
+  <table>
+    <colgroup>
+      <col width="25%" />
+      <col width="25%" />
+      <col width="25%" />
+      <col width="25%" />
+    </colgroup>
+    <thead>
+      <tr>
+        <th rowspan="5">(b)</th>
+        <th rowspan="2"><italic>m</italic></th>
+        <th>0</th>
+        <th rowspan="5"><p specific-use="wrapper">
+          <disp-quote>
+            <graphic mimetype="image" mime-subtype="png" xlink:href="vertopal_eeafef3e038144a7a1457352de4d5cea/media/image40.png" />
+          </disp-quote>
+        </p></th>
+      </tr>
+      <tr>
+        <th>−20</th>
+      </tr>
+      <tr>
+        <th rowspan="3"><italic>V</italic></th>
+        <th>−40</th>
+      </tr>
+      <tr>
+        <th>−60</th>
+      </tr>
+      <tr>
+        <th>−80</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td rowspan="5">(c)</td>
+        <td rowspan="2"><p specific-use="wrapper">
+          <disp-quote>
+            <p><italic>m</italic></p>
+          </disp-quote>
+        </p></td>
+        <td>0</td>
+        <td rowspan="5"><p specific-use="wrapper">
+          <disp-quote>
+            <graphic mimetype="image" mime-subtype="png" xlink:href="vertopal_eeafef3e038144a7a1457352de4d5cea/media/image41.png" />
+          </disp-quote>
+        </p></td>
+      </tr>
+      <tr>
+        <td>−20</td>
+      </tr>
+      <tr>
+        <td rowspan="3"><italic>V</italic></td>
+        <td>−40</td>
+      </tr>
+      <tr>
+        <td>−60</td>
+      </tr>
+      <tr>
+        <td>−80</td>
+      </tr>
+    </tbody>
+  </table>
+</table-wrap>
+<p>the sweep: 𝜎low = 0.150 mV, 𝜎∗= 0.665 mV, and 𝜎high = 2.044 mV.
+Spike</p>
+<p>Any deviation from 𝜎∗ in either direction vastly increases the</p>
+<table-wrap>
+  <table>
+    <colgroup>
+      <col width="33%" />
+      <col width="33%" />
+      <col width="33%" />
+    </colgroup>
+    <thead>
+      <tr>
+        <th><p specific-use="wrapper">
+          <disp-quote>
+            <p>0.6</p>
+          </disp-quote>
+        </p></th>
+        <th rowspan="2"><italic>σ</italic></th>
+        <th rowspan="2">*
+        trace uses vertical ticks to mark the detected spike times.
+        These ticks should not be interpreted as a separate
+        physical</th>
+      </tr>
+      <tr>
+        <th><p specific-use="wrapper">
+          <disp-quote>
+            <p>0.5</p>
+          </disp-quote>
+        </p></th>
+      </tr>
+    </thead>
+    <tbody>
+    </tbody>
+  </table>
+</table-wrap>
+<table-wrap>
+  <table>
+    <colgroup>
+      <col width="50%" />
+      <col width="50%" />
+    </colgroup>
+    <thead>
+      <tr>
+        <th>I S I <italic>C</italic></th>
+        <th><p specific-use="wrapper">
+          <disp-quote>
+            <p>0.4</p>
+          </disp-quote>
+        </p></th>
+      </tr>
+    </thead>
+    <tbody>
+    </tbody>
+  </table>
+</table-wrap>
+<disp-quote>
+  <p>0.3</p>
+  <p>0.2</p>
+</disp-quote>
+<table-wrap>
+  <table>
+    <colgroup>
+      <col width="11%" />
+      <col width="11%" />
+      <col width="11%" />
+      <col width="11%" />
+      <col width="11%" />
+      <col width="11%" />
+      <col width="11%" />
+      <col width="11%" />
+      <col width="11%" />
+    </colgroup>
+    <thead>
+      <tr>
+        <th rowspan="3">I</th>
+        <th>1.0</th>
+        <th rowspan="7" colspan="7"><p specific-use="wrapper">
+          <disp-quote>
+            <graphic mimetype="image" mime-subtype="png" xlink:href="vertopal_eeafef3e038144a7a1457352de4d5cea/media/image42.png" />
+          </disp-quote>
+        </p></th>
+      </tr>
+      <tr>
+        <th>0.8</th>
+      </tr>
+      <tr>
+        <th rowspan="2">0.6</th>
+      </tr>
+      <tr>
+        <th>S</th>
+      </tr>
+      <tr>
+        <th rowspan="5">I <italic>P</italic></th>
+        <th>0.4</th>
+      </tr>
+      <tr>
+        <th>0.2</th>
+      </tr>
+      <tr>
+        <th rowspan="3">0.0</th>
+      </tr>
+      <tr>
+        <th><p specific-use="wrapper">
+          <disp-quote>
+            <p>0.0</p>
+          </disp-quote>
+        </p></th>
+        <th>0.5</th>
+        <th>1.0</th>
+        <th><p specific-use="wrapper">
+          <disp-quote>
+            <p>1.5</p>
+          </disp-quote>
+        </p></th>
+        <th>2.0</th>
+        <th>2.5</th>
+        <th>3.0</th>
+      </tr>
+      <tr>
+        <th colspan="3"><italic>σ</italic></th>
+        <th colspan="4"><p specific-use="wrapper">
+          <disp-quote>
+            <p>( m V )</p>
+          </disp-quote>
+        </p></th>
+      </tr>
+    </thead>
+    <tbody>
+    </tbody>
+  </table>
+</table-wrap>
+<p>neuron, and the mean normalised ISI covariance 𝐶ISI = Var(ISI)
+∗⟨ISI⟩−2 is to reach 𝑃ISI = 1</p>
+<disp-quote>
+  <p>most regular spacing between events. Too little 𝜎 amplitude is much
+  noise is shown in c) where the random walk exceeds the firing
+  threshold too often and thus the stochastic nature of the noise signal
+  shows up as highly aperiodic spike timings with a high inter spike
+  time variance.</p>
+  <p>This forms the basis of the related phenomena known as Stochastic
+  Resonance (SR), where in certain systems there exists an ideal amount
+  of noise that maximises the correlation between upstream and
+  downstream neurons spiking. This corresponds to maximising the
+  distance spikes and therefore information, can travel through the SNN.
+  CR demonstrates that noise minimises the variance in the firing of an
+  LIF Neuron. The lower the stochasticity of the firing of a neuron, the
+  more different it appears to downstream neurons that otherwise are
+  themselves stimulated by ambient stochastic</p>
+</disp-quote>
+<graphic mimetype="image" mime-subtype="png" xlink:href="vertopal_eeafef3e038144a7a1457352de4d5cea/media/image47.png" />
+<p>noise. This means a lower 𝐶ISI corresponds to a higher chance
+<italic>F. Oscillators and Aperiodic Spike Circuits</italic></p>
+<p>Having an aperiodic form of stimulation whether stochastic or
+otherwise is useful for Stochastic Resonance. This is explored further
+in the discussion section. Here, an aperiodic</p>
+<p>nodes with membrane voltages Φ𝑖, where 1 drives 2, 2 drives 3 and 3
+drives 1, each with directional conductances 𝑔12, 𝑔23 and 𝑔31,
+respectively [6]. By specifying particular parameters</p>
+<p>Central Pattern Generator (CPG). CPGs are often found in the motor
+cortex of animals for autonomic nervous system functions that require
+rhythmic alternating motions such as breathing, and walking. Self
+sustained spiking is called tonic</p>
+<p>is increased, the 𝑉 nullcline in Fig. 19 is translated upwards there
+is only one point of intersection between the nullclines. This is how
+the same model can describe both monostable neurons and also produce
+oscillator neurons, furthering the idea that such multidimensional
+dynamical models encode a large number of important distinct qualitative
+features in a very compact yet computationally expensive way.</p>
+<table-wrap>
+  <table>
+    <colgroup>
+      <col width="17%" />
+      <col width="17%" />
+      <col width="17%" />
+      <col width="17%" />
+      <col width="17%" />
+      <col width="17%" />
+    </colgroup>
+    <thead>
+      <tr>
+        <th rowspan="2">ϕ</th>
+        <th><p specific-use="wrapper">
+          <disp-quote>
+            <p><italic>g</italic> 12</p>
+          </disp-quote>
+        </p></th>
+        <th rowspan="2">ϕ</th>
+        <th rowspan="2"><p specific-use="wrapper">
+          <disp-quote>
+            <p>2</p>
+          </disp-quote>
+        </p></th>
+        <th><italic>g</italic> 23</th>
+        <th rowspan="2"><p specific-use="wrapper">
+          <disp-quote>
+            <p>3</p>
+          </disp-quote>
+        </p></th>
+      </tr>
+      <tr>
+        <th><p specific-use="wrapper">
+          <disp-quote>
+            <p>1</p>
+          </disp-quote>
+        </p></th>
+        <th>ϕ</th>
+      </tr>
+    </thead>
+    <tbody>
+    </tbody>
+  </table>
+</table-wrap>
+<p><italic>g</italic> 3 1</p>
+<p>Fig. 18. A three-neuron ring circuit provides a minimal directionally
+coupled oscillator network. Each neuron projects forward to the next
+neuron in a closed loop, so activity circulates around the ring rather
+than terminating at a feedforward output layer. The directed coupling
+defines the firing order and supports phase-structured dynamics,
+including synchronised circulation, stable phase offsets, and aperiodic
+timing structure in the oscillator simula­tions. The couplings are
+excitatory.</p>
+<disp-quote>
+  <p><italic>G. Oscillator and Aperiodic Spike Circuit
+  Results</italic></p>
+  <p>Fig. 19 shows the post SNIC bifurcation flow diagram of</p>
+</disp-quote>
+<p>the dynamical system just like in Fig. 19, where the saddle and</p>
+<p>stable nodes got closer together till they meet and annihilate</p>
+<p>leaving just one unstable node remaining, as denoted by the</p>
+<p>intersection point of both nullclines. Once this happens, there</p>
+<p>is no longer a stable resting state to trap the dynamics, and the</p>
+<p>trajectory instead evolves onto a stable limit cycle, producing</p>
+<p>repetitive oscillatory spiking as can be seen in the membrane</p>
+<p>voltage time evolution in Fig. 20. These limit cycles possess</p>
+<p>basins of stability, as seen in the flow, where all trajectories</p>
+<disp-quote>
+  <p>approach the limit cycle, in the long term.</p>
+</disp-quote>
+<p><inline-graphic mimetype="image" mime-subtype="png" xlink:href="vertopal_eeafef3e038144a7a1457352de4d5cea/media/image44.png" />Tonic
+cycle</p>
+<disp-quote>
+  <p>0.2</p>
+  <p>0.1</p>
+  <p>0.0<inline-graphic mimetype="image" mime-subtype="png" xlink:href="vertopal_eeafef3e038144a7a1457352de4d5cea/media/image45.png" /></p>
+  <p>0.4</p>
+  <p>0.3</p>
+  <p><italic>n</italic> ) V m ( <italic>V</italic>
+  −60 −40−20 0 20 40 60 Fig. 19. Increasing bias current from 35mA/cm2
+  in Fig. 12 to 47mA/cm2 shown in the monostable nullcline in Fig. 12
+  showing a post-SNIC bifurcation</p>
+</disp-quote>
+<p>oscillatory regime. Note that now there is only one unstable point of
+inter­</p>
+<p>section between the nullclines. The flow paths of non limit cycle
+trajectories</p>
+<disp-quote>
+  <p>also corroborates the persistent limit cycle.</p>
+  <p>−20</p>
+  <p>−40</p>
+  <p>−60<inline-graphic mimetype="image" mime-subtype="png" xlink:href="vertopal_eeafef3e038144a7a1457352de4d5cea/media/image46.png" /></p>
+  <p>60</p>
+  <p>40</p>
+  <p>20</p>
+  <p>0</p>
+  <p>0 25 50 75 100 125 150 175</p>
+</disp-quote>
+<p><italic>t</italic> ( m s )</p>
+<p>Fig. 20. Post-SNIC bias produces tonic spiking with a locked
+constant</p>
+<p>interspike period. Voltage time series in the oscillatory regime show
+repeated</p>
+<p>frequency 𝜔= 0.550349<strike>rad</strike> The following parameters
+produced synchronized oscilla­s.</p>
+<p>spikes after transient decay. The absence of convergence to a resting
+potential</p>
+<p>and the near-regular repetition are consistent with a stable limit
+cycle with</p>
+<p>tions Fig. 21, with stable 2<strike>𝜋3</strike> phase offsets and a
+1–2–</p>
+<table-wrap>
+  <table>
+    <colgroup>
+      <col width="50%" />
+      <col width="50%" />
+    </colgroup>
+    <thead>
+      <tr>
+        <th colspan="2"><p specific-use="wrapper">
+          <disp-quote>
+            <p>10.0𝜇𝐴/cm−2 (for all i), 𝜔ref = 0.550349 rad/ms (the base
+            shows the expected <underline>𝜑1</underline>2 =
+            2<strike>𝜋3</strike>, 𝜑13=
+            <underline>4</underline><strike>𝜋<underline>3</underline></strike>.
+            φ₃</p>
+          </disp-quote>
+        </p>
+        <graphic mimetype="image" mime-subtype="png" xlink:href="vertopal_eeafef3e038144a7a1457352de4d5cea/media/image48.png" /></th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>spikes</td>
+        <td><inline-graphic mimetype="image" mime-subtype="png" xlink:href="vertopal_eeafef3e038144a7a1457352de4d5cea/media/image49.png" /></td>
+      </tr>
+    </tbody>
+  </table>
+</table-wrap>
+<disp-quote>
+  <p>φ₁</p>
+</disp-quote>
+<table-wrap>
+  <table>
+    <colgroup>
+      <col width="100%" />
+    </colgroup>
+    <thead>
+      <tr>
+        <th>Fig. 21. Identical Morris-Lecar neuron oscillators provide a
+        120° CPG Lecar limit cycle and repeated with phase offsets 𝜑= 0,
+        𝜑= 2<strike>𝜋</strike>4<strike>𝜋3</strike>. This is the
+        zero-detuning reference condition. 𝐼𝑖<underline>=
+        10</underline>𝜇A/c<strike>m</strike>2 <strike>3</strike>, and
+        𝜑=</th>
+      </tr>
+    </thead>
+    <tbody>
+    </tbody>
+  </table>
+</table-wrap>
+<disp-quote>
+  <graphic mimetype="image" mime-subtype="png" xlink:href="vertopal_eeafef3e038144a7a1457352de4d5cea/media/image50.png" />
+</disp-quote>
+<table-wrap>
+  <table>
+    <colgroup>
+      <col width="50%" />
+      <col width="50%" />
+    </colgroup>
+    <thead>
+      <tr>
+        <th><p specific-use="wrapper">
+          <disp-quote>
+            <p>spikes</p>
+          </disp-quote>
+        </p></th>
+        <th><inline-graphic mimetype="image" mime-subtype="png" xlink:href="vertopal_eeafef3e038144a7a1457352de4d5cea/media/image51.png" /></th>
+      </tr>
+    </thead>
+    <tbody>
+    </tbody>
+  </table>
+</table-wrap>
+<disp-quote>
+  <p>φ₁
+  φ₂
+  φ₃</p>
+  <p>(8, 10, 14)(𝜇A/cm2). and coupling constants 𝑔= 0.005 mS. The
+  repeated identified as (𝐼1, 𝐼2, 𝐼3) = (8, 10, 14)(𝜇A/cm2), with the
+  frequencies are sufficiently different and the coupling strength is
+  too weak to produce synchrony. Fig. 23 corroborates the expectation
+  that the phases diverge monotonically. This is</p>
+  <p>further seen in the voltage waveform Fig. 22, where the firing
+  phase and order appear chaotic. Simulation times of 4700 ms and 1000
+  ms are shown respectively to highlight that this aperiodicity isn’t
+  just a transient behaviour before the system settles to synchrony.</p>
+</disp-quote>
+<graphic mimetype="image" mime-subtype="png" xlink:href="vertopal_eeafef3e038144a7a1457352de4d5cea/media/image52.png" />
+<graphic mimetype="image" mime-subtype="png" xlink:href="vertopal_eeafef3e038144a7a1457352de4d5cea/media/image53.png" />
+<graphic mimetype="image" mime-subtype="png" xlink:href="vertopal_eeafef3e038144a7a1457352de4d5cea/media/image54.png" />
+<disp-quote>
+  <p>Fig. 23. Unwrapped phase differences drift approximately linearly,
+  confirming absence of stable phase locking. Same three-neuron network
+  as Fig. 22; phases are extracted from late-time voltages and
+  differences are unwrapped. Both differences continue to increase
+  without settling, which is direct evi­dence of persistent phase
+  drift.</p>
+</disp-quote>
+<p>IV. Feed-Forward STDP SNN</p>
+<disp-quote>
+  <p>The previous sections introduced the concept of an STDP synapse,
+  Then AIST memristors were shown to reproduce this rule well, when
+  spike shaped LIF neurons were applied across it with a diffusive
+  coupling voltage.</p>
+  <p>The LIF neuron was also introduced and investigated in­cluding under
+  stochastic stimulation. This section focusses on highlighting the
+  value of reproducing STDP, with its impli­cations for training SNNs
+  being explored. The LIF Neuron, STDP model and Poisson based
+  stochastic aperiodic drive will be incorporated into an SNN trained to
+  recognise handwritten digits. Some new network level ideas will be
+  introduced, such as homeostasis mechanisms which act to prevent a
+  subset of neurons from firing too often, and sparsity, which is any
+  mechanism that promotes a network to store learned repre­sentations of
+  training data on as few synapses in the network as possible. This
+  maximises representational efficiency given a finite number of
+  synapses in an SNN.</p>
+  <p>a) <italic>Synaptic Plasticity Update:</italic>
+  The symmetric biphasic STDP (1) rule was used
+  b) <italic>Network Dynamics and Synaptic Integration:</italic>
+  Uptill this point only excitatory coupling between neurons have been
+  considered, where the pre-synaptic Neuron drives the post synaptic
+  neuron, increasing its stimulation and thus its chance of firing. To
+  implement a functional competitive in the network, The architecture
+  relies on the interplay between excitatory (E) neurons and inhibitory
+  (I) neurons. These Neurons actively discharge the membrane capacitors
+  of the post synaptic neurons they feed into, reducing their chance of
+  firing. Thus the LIF model used is identical to (21) with the addition
+  of k inhibitory and j excitatory pre synaptic neurons feeding into a
+  post synaptic neuron i:</p>
+  <p>As before 𝜏 represents the membrane time constant, which 𝜏𝑉𝑖=
+  (𝐸rest −𝑉𝑖) + ∑𝑔𝐼𝑖𝑘(𝐸inh−𝑉𝑖)𝑔𝐸𝑖𝑗(𝐸exc−𝑉𝑖) + (27)</p>
+</disp-quote>
+<p>channel conductance (𝑔𝑒jump followed by an exponential decay:</p>
+<disp-quote>
+  <p>where 𝑔𝑖𝑘 &amp; 𝑔𝑖𝑗 are the learned conductances using the with
+  𝑔𝐸𝜏𝑔𝑒𝑔𝐸𝑖𝑗= −𝑔𝐸𝑖𝑗(𝑡= 0) = 𝑔𝑖𝑗, 𝑔𝐼 𝑖𝑗 and 𝑔𝑖and 𝑖𝑘) undergoes an
+  instantaneous 𝜏𝑔𝑖𝑖𝑘(𝑡= 0) = 𝑔𝑖𝑘,𝑔𝐼𝑖𝑘= −𝑔𝐼 (28)</p>
+</disp-quote>
+<p>non zero synaptic conductance 𝑔𝑥𝑦 from pre x to post y be equivalent
+to the LIF STDP memristor synapse, the spike kernel needs to contain an
+exponential voltage rather than a fixed gate potential seen in LIF and
+Morris Lecar Neuron models. This is another motivation behind using
+exponential in their reversal potentials. While 𝐸exc drives 𝑉post
+upward, Consequently, the driving force (𝐸inh −𝑉𝑖) is strongly
+neg­excitation, when inhibitory Neurons fire they accelerate the removal
+of charge from the membrane capacitor of the post-synaptic neuron,
+discharging it at a rate exceeding its passive leakage.</p>
+<p>c) <italic>Training Data:</italic>
+Input images were 28*28 monochrome images of a curated set of 420000
+human handwriting examples of the digits 1 to 9, by the Modified
+National Institute of Standards and Tech­</p>
+<p>maximum pixel intensity, out of 255 equally spaced possible
+intensities, was divided by 4 and converted into frequencies,</p>
+<p>sity encoded into a frequency. If fewer than five spikes were emitted
+by the entire excitatory population of the SNN during presentation of a
+particular example, the maximum input rate was increased 5Hz and the
+same image was presented again until sufficient activity had been
+elicited. This harks back to</p>
+<p>the adaptive Poisson frequency range as a variable 𝜎 proxy.</p>
+<disp-quote>
+  <p>Between successive images, a 150 ms interval with no input in Fig.
+  24. The first was an input layer of 28 × 28 = 784 excitatory layer.
+  All input pixel spike trains were fed into every Excitatory neuron,
+  with STDP synapses in between. The pattern of input pixels to which a
+  particular excitatory neuron has become most sensitive is known as the
+  receptive input pixel can be visualised like a 28 ∗28 MNIST image.
+  exitatory neuron from the previous layer that drives it with a fixed
+  non trainable synapse. Every Inhibitory neuron connects backwards
+  all-to-all except to that the neuron driving it in the excitatory
+  layer.</p>
+</disp-quote>
+<graphic mimetype="image" mime-subtype="png" xlink:href="vertopal_eeafef3e038144a7a1457352de4d5cea/media/image55.png" />
+<disp-quote>
+  <p>learning. Pixel intensities from a 28 × 28 MNIST image are
+  converted to projects back to all excitatory neurons except its source
+  neuron, creating lateral inhibition and a soft winner-take-all
+  dynamic.</p>
+  <p><italic>A. Competition and Homeostasis</italic></p>
+  <p>a) <italic>Lateral Inhibition:</italic>
+  Competition is a type of sparsity mechanism. Neurons react to inputs
+  and compete, with whichever neuron emitting the most charge, having
+  its synapse strengthened more than others reacting to the same thing.
+  It was implemented on the excita­tory neurons through a dedicated
+  inhibitory population, using the connectivity shown in Fig. 24. Each
+  excitatory neuron projected to exactly one inhibitory neuron, and each
+  inhibitory neuron projected back to all excitatory neurons except the
+  one from which it received input. This connectivity created lateral
+  inhibition and hence a soft winner-take-all dynamic. The</p>
+</disp-quote>
+<graphic mimetype="image" mime-subtype="png" xlink:href="vertopal_eeafef3e038144a7a1457352de4d5cea/media/image56.png" />
+<p>strongest neuron most strongly inhibited all others. Because it
+reacted most strongly, the lateral inhibition it experiences is also
+less than what all other excitatory neurons experience. This made it
+more likely that only a small subset of excitatory neurons reacts most
+strongly to a given training example, thus promoting sparse
+representations in the excitatory neurons. as Poisson spike rates so a
+larger excitatory 𝜏 allows the information across multiple images
+providing more stable learning, whilst inhibition can still act quickly
+on a single training example providing a per image winner neuron. this
+forces the inhibitory neurons to only provide competition, and does not
+meaningfully participate in building a rich learnt representation of the
+training data.</p>
+<p>b) <italic>Adaptive Thresholding:</italic>
+To prevent a small subset of excitatory neurons from dominating the
+response, the network also implemented a homoeostasis mechanism through
+an adaptive threshold. This was identical to that described in equation
+(24). A neuron that had recently been highly active becomes temporarily
+harder to excite, redistributing competition across the population and
+encouraging receptive fields to differentiate, and to get excitatory
+neurons to detect different digits from one another.</p>
+<p><italic>B. Training</italic></p>
+<p>Training was unsupervised. Synaptic weights were learned from
+presentations of the MNIST training set without class labels. Labels
+were introduced only after learning had fin­ished. At that stage,
+learning was disabled, neuron thresholds were fixed, and each excitatory
+neuron was assigned to the digit class for which it showed the highest
+average response over the training set. During evaluation, the predicted
+digit was taken to be the class whose assigned neurons exhibited the
+highest mean firing response. No separate classifier was placed on top
+of the spiking network. An Nvidia RTX 4090 graphics processing unit
+(GPU) was used to simulate networks with 100, 400, and 1600 excitatory
+neurons.</p>
+<p>run reaches a final training-window accuracy of 74.8% after 40000
+images, the 𝑁= 400 run reaches 94.4% after 180000 Fig. 26 shows a clear
+population-size effect. The 𝑁= 100 <italic>C. Training
+results</italic></p>
+<disp-quote>
+  <p>level result in the simulation set: the architecture does not only
+  fit its training-window metric, but retains substantially improved
+  performance on the test data. For this graph, the 400 neuron result
+  was omitted because the simulation crashed before those figures could
+  be obtained.</p>
+</disp-quote>
+<table-wrap>
+  <table>
+    <colgroup>
+      <col width="20%" />
+      <col width="20%" />
+      <col width="20%" />
+      <col width="20%" />
+      <col width="20%" />
+    </colgroup>
+    <thead>
+      <tr>
+        <th rowspan="3">)</th>
+        <th>100</th>
+        <th rowspan="10" colspan="3"><p specific-use="wrapper">
+          <table-wrap>
+            <table>
+              <colgroup>
+                <col width="10%" />
+                <col width="10%" />
+                <col width="10%" />
+                <col width="10%" />
+                <col width="10%" />
+                <col width="10%" />
+                <col width="10%" />
+                <col width="10%" />
+                <col width="10%" />
+                <col width="10%" />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th rowspan="2" colspan="2"></th>
+                  <th rowspan="2" colspan="3">79</th>
+                  <th></th>
+                  <th></th>
+                  <th>93</th>
+                  <th colspan="2"><p specific-use="wrapper">
+                    <disp-quote>
+                      <p>.5</p>
+                    </disp-quote>
+                  </p></th>
+                </tr>
+                <tr>
+                  <th><p specific-use="wrapper">
+                    <disp-quote>
+                      <p>.4</p>
+                    </disp-quote>
+                  </p></th>
+                  <th></th>
+                  <th></th>
+                  <th></th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td colspan="2"></td>
+                  <td colspan="2"></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                </tr>
+                <tr>
+                  <td colspan="2"></td>
+                  <td colspan="2"></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                </tr>
+                <tr>
+                  <td></td>
+                  <td>3</td>
+                  <td colspan="2"><p specific-use="wrapper">
+                    <disp-quote>
+                      <p>.9</p>
+                    </disp-quote>
+                  </p></td>
+                  <td rowspan="2"></td>
+                  <td rowspan="2"></td>
+                  <td rowspan="2"></td>
+                  <td rowspan="2"></td>
+                  <td rowspan="2"></td>
+                  <td rowspan="2"></td>
+                </tr>
+                <tr>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                </tr>
+                <tr>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                </tr>
+              </tbody>
+            </table>
+          </table-wrap>
+        </p></th>
+      </tr>
+      <tr>
+        <th>80</th>
+      </tr>
+      <tr>
+        <th rowspan="2">60</th>
+      </tr>
+      <tr>
+        <th>%</th>
+      </tr>
+      <tr>
+        <th>(</th>
+        <th rowspan="4">40</th>
+      </tr>
+      <tr>
+        <th>t</th>
+      </tr>
+      <tr>
+        <th>e t</th>
+      </tr>
+      <tr>
+        <th rowspan="4"><italic>A</italic></th>
+      </tr>
+      <tr>
+        <th>20</th>
+      </tr>
+      <tr>
+        <th rowspan="2">0</th>
+      </tr>
+      <tr>
+        <th><italic>N</italic>=2 5</th>
+        <th><italic>N</italic>=1 0 0</th>
+        <th><italic>N</italic>=1 6 0 0</th>
+      </tr>
+    </thead>
+    <tbody>
+    </tbody>
+  </table>
+</table-wrap>
+<p>size simulations with 𝑁= 25, 𝑁= 100, and 𝑁= 1600 excitatory
+neurons;</p>
+<disp-quote>
+  <p>The confusion matrix in Fig. 27 shows where the remaining errors
+  occur. Highest probability (yellow colour intensity) lies on the
+  diagonal, confirming that the output assignment rule 93.55%, giving a
+  7% error rate and agrees with the repeated-rather than as a fully
+  optimised state of the art classifier, and there are certainly many
+  ANNs that can outperform it (Gradient Descent exceeds 99% accuracy as
+  noted by Diehl &amp; Cook [9]).</p>
+  <p>100</p>
+  <p>90</p>
+  <p>80</p>
+  <p>) % ( <italic>A</italic>
+  70</p>
+  <p>60</p>
+  <p>50</p>
+</disp-quote>
+<table-wrap>
+  <table>
+    <colgroup>
+      <col width="9%" />
+      <col width="9%" />
+      <col width="9%" />
+      <col width="9%" />
+      <col width="9%" />
+      <col width="9%" />
+      <col width="9%" />
+      <col width="9%" />
+      <col width="9%" />
+      <col width="9%" />
+      <col width="9%" />
+    </colgroup>
+    <thead>
+      <tr>
+        <th rowspan="5">the high-accuracy regime, consistent with the
+        original Diehl–Cook observation that larger excitatory
+        populations provide</th>
+        <th rowspan="5">40</th>
+        <th rowspan="5"><p specific-use="wrapper">
+          <disp-quote>
+            <p>0</p>
+          </disp-quote>
+        </p></th>
+        <th rowspan="5">100</th>
+        <th rowspan="5"><italic>n</italic> t r a i n</th>
+        <th rowspan="4">200</th>
+        <th rowspan="5"><p specific-use="wrapper">
+          <disp-quote>
+            <p>i m a g e s )</p>
+          </disp-quote>
+        </p></th>
+        <th rowspan="5"><p specific-use="wrapper">
+          <disp-quote>
+            <p>300</p>
+          </disp-quote>
+        </p></th>
+        <th><italic>N</italic></th>
+        <th>=</th>
+        <th><p specific-use="wrapper">
+          <disp-quote>
+            <p>1 0 0</p>
+          </disp-quote>
+        </p></th>
+      </tr>
+      <tr>
+        <th><italic>N</italic></th>
+        <th>=</th>
+        <th><p specific-use="wrapper">
+          <disp-quote>
+            <p>4 0 0</p>
+          </disp-quote>
+        </p></th>
+      </tr>
+      <tr>
+        <th><italic>N</italic></th>
+        <th>=</th>
+        <th rowspan="3"><p specific-use="wrapper">
+          <disp-quote>
+            <p>1 6 0 0</p>
+          </disp-quote>
+        </p></th>
+      </tr>
+      <tr>
+        <th rowspan="2" colspan="2">400</th>
+      </tr>
+      <tr>
+        <th>( 1 0 3</th>
+      </tr>
+    </thead>
+    <tbody>
+    </tbody>
+  </table>
+</table-wrap>
+<p>from 𝑁= 100 to 𝑁= 1600 raises the mean test accuracy</p>
+<p>1600 excitatory neurons using seed 42. Line styles distinguish
+network size 74.8%, 94.4%, and 98.0% respectively.</p>
+<p>V. discussion</p>
+<p><italic>A. Device-Level Plasticity</italic></p>
+<p>Initially the STDP rule (1) was defined. STDP can be explained as
+promoting meaningful computations to take place in an SNN without
+explicitly defining an algorithm to solve a particular task. Computation
+in an SNN occurs by manip­ulating the time distribution of spikes as they
+travel through the network, from input sensory neurons to output action
+neurons. When some meaningful coordinated computation is being done by
+some neurons, then it may be expected that a group of connected neurons
+will fire close together in time, in the order of the feed forward
+excitatory influence they have been arranged in. This way LTP reinforces
+any task agnostic, well coordinated computations that may randomly arise
+in the SNN when sensory input is fed in. The idea is that applying STDP
+after every exposure to many different training examples for a
+particular task, only the subset of well coordi­nated computations
+actually relevant to solving the training task, gets reinforced,
+potentiating the same synaptic pathways consistently. IN contrast,
+chance based correlations found in noise or unrelated parts of the
+training data, change which synapses get strengthened every new training
+example. Thus these irrelevant yet well coordinated computations average
+out to contribute very little to the overall synaptic structure of the
+network. What is left may be thought of as groups of neurons forming
+specialised circuits that perform some task relevant computations that
+feed into each other to give the desired output. LTD is there to weaken
+synapses that may happen to exist between a pair of neurons that have
+settled into different independent specialised circuits. Due to this,
+Spikes produced before the upstream neuron, producing Δ𝑡&lt; 0 (the
+condition</p>
+<p>feed into one post synaptic neuron (via a distinct synapse for each
+pre-synaptic neuron). A larger time gap between a pre and post neuron
+spiking has a larger chance that a different other pre neuron caused the
+superthreshold voltage crossing that triggered the firing of the post
+synaptic neuron. This LTD also decays when |Δ𝑡| →∞. between an AIST
+memristor and an STDP-like synapse. The The first part of the project
+established the physical link ambiguity increases with time so it is
+sensible for LTP to decay with spike timing separation. By the same
+argument,</p>
+<p>AIST model in Fig. 2 and the pulse-programming response in Fig. 3 and
+Fig. 4 show the same central mechanism of device conductance evolving
+with the time integral of a non linear suprathreshold update function
+(3) when driven by either a positive or negative suprathreshold voltage.
+This corresponds to the formation and dissolution of a lower resistance
+fila­mentary phase in the crystal structure of the AIST substrate. The
+resistance of such a device depends on its own recent programming
+history, with a bounded resistance caused by the</p>
+<p>persist, making its conductance 𝐺 suitable for storing synaptic</p>
+<disp-quote>
+  <p>tive spike timing into a suprathreshold pulse duration, signed
+  opposingly between causal and anti causal firing cases. In Fig. 6,
+  causal timing produced LTP and anti-causal timing</p>
+</disp-quote>
+<p>changed about |Δ𝑡| = 0. This is why the fits in Fig. 8, Fig. 7,</p>
+<p>sign is still correct, so although synaptic updates may not be in
+Fig. 8, 1 −𝑒−<strike>7</strike> is lost by having this cusp region. This
+is not Ideal for use in 65 ≈10% of the overall Ideal STDP strength as
+strong near zero, the correct type of update still happens. Compared to
+the approximately 65 ms time constants found</p>
+<disp-quote>
+  <p>The Δ𝐺 amplitude also falls to zero near the conductance SNN for
+  example. Over the region where the amplitude is the highest and the
+  flattest (30 to 78 mS) the update amplitude percentage is 0.6% of this
+  window which falls in line with estimates made by Kim et. al [12], for
+  sufficient amplitude ratios needed for effectively training an SNN
+  using the STDP rule. All in all this strongly supports the use of such
+  AIST memristors as STDP synapses, fulfilling the first aim of this
+  project. Although there is the caveat from the 10% cusp atten­uation
+  from the previous paragraph that needs to considered. Also the device
+  model used did not take into account any de­vice stochasticity and
+  device-to-device variability that matters in a fabricated SNN array,
+  that affect STDP reproducibility. Approaches such as active spike
+  amplitude normalisation, batch together many synapses and re-normalise
+  the action potentials of neurons explicitly to stabilise the synaptic
+  update amplitude to be more consistent across the conductance range,
+  and to artificially shrink the cusp region. These form a good passage
+  for further exploration.</p>
+  <p>Then the groundwork for the SNN section was laid with the LIF
+  neuron being derived from more complicated dynamical neuron models, by
+  replicating threshold firing and Laaky inte­gration dynamics of
+  biological ion channels. Then followed</p>
+</disp-quote>
+<p>particular level of gaussian noise amplitude 𝜎∗= 0.665mV.</p>
+<p>SNN architecture. Other Network mechanisms such as lateral inhibition
+and adaptive thresholding was used to implement competition and
+homeostasis respectively.</p>
+<p>CR demonstrates that noise increases the excitability of the LIF
+neuron, so it is easier for a neuron to transmit information to
+downstream. This is of course also true for just reducing the firing
+threshold voltage of LIF neurons, but that would also make the SNN less
+tolerant of external noise. It is by the fact that Gaussian noise is
+Aperiodic and centered on 0V, that on average the overall increase in
+the excitability of the neuron is 0. Adding an aperiodic background
+drive means that connected chains of neurons will only occasionally have
+a transient boost in the excitability of the downstream neuron favoring
+the chance that a coincidental upstream neuron firing will trigger a
+cascade of downstream neurons to fire. Since STDP strengthens synapses
+when downstream neurons fire shortly after upstream neurons, it
+asymmetrically favors and strengthens the stimulation the upstream
+neuron has on the downstream neuron. In the case where the transient
+gaussian noise voltage waveform made the downstream neuron harder to
+fire (by being negative), there is a lower chance that the pre synaptic
+neuron causes the post neuron to have a suprathreshold voltage crossing
+event to begin with, reducing the chance for there being a spike pair
+for STDP to react to. this way STDP asymmetrically favours aperiodic
+voltage sources superimposed into the membrane voltages of spiking
+neurons in SNNs, increasing the distance information can travel in the
+network, whilst maintaining its original noise tolerance. Using
+randomness to achieve this is known as Sto­chastic Resonance (SR). This
+motivated investigating aperiod Chaotic biologically plausible
+oscillators presented in its own section, and the use of Poisson
+distributed sensory neuron stimulus in the Diehl Cook SNN.</p>
+<p>The Diehl–Cook unsupervised SNN reproduction combined the preceding
+pieces into an explicit network-level test of whether the local STDP
+rule could facilitate unsupervised learning. The architecture in Fig. 25
+highlights a crucial mechanism. All input pixels project to all
+excitatory neurons, each excitatory neuron projects to one of its own
+inhibitory neuron, and inhibitory feeds backwards suppresses every other
+competing excitatory neurons in the SNN. This is known as Lateral
+inhibition and creates a soft winner-take-all mechanism. When one neuron
+responds strongly to an input digit, lateral inhibition prevents all
+neighbouring neurons from learning the same pattern at the same time,
+thus making learned representations to be more efficiently stored on a
+minimal number of synapse weights. STDP then strengthens the weights
+between the poisson coded active input pixel neurons and the winning
+neuron, making the neuron more selective for that feature in future
+presentations. Homeosta­sis is a complementary mechanism. The adaptive
+threshold described in the LIF section makes recently active excitatory
+neurons temporarily harder to activate, so competition does not collapse
+onto the first few neurons that happen to react strongly to something.
+This allows for more training examples to have a chance to influence the
+learned features, without the SNN getting too hung up on some
+correlation that may occur in early examples that might have just been
+noise. This</p>
+<p>explains why the receptive fields of each neuron specialises for a
+specific digit and in Fig. 29 and Fig. 30 appear to visually encode the
+average of many different common hand­writing variations, demonstrating
+the ability of the network to learn the general concepts behind the
+features present in te training data, without the use of any image
+labels, or given any external feedback on how accurate its predictions
+were. Despite this, the SNN failed on around 7% of examples on average
+with the final tested accuracy being 98%. In summary lateral inhibition
+strengthens transient correlations found in the most recent training
+examples, while homeostasis slowly redistributes the incremental
+knowledge gained each training example, whilst protecting previously
+learned knowledge from being overwritten by strong transient updates.
+This pairing is why the network resembles vector quantisation or
+self-organ­ising maps seen in traditional ANNs that require expensive
+synchronised global weight matrix updates. The accuracy results are
+strong in the broader context of Neuromorphic racies of 82.9%, 87.0%,
+91.9%, and 95.0% for 𝑁 = 100,</p>
+<disp-quote>
+  <p>in Fig. 27, which is within margin of error of the original
+  author’s results. Note that the 6400 neuron simulation was not
+  reproduced due to restricted funding for compute resources compared to
+  the Authors. The confusion matrix in Fig. 28 and the a sample of the
+  SNN’s failures in Fig. 31 show its limita­tions. Ambiguous handwritten
+  examples can still activate the wrong assigned population. Such
+  failure modes are expected from a shallow unsupervised architecture,
+  since it learns useful stroke and digit templates, but it does not
+  have the hierarchical abstraction of more layered networks, that allow
+  them to abstract and handle ambiguity better. Diehl and Cook make the
+  same broader comparison in their benchmark table, where supervised or
+  less biologically constrained systems performed worse, but state of
+  the art conventional Gradient Descent methods can reach higher
+  accuracies (99%). Diehl &amp; Cook’s work remain valuable because of
+  its simplicity, unsupervised nature and class leading performance
+  amongst biologically inspired synaptic update/ learning rules. Aside
+  from some ANNs getting higher accuracies, the 98% peak accuracy
+  obtained still strongly supports the conclusion that STDP is
+  sufficient to perform very well as a training rule for an SNN,
+  answering the second aim of this project. Further work could involve
+  modifying STDP to perform even better, to try and reach parity with
+  ANNs and to investigate ways in which much larger SNNs with more
+  neuron layers can be implemented.</p>
+  <p><italic>B. Overall Assessment</italic></p>
+  <p>Taken together, the results support the project aim: a compact
+  AIST-style memristor model can reproduce a local, timing-dependent
+  conductance update, and a Diehl–Cook style STDP SNN can learn
+  recognisable MNIST structure with strong accuracy. The strongest
+  conceptual chain is that pulse timing becomes AIST memristor
+  conductance updates, memristor conductance updates mimics the STDP
+  synaptic</p>
+</disp-quote>
+<p>plasticity rule in an SNN, lateral inhibition turns plasticity into
+competition inside of an SNN, and homeostasis prevents competition from
+degenerating into a few neurons monopolis­ing SNN behaivour. This chain
+gives a coherent neuromorphic story from device physics to network
+function, motivated by the energy efficiency of neuromorphic systems
+seen in the literature.</p>
+<p>The main caveat is that the results in this paper do not directly
+demonstrate the hardware efficiency that motivates neuromorphic
+computing. Training was slow and inefficient because event-driven STDP
+still had to be simulated sequen­tially on conventional synchronous
+hardware. A physical memristor crossbar, by contrast, would update many
+synapses asynchronously in parallel through local device physics, which
+is the reason memristive synapses and spiking neuromorphic hardware
+remain attractive. Existing neuromorphic processors already show the
+appeal of this direction: TrueNorth demon­strated large-scale spiking
+networks performing tasks success­fully at milliwatt power levels [21],
+with Loihi demonstrating similar energy gains on programmable Spiking
+Neural archi­tecture [22]. No power measurement was performed in this
+project, so those references should be treated as motivation rather than
+evidence in favour of the presented SNN compared to traditional
+ANNs.</p>
+<p>VI. Conclusion</p>
+<p>This project demonstrated a coherent simulation pathway from
+device-level memristor dynamics to network-level un­supervised learning.
+The AIST threshold-memristor model reproduced the core ingredients
+required for a synaptic device: non-volatile state-dependent
+conductance, threshold-ed pulse programming, bounded saturation, and
+polarity-dependent set/ reset behaviour. When driven by overlapping pre-
+and postsy­naptic spike kernels, the model produced a biphasic STDP-like
+conductance update, with causal timing producing LTP and anti-causal
+timing producing LTD. The fitted outer lobes were approximately
+exponential across the usable conductance range, while the update
+amplitude correctly fell toward zero near the conductance limits. The
+conductance update was weak when the spike timing magnitude fell below
+7ms, and the lack of control in the strength of the updates is a
+drawback of using AIST memristors as STDP synapses. Further work could
+explore the many ways these drawbacks are overcome by supplementing AIST
+memristors with additional circuitry. Overall this still supports the
+use of AIST memristors for STDP synapses well and shows promise, thus
+the first aim of the project was successful.</p>
+<p>The neuron-model simulations helped justify the abstrac­tions used in
+the network section. Conductance-based and reduced phase-plane models
+showed how threshold crossing and spike generation arise from continuous
+membrane dynam­ics, while the LIF coherence-resonance simulations showed
+that noise can improve spike-timing regularity at an interme­diate noise
+strength. The oscillator and ring-circuit simulations further
+illustrated how structured or aperiodic timing sources could be used to
+as a pseudorandom noise source.</p>
+<disp-quote>
+  <p>At network scale, the reproduced Diehl–Cook style archi­tecture
+  showed strong unsupervised learning behaviour [9]. Lateral inhibition
+  created competition between excitatory neurons, while adaptive
+  thresholds provided homeostasis so</p>
+  <p>93.544% mean test accuracy. This result compares favourably
+  formance whilst being unsupervised. For example The work done by
+  Hussain et al. [23] just a year before, using the super­vised
+  Morphology rule only achieved an accuracy of 90.3% [9]. The use of
+  STDP in this SNN provides an elusive pathway to implement such devices
+  with memristive STDP synapses providing low energy spike circuits and
+  asynchronous local plasticity, where autonomous synaptic strength
+  updates occur naturally from device physics, allowing for massively
+  parallel computation at a per synapse level. The two aims of the
+  project are therefore complementary, as the AIST memristor provides a
+  very compact STDP synapse implementation (the terminal gap is just
+  3nm), providing a proof of concept to im­plementing low energy
+  artificial STDP synapses in hardware, and the STDP SNN gives STDP
+  synapses a meaningful role in facilitating highly parallel
+  asynchronised synaptic updates, that this SNN demands. Future work
+  should therefore focus on moving beyond the concept level, and towards
+  tackling the device non-idealities present in fabricated arrays,
+  increasing the depth of the networks (currently there’s only 3 layers)
+  and size of the networks, to be able to take on more difficult and
+  practical real world machine learning tasks. Put together, the second
+  aim of the project was also successfully carried out. All together
+  both aims were thoroughly investigated, and plans for future work have
+  been outlined.</p>
+</disp-quote>
+<p>VII. Acknowledgements:</p>
+<disp-quote>
+  <p>All reproduction graphs were reproduced independently by Tabeeb
+  Rahman. Fig. 24 comes from [9].</p>
+</disp-quote>
+<p>References</p>
+<table-wrap>
+  <table>
+    <colgroup>
+      <col width="50%" />
+      <col width="50%" />
+    </colgroup>
+    <thead>
+      <tr>
+        <th><p>[1]</p>
+        <p>[2]</p>
+        <p>[3]</p>
+        <p>[4]</p>
+        <p>[5]</p>
+        <p>[6]</p></th>
+        <th><p specific-use="wrapper">
+          <disp-quote>
+            <p>F. Rosenblatt, “The Perceptron: A Probabilistic Model for
+            Information Storage and Organization in the<italic>gical
+            Review</italic>, vol. 65, no. 6, pp. 386–408, 1958, doi:
+            .</p>
+            <p>B. Widrow and M. E. Hoff, “A Circuits,” <italic>1960 IRE
+            WESCON Convention Record</italic>, vol. 4, pp. 96–104,
+            1960.</p>
+            <p>C. E. Shannon, “A Mathematical Theory of Communication,”
+            <italic>The Bell</italic> no. 3, pp. 379–423, 1948, doi:
+            .</p>
+            <p>B. Landers, and H. Pinkard, “ARC-AGI-2: A New Challenge
+            for Frontier AI Reasoning <italic>505.11831</italic>, 2025,
+            [Online]. Available:
+            anian, “Brain power,” <italic>Proceedings of the
+            National</italic> l. 118, no. 32, p. e2107022118, 2021, doi:
+            .</p>
+            <p>“Voltage Oscillations in the Barnacle Giant Muscle Fib,
+            no. 1, pp. 193–213, July 1981, doi: .</p>
+          </disp-quote>
+        </p></th>
+      </tr>
+    </thead>
+    <tbody>
+    </tbody>
+  </table>
+</table-wrap>
+<p>[7] L. Lapicque, “Recherches quantitatives sur l'excitation
+électrique des nerfs traitée comme une polarisation,” <italic>Journal de
+Physiologie et de</italic> <italic>Pathologie Générale</italic>, vol. 9,
+pp. 620–635, 1907.</p>
+<p>[8] B. Lindner and L. Schimansky-Geier, “Analytical approach to the
+stochastic FitzHugh-Nagumo system and coherence
+resonanc<italic>­</italic> l. 60, no. 6, pp. 7270–7276, 1999, doi: .</p>
+<p>[9] . Cook, “Unsupervised learning of digit recognition using
+spike-timing-dependent plasticity<italic>onal</italic>
+<italic>Neuroscience</italic>, vol. 9, p. 99, 2015, doi: .</p>
+<p>[10] Y. Li <italic>et al.</italic>, “Activity-dependent synapnide
+electronic synapse for neur<italic>Scientific Reports</italic>, vol. 4,
+p. 4906, May 2014, doi: .</p>
+<p>[11] Y. Zhang, X. Wang, Y. Li,an, “Memristive Model for Synaptic
+Circuits,” <italic>IEEE Transactions on Circuits and</italic> vol. 64,
+no. 7, pp. 1–5, 2017, doi: .</p>
+<p>[12] iking Neural Network (SNN) With Memristor Synapses Having
+Non-linear Weight Update,” <italic>Frontiers in­nce</italic>, vol. 15, p.
+646125, 2021, doi: .</p>
+<p>[13] ion channels: Past, present, and future,”
+<italic>ysiology</italic>, vol. 144, no. 1, pp. 7–26, 2014, doi: .</p>
+<p>[14] , T. Yamanishi, K. Ptak, M. Z. Mogri, and J. C.</p>
+<disp-quote>
+  <p>Smith, “Real-time kinetic modeling of voltage-gated ion channels
+  using
+  dyna<italic>rnal</italic>, vol. 95, no. 1, pp. 66–87, 2008,
+  doi: .</p>
+</disp-quote>
+<p>[15] W. G<italic>iking Neuron Models: Single Neurons,</italic>
+<italic>Populations, Plasticity</italic>. Cambridge: Cambridge
+University Press, 2002. [16] W. Gerstner, W. M. Kistler, R. Naud, and L.
+Paninski, <italic>Neuronal</italic> <italic>Dynamics: From Single
+Neurons to Networks and Models of Cognition</italic>.</p>
+<p>ity Press, 2014. [Online]. Available: /
+[17] rges, “MNIST handwritten digit data­ base,” <italic>ATT Labs
+[Online]. Available: http://yann.lecun.com/exdb/mnist</italic>, vol. 2,
+2010.</p>
+<p>[18] S. Song, K. D. Miller, and L. F. Abbott, “Competitive Hebbian
+Learning through Spike-Timing-Dependent Synaptic <italic>ure
+Neuroscience</italic>, vol. 3, no. 9, pp. 919–926, 2000, doi: .</p>
+<p>[19] T. Masquelier and S. J. Thorpe, “Unsupervised Learnea­ tures
+through Spike Timing Dependent Pl <italic>Biology</italic>, vol. 3, no.
+2, p. e31, 2007, doi: . [20] T. Masquelier, R. Guyonneau, and S. J. T­
+dent Plasticity Finds the Start of Repeating Patterns in Co
+<italic>ONE</italic>, vol. 3, no. 1, p. e1377, 2008, doi: .</p>
+<p>[21] A million spiking-neuron integrated circuit with a scalable
+communication networ, vol. 345, no. 6197, pp. 668–673, 2014, doi: .</p>
+<p>[22] M. Davies <italic>et al.</italic>, “Loihi: A NProcessor with
+<italic>cro</italic>, vol. 38, no. 1, pp. 82–99, 2018, doi: .</p>
+<p>[23] . Basu, “Improved Margin Multi-Class Classification Using
+Dendritic Neurons with Morphological Learning,” in <italic>2014 IEEE
+International Symposium on Circuits and Systems</italic> stralia: IEEE,
+2014, pp. 2640–2643. doi: .</p>
+</body>
+<back>
+</back>
+</article>

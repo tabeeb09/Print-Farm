@@ -1,0 +1,40 @@
+name: CAId Converge From Website Runner
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/caid-converge-vps.yml"
+  schedule:
+    - cron: "*/15 * * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: caid-converge-from-website-runner
+  cancel-in-progress: false
+
+jobs:
+  converge:
+    runs-on: ${{ fromJSON(vars.DEPLOY_RUNNER_LABELS || '["self-hosted","linux","website-deploy","private-network"]') }}
+    steps:
+      - name: Converge CAId
+        shell: bash
+        run: |
+          cd /srv/caid
+          sudo git config --global --add safe.directory /srv/caid
+          sudo git fetch --all --tags --prune
+          sudo git checkout main
+          sudo git reset --hard origin/main
+          set +e
+          sudo bash scripts/caid-converge.sh --mode noninteractive
+          status="$?"
+          set -e
+          if test "$status" = "20"; then
+            echo "CAId converge published pending human config requests."
+            exit 0
+          fi
+          exit "$status"

@@ -1,0 +1,63 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+/.act-local/
+
+# NavBar iterations
+/components/VerticalNavBar.tsx
+/components/VerticalNavBar (1).tsx
+/components/VerticalNavBar (1).css
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# generated bootstrap/infra state
+/.generated/
+.terraform/
+*.tfstate
+*.tfstate.*
+
+# misc
+.DS_Store
+*.pem
+*.tar
+*.tar.zip
+crash.log
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files (can opt-in for committing if needed)
+.env*
+!.env.example
+
+# runtime secrets generated from OpenBao
+.env.runtime
+/secrets/*.env
+/secrets/*.token
+/secrets/*.json
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
