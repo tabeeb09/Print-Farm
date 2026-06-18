@@ -207,8 +207,6 @@ GitHub repository variables required for self-hosted deploy mode:
 DEPLOY_MODE=local
 DEPLOY_RUNNER_LABELS=$labels_json
 USE_LOCAL_RUSTFS_NETWORK=true
-APP_EXTRA_COMPOSE_FILES=docker-compose.website-only.same-vm-auth.override.yaml
-RUSTFS_EXTRA_COMPOSE_FILES=docker-compose.rustfs.same-vm-auth.override.yaml
 
 No DEPLOY_SSH_* GitHub secrets are required in DEPLOY_MODE=local.
 EOF
@@ -260,8 +258,6 @@ main() {
     set_repo_variable "$github_token" DEPLOY_MODE local || true
     set_repo_variable "$github_token" DEPLOY_RUNNER_LABELS "$labels_json" || true
     set_repo_variable "$github_token" USE_LOCAL_RUSTFS_NETWORK true || true
-    set_repo_variable "$github_token" APP_EXTRA_COMPOSE_FILES docker-compose.website-only.same-vm-auth.override.yaml || true
-    set_repo_variable "$github_token" RUSTFS_EXTRA_COMPOSE_FILES docker-compose.rustfs.same-vm-auth.override.yaml || true
   fi
 
   print_required_variables

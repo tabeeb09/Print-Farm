@@ -1,8 +1,6 @@
 ## Getting Started
 
-This repository is the website-side of the stack. It contains the public Next.js portfolio application, the authenticated CMS at `/cms/media`, the RustFS-facing media registry, and the VPS/bootstrap scripts used to deploy the website and media services together.
-
-I am running this on a VPS, so allowing it to be accessible via the internet. You can access my portfolio site by navigating to https://oi.loftrop.com which is portfolio spelled in reverse order. Every time I push a commit to the main branch, the VPS is configured with GitHub Actions and the new version of the site goes live. If any content is needed for the site that is too large for GitHub, I use separate object storage for those files, so those files will not necessarily be provided directly in this repo. Note that sensitive things such as API keys and my personal details such as my CV are not included in plaintext configuration.
+This repository is a deployment simulation for the Print Farm site. It keeps the website-side stack intact so we can exercise GitHub Actions deployment, CAId-backed secret/bootstrap flow, and Caddy hosting behavior without testing directly against the production portfolio repository.
 
 The application is designed around a few explicit boundaries:
 
@@ -85,8 +83,8 @@ The internal resource registry at `src/lib/resource-schema-data.json` is deliber
 Clone the repo and install dependencies:
 
 ```bash
-git clone https://github.com/tabeeb09/oi.loftrop.com.git
-cd oi.loftrop.com
+git clone https://github.com/tabeeb09/Print-Farm.git
+cd Print-Farm
 npm install
 ```
 
@@ -192,12 +190,12 @@ This repo assumes:
 - this app VPS fetches runtime secrets from OpenBao using AppRole
 - the website image is built by GitHub Actions and pulled from GHCR
 
-The simplest VPS flow is:
+The simplest app-hosting flow is:
 
 ```bash
 sudo apt-get update
 sudo apt-get install -y git
-git clone https://github.com/tabeeb09/oi.loftrop.com.git /srv/website/app
+git clone https://github.com/tabeeb09/Print-Farm.git /srv/website/app
 cd /srv/website/app
 sudo bash scripts/setup-app-vps.sh
 ```
