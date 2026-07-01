@@ -4,6 +4,7 @@
     "build": "next build",
     "dev": "next dev",
     "start": "next start",
+    "preworker": "node scripts/ensure-worker-deps.mjs",
     "worker": "node worker/print-worker.mjs"
   },
   "dependencies": {
