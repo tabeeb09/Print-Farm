@@ -1,0 +1,228 @@
+{
+	"type": "machine",
+	"name": "Bambu Lab X1 Carbon 0.4 nozzle",
+	"inherits": "fdm_bbl_3dp_001_common",
+	"from": "system",
+	"setting_id": "GM001",
+	"instantiation": "true",
+	"nozzle_diameter": [
+		"0.4"
+	],
+	"printer_model": "Bambu Lab X1 Carbon",
+	"printer_variant": "0.4",
+	"bed_exclude_area": [
+		"0x0",
+		"18x0",
+		"18x28",
+		"0x28"
+	],
+	"default_print_profile": "0.20mm Standard @BBL X1C",
+	"deretraction_speed": [
+		"30",
+		"30"
+	],
+	"enable_long_retraction_when_cut": "2",
+	"extruder_offset": [
+		"0x2"
+	],
+	"fan_direction": "left",
+	"extruder_variant_list": [
+		"Direct Drive Standard,Direct Drive High Flow"
+	],
+	"long_retractions_when_cut": [
+		"0",
+		"0"
+	],
+	"machine_unload_filament_time": "28",
+	"machine_max_acceleration_e": [
+		"5000",
+		"5000",
+		"5000",
+		"5000"
+	],
+	"machine_max_acceleration_extruding": [
+		"20000",
+		"20000",
+		"20000",
+		"20000"
+	],
+	"machine_max_acceleration_retracting": [
+		"5000",
+		"5000",
+		"5000",
+		"5000"
+	],
+	"machine_max_acceleration_travel": [
+		"9000",
+		"9000",
+		"9000",
+		"9000"
+	],
+	"machine_max_acceleration_x": [
+		"20000",
+		"20000",
+		"20000",
+		"20000"
+	],
+	"machine_max_acceleration_y": [
+		"20000",
+		"20000",
+		"20000",
+		"20000"
+	],
+	"machine_max_acceleration_z": [
+		"500",
+		"200",
+		"200",
+		"200"
+	],
+	"machine_max_jerk_e": [
+		"2.5",
+		"2.5",
+		"2.5",
+		"2.5"
+	],
+	"machine_max_jerk_x": [
+		"9",
+		"9",
+		"9",
+		"9"
+	],
+	"machine_max_jerk_y": [
+		"9",
+		"9",
+		"9",
+		"9"
+	],
+	"machine_max_jerk_z": [
+		"3",
+		"3",
+		"3",
+		"3"
+	],
+	"machine_max_speed_e": [
+		"30",
+		"30",
+		"30",
+		"30"
+	],
+	"machine_max_speed_x": [
+		"500",
+		"200",
+		"200",
+		"200"
+	],
+	"machine_max_speed_y": [
+		"500",
+		"200",
+		"200",
+		"200"
+	],
+	"machine_max_speed_z": [
+		"20",
+		"20",
+		"20",
+		"20"
+	],
+	"machine_min_extruding_rate": [
+		"0"
+	],
+	"machine_min_travel_rate": [
+		"0"
+	],
+	"nozzle_height": "4.2",
+	"nozzle_type": [
+		"hardened_steel",
+		"hardened_steel"
+	],
+	"nozzle_volume": [
+		"107",
+		"107"
+	],
+	"printer_extruder_id": [
+		"1",
+		"1"
+	],
+	"printer_extruder_variant": [
+		"Direct Drive Standard",
+		"Direct Drive High Flow"
+	],
+	"retract_before_wipe": [
+		"0%",
+		"0%"
+	],
+	"retract_length_toolchange": [
+		"2",
+		"2"
+	],
+	"retract_lift_above": [
+		"0",
+		"0"
+	],
+	"retract_lift_below": [
+		"249",
+		"249"
+	],
+	"retraction_length": [
+		"0.8",
+		"0.8"
+	],
+	"retraction_minimum_travel": [
+		"1",
+		"1"
+	],
+	"retraction_speed": [
+		"30",
+		"30"
+	],
+	"retract_restart_extra": [
+		"0",
+		"0"
+	],
+	"retract_restart_extra_toolchange": [
+		"0",
+		"0"
+	],
+	"retract_when_changing_layer": [
+		"1",
+		"1"
+	],
+	"retraction_distances_when_cut": [
+		"18",
+		"18"
+	],
+	"scan_first_layer": "1",
+	"support_air_filtration": "1",
+	"wipe_distance": [
+		"2",
+		"2"
+	],
+	"wipe": [
+		"1",
+		"1"
+	],
+	"z_hop": [
+		"0.4",
+		"0.4"
+	],
+	"z_hop_types": [
+		"Auto Lift",
+		"Auto Lift"
+	],
+	"upward_compatible_machine": [
+		"Bambu Lab P1S 0.4 nozzle",
+		"Bambu Lab P1P 0.4 nozzle",
+		"Bambu Lab X1 0.4 nozzle",
+		"Bambu Lab X1E 0.4 nozzle",
+		"Bambu Lab A1 0.4 nozzle",
+		"Bambu Lab H2D 0.4 nozzle",
+		"Bambu Lab H2D Pro 0.4 nozzle",
+		"Bambu Lab H2S 0.4 nozzle",
+		"Bambu Lab P2S 0.4 nozzle"
+	],
+	"machine_start_gcode": "G90\nM83\nM104 S[nozzle_temperature_initial_layer]\nM140 S[bed_temperature_initial_layer_single]\nG28\nG1 Z5 F3000\nM190 S[bed_temperature_initial_layer_single]\nM109 S[nozzle_temperature_initial_layer]\nG92 E0\nG1 X18 Y5 Z0.28 F5000\nG1 E2 F300\nG1 X220 E15 F1200\nG92 E0\n",
+	"before_layer_change_gcode": ";BEFORE_LAYER_CHANGE\n;[layer_z]\nG92 E0\n",
+	"machine_end_gcode": "M400\nG92 E0\nG1 E-0.8 F1800\nG91\nG1 Z10 F900\nG90\nM104 S0\nM140 S0\nM106 S0\nG1 X128 Y250 F3600\n",
+	"time_lapse_gcode": "",
+	"change_filament_gcode": ""
+}

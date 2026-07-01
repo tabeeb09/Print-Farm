@@ -1,0 +1,9 @@
+services:
+  website:
+    networks:
+      - rustfs
+
+networks:
+  rustfs:
+    external: true
+    name: ${RUSTFS_NETWORK:-rustfs_internal}

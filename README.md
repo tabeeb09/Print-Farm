@@ -65,6 +65,25 @@ graph LR
 
 Operationally, the public website, RustFS media stack, and deployment scripts live here. Keycloak and OpenBao are consumed as upstream infrastructure from the CAId repo.
 
+## Print farm
+
+The standalone print farm app now lives in `deployables/print-stage`.
+
+Start it locally from the repo root with:
+
+```bash
+npm run print:dev
+```
+
+Build or run the worker with:
+
+```bash
+npm run print:build
+npm run print:worker
+```
+
+The print-stage project keeps its own Next.js app, print queue UI, backend slicer path, and worker entry point separate from the portfolio site so the print farm can be deployed as its own project.
+
 ## Media and auth flow
 
 The media and auth model is intentionally split so that the browser never gets direct write credentials:

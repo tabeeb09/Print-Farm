@@ -14,7 +14,11 @@
     "up:fullstack:local": "node scripts/full-stack-local-up.mjs",
     "prepare:fullstack:prod": "node scripts/prepare-full-stack-env.mjs --mode prod --base .env.example --runtime .env.runtime --output .env.full.generated",
     "init:rustfs": "node scripts/init-rustfs-bucket.mjs",
-    "upload:resources": "node scripts/upload-site-resources.mjs"
+    "upload:resources": "node scripts/upload-site-resources.mjs",
+    "print:dev": "npm --prefix deployables/print-stage run dev",
+    "print:build": "npm --prefix deployables/print-stage run build",
+    "print:start": "npm --prefix deployables/print-stage run start",
+    "print:worker": "npm --prefix deployables/print-stage run worker"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1057.0",

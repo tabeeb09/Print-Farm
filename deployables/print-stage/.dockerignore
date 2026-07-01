@@ -1,0 +1,8 @@
+node_modules
+.next
+.git
+.codex-3d-test
+.codex-dev.out.log
+.codex-dev.err.log
+.env.local
+npm-debug.log*

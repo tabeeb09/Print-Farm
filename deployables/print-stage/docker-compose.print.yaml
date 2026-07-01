@@ -1,0 +1,18 @@
+services:
+  website:
+    build:
+      context: .
+    restart: unless-stopped
+    env_file:
+      - /etc/print/deploy.env
+    environment:
+      S3_PUBLIC_ENDPOINT: https://media.loftrop.com
+    networks:
+      default:
+      app_edge:
+        aliases:
+          - print-web
+
+networks:
+  app_edge:
+    external: true
