@@ -4,10 +4,8 @@ import os from "node:os";
 import path from "node:path";
 import readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
-import { spawn } from "node:child_process";
 
 import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
-import mqtt from "mqtt";
 
 import { env } from "../lib/env.js";
 import { listPrintQueue, markNextQueuedFileAsPrinting } from "../lib/s3Files.js";
@@ -18,6 +16,7 @@ const WORKER_FOLDER = process.platform === "win32"
   ? path.join(process.env.APPDATA || path.join(os.homedir(), "AppData", "Roaming"), "caid-print-worker")
   : path.join(os.homedir(), ".config", "caid-print-worker");
 const CONFIG_PATH = path.join(WORKER_FOLDER, "printers.json");
+const OUTBOX_DIR = path.join(WORKER_FOLDER, "outbox");
 
 function workerActor() {
   return {
@@ -62,6 +61,7 @@ function createS3Client() {
 
 async function ensureWorkerDir() {
   await fs.mkdir(WORKER_FOLDER, { recursive: true });
+  await fs.mkdir(OUTBOX_DIR, { recursive: true });
 }
 
 async function readJson(filePath) {
@@ -96,14 +96,17 @@ async function promptBoolean(rl, question, fallback = true) {
 }
 
 async function bootstrapPrinterConfig() {
+  if (!process.stdin.isTTY) {
+    throw new Error(
+      "Printer config is missing and the worker is not attached to an interactive terminal. Create printers.json first.",
+    );
+  }
+
   const rl = readline.createInterface({ input, output });
   try {
     const printerLabel = await promptText(rl, "Printer label", "X1 Carbon");
     const host = await promptText(rl, "Printer IP or hostname");
     const serial = await promptText(rl, "Printer serial number");
-    const accessCode = await promptText(rl, "Printer access code");
-    const mqttPort = Number.parseInt(await promptText(rl, "MQTT port", "8883"), 10) || 8883;
-    const ftpPort = Number.parseInt(await promptText(rl, "FTPS port", "990"), 10) || 990;
     const useAms = await promptBoolean(rl, "Use AMS for single-filament jobs?", true);
     const amsSlot = Number.parseInt(await promptText(rl, "Default AMS slot", "0"), 10) || 0;
 
@@ -112,9 +115,6 @@ async function bootstrapPrinterConfig() {
       label: printerLabel,
       host,
       serial,
-      accessCode,
-      mqttPort,
-      ftpPort,
       useAms,
       amsSlot,
       createdAt: new Date().toISOString(),
@@ -143,17 +143,12 @@ async function loadPrinterState() {
   return bootstrapPrinterConfig();
 }
 
-async function savePrinterState(state) {
-  await writeJson(CONFIG_PATH, state);
-}
-
 function selectPrinter(state, printerId = null) {
   if (!state?.printers?.length) {
     return null;
   }
 
   const configuredId = process.env.PRINT_WORKER_PRINTER_ID || printerId;
-
   if (configuredId) {
     const byId = state.printers.find((printer) => printer.id === configuredId);
     if (byId) {
@@ -174,7 +169,7 @@ async function promptPrinterRepair(state, printer) {
   try {
     const shouldUpdate = await promptBoolean(
       rl,
-      `Printer "${printer.label}" rejected the current credentials. Update access code now?`,
+      `Printer "${printer.label}" needs updated details. Update now?`,
       true,
     );
 
@@ -182,19 +177,17 @@ async function promptPrinterRepair(state, printer) {
       return state;
     }
 
-    const nextAccessCode = await promptText(rl, "New access code");
     const nextHost = await promptText(rl, "Printer IP or hostname", printer.host);
     const nextSerial = await promptText(rl, "Printer serial number", printer.serial);
-    const nextMqttPort = Number.parseInt(await promptText(rl, "MQTT port", String(printer.mqttPort ?? 8883)), 10) || 8883;
-    const nextFtpPort = Number.parseInt(await promptText(rl, "FTPS port", String(printer.ftpPort ?? 990)), 10) || 990;
+    const nextUseAms = await promptBoolean(rl, "Use AMS for single-filament jobs?", Boolean(printer.useAms));
+    const nextAmsSlot = Number.parseInt(await promptText(rl, "Default AMS slot", String(printer.amsSlot ?? 0)), 10) || 0;
 
     const updatedPrinter = {
       ...printer,
       host: nextHost,
       serial: nextSerial,
-      accessCode: nextAccessCode,
-      mqttPort: nextMqttPort,
-      ftpPort: nextFtpPort,
+      useAms: nextUseAms,
+      amsSlot: nextAmsSlot,
       updatedAt: new Date().toISOString(),
       lastReauthAt: new Date().toISOString(),
       needsReauth: false,
@@ -206,41 +199,11 @@ async function promptPrinterRepair(state, printer) {
       printers: state.printers.map((item) => (item.id === printer.id ? updatedPrinter : item)),
     };
 
-    await savePrinterState(nextState);
+    await writeJson(CONFIG_PATH, nextState);
     return nextState;
   } finally {
     rl.close();
   }
-}
-
-function runCommand(command, args, cwd) {
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
-      cwd,
-      stdio: ["ignore", "pipe", "pipe"],
-      windowsHide: true,
-    });
-    let stdout = "";
-    let stderr = "";
-
-    child.stdout.on("data", (chunk) => {
-      stdout += chunk.toString();
-    });
-
-    child.stderr.on("data", (chunk) => {
-      stderr += chunk.toString();
-    });
-
-    child.on("error", reject);
-    child.on("close", (code) => {
-      if (code !== 0) {
-        reject(new Error(stderr.trim() || stdout.trim() || `Command exited with code ${code}.`));
-        return;
-      }
-
-      resolve({ stdout, stderr });
-    });
-  });
 }
 
 async function readObjectToTempFile(objectKey, suggestedName) {
@@ -299,82 +262,12 @@ async function requeueJob(manifest, errorMessage) {
   return updated;
 }
 
-async function uploadToPrinter(printer, localPath, remoteName) {
-  const curlPath = process.platform === "win32" ? "curl.exe" : "curl";
-  const remoteUrl = `ftps://${printer.host}:${printer.ftpPort ?? 990}/${remoteName}`;
-
-  await runCommand(
-    curlPath,
-    [
-      "-k",
-      "--ftp-pasv",
-      "--ssl-reqd",
-      "-u",
-      `bblp:${printer.accessCode}`,
-      "-T",
-      localPath,
-      remoteUrl,
-    ],
-  );
-}
-
-async function dispatchProjectFile(printer, remoteName) {
-  return new Promise((resolve, reject) => {
-    let client;
-    const timeout = setTimeout(() => {
-      client?.end(true);
-      reject(new Error("Timed out waiting for printer MQTT acknowledgement."));
-    }, 15000);
-
-    const payload = {
-      print: {
-        sequence_id: "0",
-        command: "project_file",
-        param: "Metadata/plate_1.gcode",
-        subtask_name: remoteName,
-        file: remoteName,
-        url: `ftp:///${remoteName}`,
-        md5: "",
-        project_id: "0",
-        profile_id: "0",
-        task_id: "0",
-        subtask_id: "0",
-        timelapse: false,
-        bed_type: "auto",
-        bed_leveling: true,
-        bed_levelling: true,
-        flow_cali: true,
-        vibration_cali: true,
-        layer_inspect: true,
-        use_ams: Boolean(printer.useAms),
-        ams_mapping: printer.useAms ? [printer.amsSlot ?? 0, -1, -1, -1, -1] : [-1, -1, -1, -1, -1],
-      },
-    };
-
-    client = mqtt.connect(`mqtts://${printer.host}:${printer.mqttPort ?? 8883}`, {
-      username: "bblp",
-      password: printer.accessCode,
-      rejectUnauthorized: false,
-    });
-
-    client.on("connect", () => {
-      client.publish(`device/${printer.serial}/request`, JSON.stringify(payload), { qos: 1 }, (error) => {
-        clearTimeout(timeout);
-        client.end(true);
-        if (error) {
-          reject(error);
-          return;
-        }
-        resolve();
-      });
-    });
-
-    client.on("error", (error) => {
-      clearTimeout(timeout);
-      client.end(true);
-      reject(error);
-    });
-  });
+async function stageForOrca(printer, localPath, remoteName) {
+  const printerDir = path.join(OUTBOX_DIR, sanitizeRemoteName(printer.label));
+  await fs.mkdir(printerDir, { recursive: true });
+  const stagedPath = path.join(printerDir, remoteName);
+  await fs.copyFile(localPath, stagedPath);
+  return stagedPath;
 }
 
 async function runJob(job, printer) {
@@ -388,8 +281,7 @@ async function runJob(job, printer) {
   const { tempDir, tempPath } = await readObjectToTempFile(queueObjectKey, remoteName);
 
   try {
-    await uploadToPrinter(printer, tempPath, remoteName);
-    await dispatchProjectFile(printer, remoteName);
+    const stagedPath = await stageForOrca(printer, tempPath, remoteName);
 
     const updated = {
       ...job,
@@ -399,10 +291,14 @@ async function runJob(job, printer) {
       printError: null,
       workerPrinterId: printer.id,
       workerPrinterLabel: printer.label,
+      workerStagedPath: stagedPath,
       updatedAt: new Date().toISOString(),
     };
 
     await writeManifest(updated);
+    console.log(
+      `[print-worker] staged ${updated.originalFilename} for ${printer.label} at ${stagedPath}`,
+    );
     return updated;
   } finally {
     await fs.rm(tempDir, { recursive: true, force: true });
@@ -436,9 +332,6 @@ async function runOnce(state) {
 
   try {
     const completed = await runJob(claimed, printer);
-    console.log(
-      `[print-worker] queued ${completed.originalFilename} -> ${printer.label} (${printer.host})`,
-    );
     return { handled: true, fileId: completed.id };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Print dispatch failed.";
@@ -449,7 +342,7 @@ async function runOnce(state) {
       await requeueJob(current, message);
     }
 
-    if (/auth|login|credential|access/i.test(message) && process.stdin.isTTY) {
+    if (/printer|access|serial|config/i.test(message) && process.stdin.isTTY) {
       const nextState = await promptPrinterRepair(state, printer);
       return { handled: false, reason: "printer-repaired", state: nextState };
     }
