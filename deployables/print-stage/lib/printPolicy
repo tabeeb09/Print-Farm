@@ -1,0 +1,2 @@
+export * from './printPolicy.js';
+export { default } from './printPolicy.js';

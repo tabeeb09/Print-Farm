@@ -7,7 +7,6 @@ const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
 const nodeModulesDir = path.join(rootDir, "node_modules");
 const sentinelPackages = [
   "@aws-sdk/client-s3",
-  "mqtt",
   "next",
 ];
 

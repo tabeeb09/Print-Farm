@@ -13,7 +13,7 @@ import {
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
-import { env, parseCsv } from "./env";
+import { env, parseCsv } from "./env.js";
 import { extractOrca3mfMetadataFromBuffer } from "./orca3mf";
 import { inspect3mfPackageFromBuffer } from "./orca3mfPackage";
 import { sliceModelTo3mf } from "./orcaSlicer";
