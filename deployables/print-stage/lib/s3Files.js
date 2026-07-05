@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import fs from "node:fs/promises";
 import path from "node:path";
 
 import {
@@ -31,6 +32,9 @@ const UPLOAD_URL_TTL_SECONDS = 300;
 const MANIFEST_FOLDER = "private/system/files/manifests";
 const PRINT_QUEUE_FOLDER = "private/system/print-queue";
 const GCODE_FOLDER = "private/system/files/gcode";
+const DEFAULT_RUNTIME_ENV_FILE = ".env.runtime";
+const DEFAULT_WORKER_CONFIG_DIR = process.env.PRINT_WORKER_CONFIG_DIR || process.env.XDG_CONFIG_HOME || path.join(process.env.HOME || process.env.USERPROFILE || ".", ".config");
+const DEFAULT_WORKER_CONFIG_FILE = process.env.PRINT_WORKER_PRINTER_CONFIG_FILE || path.join(DEFAULT_WORKER_CONFIG_DIR, "caid-print-worker", "printers.json");
 
 function createS3Client() {
   return new S3Client({
@@ -86,6 +90,14 @@ function buildGcodeObjectKey(ownerSub, fileId, filename) {
 
 function buildPrintQueueObjectKey(ownerSub, fileId, filename) {
   return `${PRINT_QUEUE_FOLDER}/${ownerSub}/${fileId}/${sanitizeFilename(filename)}`;
+}
+
+function getRuntimeEnvFilePath() {
+  return process.env.PRINT_WORKER_RUNTIME_ENV_FILE || path.join(process.cwd(), DEFAULT_RUNTIME_ENV_FILE);
+}
+
+function getPrinterConfigPath() {
+  return DEFAULT_WORKER_CONFIG_FILE;
 }
 
 function decodeCursor(cursor) {
@@ -1032,6 +1044,114 @@ export async function markNextQueuedFileAsPrinting(actor) {
     updatedAt: new Date().toISOString(),
   };
 
+  await writeManifest(updated);
+  return hydrateManifest(updated);
+}
+
+export async function loadRuntimeEnv() {
+  const runtimeEnvFile = getRuntimeEnvFilePath();
+
+  try {
+    const text = await fs.readFile(runtimeEnvFile, "utf8");
+    const loaded = {};
+    for (const rawLine of text.split(/\r?\n/)) {
+      const line = rawLine.trim();
+      if (!line || line.startsWith("#")) continue;
+      const equalsIndex = line.indexOf("=");
+      if (equalsIndex < 1) continue;
+      const key = line.slice(0, equalsIndex).trim();
+      const value = line.slice(equalsIndex + 1).trim();
+      if (key) {
+        loaded[key] = value;
+      }
+    }
+    return { ...env, ...loaded };
+  } catch {
+    return { ...env };
+  }
+}
+
+export function getEffectiveStorageConfig(runtime = {}) {
+  const source = runtime && typeof runtime === "object" ? runtime : env;
+
+  return {
+    endpoint: source.S3_ENDPOINT || env.S3_ENDPOINT,
+    publicEndpoint: source.S3_PUBLIC_ENDPOINT || env.S3_PUBLIC_ENDPOINT || source.S3_ENDPOINT || env.S3_ENDPOINT,
+    region: source.S3_REGION || env.S3_REGION || "us-east-1",
+    bucket: source.S3_PRIVATE_BUCKET || env.S3_PRIVATE_BUCKET,
+    accessKeyId: source.S3_ACCESS_KEY_ID || env.S3_ACCESS_KEY_ID,
+    secretAccessKey: source.S3_SECRET_ACCESS_KEY || env.S3_SECRET_ACCESS_KEY,
+    forcePathStyle: true,
+  };
+}
+
+export async function readPrinterConfig() {
+  try {
+    const text = await fs.readFile(getPrinterConfigPath(), "utf8");
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+export async function savePrinterConfig(config) {
+  const target = getPrinterConfigPath();
+  await fs.mkdir(path.dirname(target), { recursive: true });
+  await fs.writeFile(target, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 });
+  return config;
+}
+
+export async function claimNextQueuedFile() {
+  try {
+    return await markNextQueuedFileAsPrinting({ isQueueAdmin: true });
+  } catch {
+    return null;
+  }
+}
+
+export async function markFilePrinting(fileId, updates = {}) {
+  const manifest = await readManifest(fileId);
+  if (!manifest) {
+    throw new Error("File not found.");
+  }
+  const updated = {
+    ...manifest,
+    ...updates,
+    printStatus: "printing",
+    printStartedAt: manifest.printStartedAt ?? new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  await writeManifest(updated);
+  return hydrateManifest(updated);
+}
+
+export async function markFileQueued(fileId, updates = {}) {
+  const manifest = await readManifest(fileId);
+  if (!manifest) {
+    throw new Error("File not found.");
+  }
+  const updated = {
+    ...manifest,
+    ...updates,
+    printStatus: "queued",
+    printRequestedAt: manifest.printRequestedAt ?? new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  await writeManifest(updated);
+  return hydrateManifest(updated);
+}
+
+export async function markFileFailed(fileId, updates = {}) {
+  const manifest = await readManifest(fileId);
+  if (!manifest) {
+    throw new Error("File not found.");
+  }
+  const updated = {
+    ...manifest,
+    ...updates,
+    printStatus: "failed",
+    updatedAt: new Date().toISOString(),
+  };
   await writeManifest(updated);
   return hydrateManifest(updated);
 }

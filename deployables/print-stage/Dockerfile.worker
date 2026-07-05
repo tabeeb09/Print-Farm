@@ -1,0 +1,22 @@
+FROM node:20-bookworm-slim
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV PRINT_WORKER_CONFIG_DIR=/config
+ENV PRINT_WORKER_OUTBOX_DIR=/outbox
+ENV PRINT_WORKER_OPENBAO_CREDS_FILE=/config/openbao-approle.env
+
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
+
+COPY . .
+
+COPY scripts/ensure-openbao-approle.mjs ./scripts/ensure-openbao-approle.mjs
+COPY scripts/ensure-openbao-worker-env.mjs ./scripts/ensure-openbao-worker-env.mjs
+
+RUN mkdir -p /config /outbox
+
+VOLUME ["/config", "/outbox"]
+
+ENTRYPOINT ["sh", "-lc", "node scripts/ensure-openbao-approle.mjs && node scripts/ensure-openbao-worker-env.mjs && set -a && . /config/openbao-approle.env && . /config/print-worker.env && set +a && node worker/print-worker.mjs"]

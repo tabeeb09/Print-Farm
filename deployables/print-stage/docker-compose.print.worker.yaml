@@ -1,0 +1,29 @@
+services:
+  print-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    image: print-stage-worker:local
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+    environment:
+      PRINT_WORKER_CONFIG_DIR: /config
+      PRINT_WORKER_OUTBOX_DIR: /outbox
+      PRINT_WORKER_ONCE: "false"
+      PRINT_WORKER_OPENBAO_CREDS_FILE: /config/openbao-approle.env
+      PRINT_WORKER_RUNTIME_ENV_FILE: /config/print-worker.env
+      BAO_SECRET_PATH_PRINT_WORKER: ${BAO_SECRET_PATH_PRINT_WORKER:-print-worker/prod}
+    volumes:
+      - print-worker-config:/config
+      - print-worker-outbox:/outbox
+    networks:
+      - app_edge
+
+volumes:
+  print-worker-config:
+  print-worker-outbox:
+
+networks:
+  app_edge:
+    external: true
