@@ -55,6 +55,22 @@ async function promptInteractive() {
   }
 }
 
+function readFromEnvironment() {
+  const values = {
+    BAO_ADDR: pick(process.env.BAO_ADDR),
+    OPENBAO_ROLE_ID: pick(process.env.OPENBAO_ROLE_ID) || pick(process.env.BAO_ROLE_ID),
+    OPENBAO_SECRET_ID: pick(process.env.OPENBAO_SECRET_ID) || pick(process.env.BAO_SECRET_ID),
+    BAO_KV_MOUNT: pick(process.env.BAO_KV_MOUNT, "kv"),
+    BAO_APPROLE_AUTH_PATH: pick(process.env.BAO_APPROLE_AUTH_PATH, "approle"),
+  };
+
+  if (values.BAO_ADDR && values.OPENBAO_ROLE_ID && values.OPENBAO_SECRET_ID) {
+    return values;
+  }
+
+  return null;
+}
+
 async function writeEnvFile(values) {
   await fs.mkdir(path.dirname(CREDS_FILE), { recursive: true });
   const lines = [
@@ -71,6 +87,13 @@ async function main() {
   const existing = await readExisting();
   if (existing) {
     console.log(`[openbao] using existing AppRole credentials file: ${CREDS_FILE}`);
+    return;
+  }
+
+  const envValues = readFromEnvironment();
+  if (envValues) {
+    await writeEnvFile(envValues);
+    console.log(`[openbao] wrote AppRole credentials from environment to ${CREDS_FILE}`);
     return;
   }
 

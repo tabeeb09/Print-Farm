@@ -1,2 +1,1 @@
 export * from './orca3mf.js';
-export { default } from './orca3mf.js';

@@ -17,13 +17,7 @@ services:
     volumes:
       - print-worker-config:/config
       - print-worker-outbox:/outbox
-    networks:
-      - app_edge
 
 volumes:
   print-worker-config:
   print-worker-outbox:
-
-networks:
-  app_edge:
-    external: true

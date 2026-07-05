@@ -10,7 +10,6 @@ import {
   loadRuntimeEnv,
   markFileFailed,
   markFilePrinting,
-  markFileQueued,
   readPrinterConfig,
   savePrinterConfig,
 } from '../lib/s3Files.js';
@@ -93,6 +92,10 @@ async function getPrinterConfig(job) {
 
 async function runOrcaLanWrapper(job, localPath, printer) {
   const wrapper = pick(process.env.ORCA_LAN_WRAPPER);
+  if (!wrapper && process.env.ORCA_LAN_DRY_RUN === '1') {
+    console.log(`[worker] dry-run handoff for ${localPath} to ${printer.label || printer.host || 'printer'}`);
+    return;
+  }
   if (!wrapper) throw new Error('ORCA_LAN_WRAPPER is not configured');
 
   const workDir = path.dirname(localPath);
@@ -121,6 +124,7 @@ async function runOrcaLanWrapper(job, localPath, printer) {
 async function main() {
   const runtime = await loadRuntimeEnv();
   const storage = getEffectiveStorageConfig(runtime);
+  const runOnce = process.env.PRINT_WORKER_ONCE === '1' || process.env.PRINT_WORKER_ONCE === 'true';
   const s3 = new S3Client({
     region: storage.region,
     endpoint: storage.endpoint,
@@ -137,6 +141,10 @@ async function main() {
   while (true) {
     const job = await claimNextQueuedFile();
     if (!job) {
+      if (runOnce) {
+        console.log('[worker] no queued jobs found');
+        return;
+      }
       await new Promise((resolve) => setTimeout(resolve, 5000));
       continue;
     }
@@ -153,7 +161,7 @@ async function main() {
     try {
       const localPath = await downloadObjectToTemp(s3, job.bucket, job.printQueueObjectKey, job.originalFilename);
       await runOrcaLanWrapper(job, localPath, printer);
-      await markFileQueued(job.id, {
+      await markFilePrinting(job.id, {
         printerId: printer.id,
         printerLabel: printer.label,
         printerHost: printer.host,
@@ -166,6 +174,9 @@ async function main() {
         printQueueObjectKey: job.printQueueObjectKey,
       });
       console.log(`[worker] handed off job ${job.id} to Orca LAN wrapper`);
+      if (runOnce) {
+        return;
+      }
     } catch (error) {
       await markFileFailed(job.id, {
         printerId: printer.id,
@@ -179,6 +190,10 @@ async function main() {
         error: error instanceof Error ? error.message : String(error),
       });
       console.error(`[worker] failed job ${job.id}`, error);
+      if (runOnce) {
+        process.exitCode = 1;
+        return;
+      }
     }
   }
 }
