@@ -21,10 +21,20 @@ const envSchema = z.object({
   KEYCLOAK_CLIENT_SECRET: optionalNonEmptyString,
   KEYCLOAK_FILE_ADMIN_ROLES: z.string().default("owner,technician,print_admin,media_admin"),
   KEYCLOAK_QUEUE_ADMIN_ROLES: z.string().default("owner,technician,print_admin"),
+  KEYCLOAK_OPENBAO_ADMIN_ROLES: z.string().default("owner,openbao_admin,infra_admin"),
+  KEYCLOAK_HR_ADMIN_ROLES: z.string().default("owner,identity_hr_manager"),
+  KEYCLOAK_MANAGEABLE_ROLES: z
+    .string()
+    .default("viewer,editor,media_admin,technician,print_admin,config_admin,openbao_admin,infra_admin,identity_hr_manager"),
   KEYCLOAK_ROLE_CLAIM_PATH: z.string().default("resource_access.website.roles"),
   KEYCLOAK_FILE_UPLOAD_LIMIT_CLAIMS: z
     .string()
     .default("file_upload_limit_bytes,fileUploadLimitBytes"),
+  KEYCLOAK_ADMIN_REALM: z.string().default("master"),
+  KEYCLOAK_ADMIN_CLIENT_ID: z.string().default("admin-cli"),
+  KEYCLOAK_ADMIN_CLIENT_SECRET: optionalNonEmptyString,
+  KEYCLOAK_ADMIN_USERNAME: optionalNonEmptyString,
+  KEYCLOAK_ADMIN_PASSWORD: optionalNonEmptyString,
   SUPERADMIN_EMAILS: z.string().default("tabeebrahman.logistics@gmail.com"),
   APP_BASE_URL: optionalUrl,
   S3_ENDPOINT: optionalUrl,
@@ -35,6 +45,12 @@ const envSchema = z.object({
   S3_SECRET_ACCESS_KEY: optionalNonEmptyString,
   STRIPE_SECRET_KEY: optionalNonEmptyString,
   STRIPE_WEBHOOK_SECRET: optionalNonEmptyString,
+  BAO_ADDR: optionalUrl,
+  BAO_KV_MOUNT: z.string().default("kv"),
+  BAO_APPROLE_AUTH_PATH: z.string().default("approle"),
+  BAO_ADMIN_TOKEN: optionalNonEmptyString,
+  BAO_ADMIN_ROLE_ID: optionalNonEmptyString,
+  BAO_ADMIN_SECRET_ID: optionalNonEmptyString,
   FILE_UPLOAD_MAX_BYTES: z.coerce.number().int().positive().default(262144000),
   FILE_ALLOWED_MIME_TYPES: z.string().default(""),
   FILE_ALLOWED_EXTENSIONS: z

@@ -51,6 +51,9 @@ yarn-error.log*
 
 # runtime secrets generated from OpenBao
 .env.runtime
+openbao-approle.env
+deployables/print-stage/openbao-approle.env
+deployables/print-stage/print-worker.env
 /secrets/*.env
 /secrets/*.token
 /secrets/*.json

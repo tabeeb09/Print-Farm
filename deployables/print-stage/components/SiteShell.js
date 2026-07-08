@@ -14,7 +14,18 @@ export default function SiteShell({ children, title = "3D Printer" }) {
   const isQueueAdmin =
     session?.user?.email?.toLowerCase?.() === "tabeebrahman.logistics@gmail.com" ||
     ["owner", "technician", "print_admin"].some((role) => roles.includes(role));
-  const visibleMenuItems = menuItems.filter((item) => !item.adminOnly || isQueueAdmin);
+  const isOpenBaoAdmin =
+    session?.user?.email?.toLowerCase?.() === "tabeebrahman.logistics@gmail.com" ||
+    ["owner", "openbao_admin", "infra_admin"].some((role) => roles.includes(role));
+  const isHrAdmin =
+    session?.user?.email?.toLowerCase?.() === "tabeebrahman.logistics@gmail.com" ||
+    ["owner", "identity_hr_manager"].some((role) => roles.includes(role));
+  const visibleMenuItems = menuItems.filter((item) => {
+    if (item.openBaoAdminOnly) return isOpenBaoAdmin;
+    if (item.hrAdminOnly) return isHrAdmin;
+    if (item.adminOnly) return isQueueAdmin;
+    return true;
+  });
 
   async function handleSignOut() {
     const logoutUrl = session?.keycloakLogoutUrl;

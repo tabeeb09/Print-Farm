@@ -26,6 +26,8 @@ export function toFileActor(session) {
   const roles = session.user.roles ?? [];
   const adminRoles = parseCsv(env.KEYCLOAK_FILE_ADMIN_ROLES);
   const queueAdminRoles = parseCsv(env.KEYCLOAK_QUEUE_ADMIN_ROLES);
+  const openBaoAdminRoles = parseCsv(env.KEYCLOAK_OPENBAO_ADMIN_ROLES);
+  const hrAdminRoles = parseCsv(env.KEYCLOAK_HR_ADMIN_ROLES);
   const superadminEmails = parseCsv(env.SUPERADMIN_EMAILS).map((email) => email.toLowerCase());
   const email = session.user.email ?? null;
   const isSuperadmin = email ? superadminEmails.includes(email.toLowerCase()) : false;
@@ -41,6 +43,8 @@ export function toFileActor(session) {
         : env.FILE_UPLOAD_MAX_BYTES,
     isFileAdmin: isSuperadmin || adminRoles.some((role) => roles.includes(role)),
     isQueueAdmin: isSuperadmin || queueAdminRoles.some((role) => roles.includes(role)),
+    isOpenBaoAdmin: isSuperadmin || openBaoAdminRoles.some((role) => roles.includes(role)),
+    isHrAdmin: isSuperadmin || hrAdminRoles.some((role) => roles.includes(role)),
     isSuperadmin,
   };
 }

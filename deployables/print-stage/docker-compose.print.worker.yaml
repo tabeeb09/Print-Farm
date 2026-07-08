@@ -13,7 +13,9 @@ services:
       PRINT_WORKER_ONCE: "false"
       PRINT_WORKER_OPENBAO_CREDS_FILE: /config/openbao-approle.env
       PRINT_WORKER_RUNTIME_ENV_FILE: /config/print-worker.env
-      BAO_SECRET_PATH_PRINT_WORKER: ${BAO_SECRET_PATH_PRINT_WORKER:-print-worker/prod}
+      # The current deployed website AppRole can read print/prod. Switch this
+      # to print-worker/prod after minting a narrower worker-only AppRole.
+      BAO_SECRET_PATH_PRINT_WORKER: ${BAO_SECRET_PATH_PRINT_WORKER:-print/prod}
     volumes:
       - print-worker-config:/config
       - print-worker-outbox:/outbox
