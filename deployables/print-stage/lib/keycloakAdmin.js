@@ -135,7 +135,64 @@ async function findUsersByEmail(email) {
   return users.filter((user) => user.email?.toLowerCase() === normalized);
 }
 
-async function createUserByEmail(email, name = "") {
+function sanitizeUser(user) {
+  return {
+    id: user.id,
+    email: user.email || "",
+    username: user.username || "",
+    firstName: user.firstName || "",
+    lastName: user.lastName || "",
+    enabled: user.enabled !== false,
+    attributes: user.attributes || {},
+  };
+}
+
+function getManagedBy(user) {
+  const values = user.attributes?.[env.KEYCLOAK_HR_SCOPE_ATTRIBUTE];
+  return Array.isArray(values) ? values.map(normalizeEmail).filter(Boolean) : [];
+}
+
+function isOwnerActor(actor) {
+  return Boolean(actor?.isSuperadmin || actor?.roles?.includes("owner"));
+}
+
+function canManageUser(actor, user) {
+  if (isOwnerActor(actor)) return true;
+  const actorEmail = normalizeEmail(actor?.email);
+  return Boolean(actorEmail && getManagedBy(user).includes(actorEmail));
+}
+
+async function setManagedBy(user, managerEmail) {
+  const normalized = normalizeEmail(managerEmail);
+  if (!normalized) return user;
+
+  const current = getManagedBy(user);
+  const nextManagedBy = Array.from(new Set([...current, normalized]));
+  const response = await keycloakAdminFetch(`/users/${user.id}`, {
+    method: "PUT",
+    body: JSON.stringify({
+      ...user,
+      attributes: {
+        ...(user.attributes || {}),
+        [env.KEYCLOAK_HR_SCOPE_ATTRIBUTE]: nextManagedBy,
+      },
+    }),
+  });
+
+  if (!response.ok && response.status !== 204) {
+    throw new Error(`Unable to update manager scope for ${user.email}.`);
+  }
+
+  return {
+    ...user,
+    attributes: {
+      ...(user.attributes || {}),
+      [env.KEYCLOAK_HR_SCOPE_ATTRIBUTE]: nextManagedBy,
+    },
+  };
+}
+
+async function createUserByEmail(email, name = "", managerEmail = "") {
   const normalized = normalizeEmail(email);
   if (!normalized) {
     throw new Error("Email is required.");
@@ -149,6 +206,9 @@ async function createUserByEmail(email, name = "") {
       firstName: name || undefined,
       enabled: true,
       emailVerified: false,
+      attributes: managerEmail
+        ? { [env.KEYCLOAK_HR_SCOPE_ATTRIBUTE]: [normalizeEmail(managerEmail)] }
+        : undefined,
     }),
   });
 
@@ -182,6 +242,25 @@ export function assertManageableRole(roleName) {
   }
 }
 
+export async function listPeopleForActor(actor) {
+  const response = await keycloakAdminFetch("/users?max=200");
+  const users = await response.json();
+  const people = [];
+
+  for (const user of users.filter((item) => item.email)) {
+    if (!canManageUser(actor, user)) continue;
+    people.push({
+      user: sanitizeUser(user),
+      managedBy: getManagedBy(user),
+      roles: await getUserRoles(user.id),
+    });
+  }
+
+  return people.sort((left, right) =>
+    (left.user.email || "").localeCompare(right.user.email || ""),
+  );
+}
+
 export async function getPersonByEmail(email) {
   const users = await findUsersByEmail(email);
 
@@ -194,25 +273,30 @@ export async function getPersonByEmail(email) {
   }
 
   return {
-    user: users[0],
+    user: sanitizeUser(users[0]),
+    managedBy: getManagedBy(users[0]),
     roles: await getUserRoles(users[0].id),
   };
 }
 
-export async function ensurePersonByEmail({ email, name }) {
+export async function ensurePersonByEmail({ email, name, managerEmail }) {
   const existing = await getPersonByEmail(email);
   if (existing.user) return existing;
 
-  const user = await createUserByEmail(email, name);
+  const user = await createUserByEmail(email, name, managerEmail);
   return {
-    user,
+    user: sanitizeUser(user),
+    managedBy: getManagedBy(user),
     roles: await getUserRoles(user.id),
   };
 }
 
-export async function assignRoleByEmail(email, roleName) {
+export async function assignRoleByEmail(email, roleName, managerEmail = "") {
   assertManageableRole(roleName);
-  const { user } = await ensurePersonByEmail({ email });
+  let { user } = await ensurePersonByEmail({ email, managerEmail });
+  if (managerEmail) {
+    user = sanitizeUser(await setManagedBy(user, managerEmail));
+  }
   const clientUuid = await getWebsiteClientUuid();
   const role = await getClientRole(roleName);
 

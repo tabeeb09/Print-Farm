@@ -1,6 +1,6 @@
 import Head from "next/head";
 import { getServerSession } from "next-auth/next";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import SiteShell from "../../components/SiteShell";
 import { toFileActor } from "../../lib/auth";
@@ -26,8 +26,11 @@ function roleDescription(role) {
 export default function PeopleAdminPage({ manageableRoles }) {
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
+  const [managerEmail, setManagerEmail] = useState("");
   const [person, setPerson] = useState(null);
   const [roles, setRoles] = useState([]);
+  const [managedBy, setManagedBy] = useState([]);
+  const [people, setPeople] = useState([]);
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -55,6 +58,10 @@ export default function PeopleAdminPage({ manageableRoles }) {
 
       setPerson(payload.user);
       setRoles(payload.roles || []);
+      setManagedBy(payload.managedBy || []);
+      if (Array.isArray(payload.people)) {
+        setPeople(payload.people);
+      }
       return payload;
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Permission request failed.");
@@ -63,6 +70,34 @@ export default function PeopleAdminPage({ manageableRoles }) {
       setPending(false);
     }
   }
+
+  async function loadPeople() {
+    setPending(true);
+    setError("");
+
+    try {
+      const response = await fetch("/api/admin/people");
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload.error || "Unable to load managed users.");
+      }
+
+      setPeople(payload.people || []);
+      setPerson(null);
+      setRoles([]);
+      setManagedBy([]);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to load managed users.");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  useEffect(() => {
+    loadPeople();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function searchPerson(event) {
     event.preventDefault();
@@ -75,16 +110,18 @@ export default function PeopleAdminPage({ manageableRoles }) {
   }
 
   async function createPerson() {
-    const payload = await requestPeopleApi("POST", { email, name });
+    const payload = await requestPeopleApi("POST", { email, name, managerEmail });
     if (payload?.user) {
       setMessage(`User ready: ${payload.user.email}.`);
+      await loadPeople();
     }
   }
 
   async function assignRole(role) {
-    const payload = await requestPeopleApi("POST", { email, role });
+    const payload = await requestPeopleApi("POST", { email, role, managerEmail });
     if (payload?.user) {
       setMessage(`Assigned ${role} to ${payload.user.email}.`);
+      await loadPeople();
     }
   }
 
@@ -92,7 +129,18 @@ export default function PeopleAdminPage({ manageableRoles }) {
     const payload = await requestPeopleApi("DELETE", { email, role });
     if (payload?.user) {
       setMessage(`Removed ${role} from ${payload.user.email}.`);
+      await loadPeople();
     }
+  }
+
+  function selectPerson(entry) {
+    setPerson(entry.user);
+    setEmail(entry.user.email || "");
+    setName([entry.user.firstName, entry.user.lastName].filter(Boolean).join(" "));
+    setRoles(entry.roles || []);
+    setManagedBy(entry.managedBy || []);
+    setMessage(`Selected ${entry.user.email}.`);
+    setError("");
   }
 
   return (
@@ -133,6 +181,16 @@ export default function PeopleAdminPage({ manageableRoles }) {
               />
             </label>
 
+            <label style={{ display: "grid", gap: "0.35rem" }}>
+              <span>Manager email, optional for owners</span>
+              <input
+                type="email"
+                value={managerEmail}
+                onChange={(event) => setManagerEmail(event.target.value)}
+                placeholder="manager@example.com"
+              />
+            </label>
+
             <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
               <button type="submit" disabled={pending}>
                 {pending ? "Working..." : "Search"}
@@ -158,6 +216,38 @@ export default function PeopleAdminPage({ manageableRoles }) {
         ) : null}
 
         <section className="panel panelWide">
+          <h2 style={{ marginTop: 0 }}>Visible managed users</h2>
+          {people.length ? (
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: "left", padding: "0.5rem 0" }}>Email</th>
+                  <th style={{ textAlign: "left", padding: "0.5rem 0" }}>Roles</th>
+                  <th style={{ textAlign: "left", padding: "0.5rem 0" }}>Managed by</th>
+                  <th style={{ textAlign: "left", padding: "0.5rem 0" }}>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {people.map((entry) => (
+                  <tr key={entry.user.id} style={{ borderTop: "1px solid rgba(0,0,0,0.08)" }}>
+                    <td style={{ padding: "0.65rem 0" }}>{entry.user.email}</td>
+                    <td style={{ padding: "0.65rem 0" }}>{entry.roles?.join(", ") || "none"}</td>
+                    <td style={{ padding: "0.65rem 0" }}>{entry.managedBy?.join(", ") || "owner only"}</td>
+                    <td style={{ padding: "0.65rem 0" }}>
+                      <button type="button" onClick={() => selectPerson(entry)}>
+                        Manage
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p style={{ color: "#666" }}>No users are currently visible in your management scope.</p>
+          )}
+        </section>
+
+        <section className="panel panelWide">
           <h2 style={{ marginTop: 0 }}>Current person</h2>
           {person ? (
             <div style={{ display: "grid", gap: "0.4rem" }}>
@@ -166,6 +256,9 @@ export default function PeopleAdminPage({ manageableRoles }) {
               <span style={{ color: "#555" }}>Enabled: {person.enabled === false ? "No" : "Yes"}</span>
               <span>
                 Current roles: <strong>{roles.length ? roles.join(", ") : "none"}</strong>
+              </span>
+              <span>
+                Managed by: <strong>{managedBy.length ? managedBy.join(", ") : "owner only"}</strong>
               </span>
             </div>
           ) : (
