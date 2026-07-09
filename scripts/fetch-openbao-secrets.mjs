@@ -2,6 +2,9 @@ import fs from "node:fs";
 import path from "node:path";
 
 const DRY_RUN = process.argv.includes("--dry-run");
+const groupsArgIndex = process.argv.indexOf("--groups");
+const groupsArg =
+  groupsArgIndex === -1 ? process.env.BAO_SECRET_GROUPS : process.argv[groupsArgIndex + 1];
 const rootDir = process.cwd();
 const secretsDir = path.join(rootDir, "secrets");
 const statusFile = path.join(secretsDir, "runtime-status.json");
@@ -21,6 +24,7 @@ const requiredKeys = {
     "S3_ENDPOINT",
     "S3_PUBLIC_ENDPOINT",
     "S3_BUCKET",
+    "S3_PRIVATE_BUCKET",
     "S3_REGION",
     "S3_ACCESS_KEY_ID",
     "S3_SECRET_ACCESS_KEY",
@@ -34,6 +38,32 @@ const requiredKeys = {
   keycloak: [
     "KEYCLOAK_ADMIN_REALM",
     "KEYCLOAK_ADMIN_CLIENT_ID",
+  ],
+  supabase: [
+    "SUPABASE_URL",
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "SUPABASE_STORAGE_BUCKET",
+    "FILE_UPLOAD_MAX_BYTES",
+    "FILE_ALLOWED_MIME_TYPES",
+    "FILE_ALLOWED_EXTENSIONS",
+    "KEYCLOAK_FILE_ADMIN_ROLES",
+  ],
+  print: [
+    "NEXTAUTH_URL",
+    "NEXTAUTH_SECRET",
+    "KEYCLOAK_ISSUER",
+    "KEYCLOAK_CLIENT_ID",
+    "KEYCLOAK_CLIENT_SECRET",
+    "APP_BASE_URL",
+    "S3_ENDPOINT",
+    "S3_PUBLIC_ENDPOINT",
+    "S3_PRIVATE_BUCKET",
+    "S3_ACCESS_KEY_ID",
+    "S3_SECRET_ACCESS_KEY",
+    "STRIPE_SECRET_KEY",
+    "STRIPE_WEBHOOK_SECRET",
+    "FILE_UPLOAD_MAX_BYTES",
+    "FILE_ALLOWED_EXTENSIONS",
   ],
 };
 
@@ -53,8 +83,15 @@ const config = {
     rustfs: process.env.BAO_SECRET_PATH_RUSTFS || "rustfs/prod",
     oauth2Proxy: process.env.BAO_SECRET_PATH_OAUTH2_PROXY || "oauth2-proxy/prod",
     keycloak: process.env.BAO_SECRET_PATH_KEYCLOAK || "keycloak/prod",
+    supabase: process.env.BAO_SECRET_PATH_SUPABASE || "supabase/prod",
+    print: process.env.BAO_SECRET_PATH_PRINT || "print/prod",
   },
 };
+
+const selectedGroups = (groupsArg || "website,rustfs,oauth2Proxy,keycloak,supabase")
+  .split(",")
+  .map((value) => value.trim())
+  .filter(Boolean);
 
 function readJwt() {
   if (config.token || (config.roleId && config.secretId)) {
@@ -188,11 +225,32 @@ function writeStatus(summary) {
 }
 
 function getMissingKeys(secretName, secretValues) {
-  return (requiredKeys[secretName] ?? []).filter((key) => !(key in secretValues));
+  const provider = secretValues.FILE_STORAGE_PROVIDER || process.env.FILE_STORAGE_PROVIDER || "local";
+  const keys = requiredKeys[secretName] ?? [];
+
+  return keys.filter((key) => {
+    if (secretName === "supabase" && provider !== "supabase") {
+      return false;
+    }
+
+    if (secretName === "rustfs" && key === "S3_PRIVATE_BUCKET" && provider !== "s3") {
+      return false;
+    }
+
+    return !(key in secretValues);
+  });
 }
 
 async function main() {
-  const secretPaths = Object.entries(config.paths);
+  const secretPaths = selectedGroups.map((group) => {
+    const relativePath = config.paths[group];
+
+    if (!relativePath) {
+      throw new Error(`Unknown OpenBao secret group: ${group}`);
+    }
+
+    return [group, relativePath];
+  });
 
   if (DRY_RUN) {
     console.log("Dry run: would fetch the following OpenBao KV v2 paths:");
@@ -255,8 +313,11 @@ async function main() {
 
   writeFileSafely(path.join(rootDir, ".env.runtime"), toEnvBlock(aggregated));
   if (config.roleId && config.secretId) {
+    aggregated.BAO_ADDR = config.addr;
     aggregated.OPENBAO_ROLE_ID = config.roleId;
     aggregated.OPENBAO_SECRET_ID = config.secretId;
+    aggregated.BAO_ADMIN_ROLE_ID = config.roleId;
+    aggregated.BAO_ADMIN_SECRET_ID = config.secretId;
     aggregated.BAO_APPROLE_AUTH_PATH = config.appRoleAuthPath;
     aggregated.BAO_KV_MOUNT = config.kvMount;
     aggregated.BAO_CONFIG_REQUEST_PATH =
