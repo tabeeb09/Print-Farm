@@ -316,8 +316,8 @@ async function main() {
     aggregated.BAO_ADDR = config.addr;
     aggregated.OPENBAO_ROLE_ID = config.roleId;
     aggregated.OPENBAO_SECRET_ID = config.secretId;
-    aggregated.BAO_ADMIN_ROLE_ID = config.roleId;
-    aggregated.BAO_ADMIN_SECRET_ID = config.secretId;
+    aggregated.BAO_ADMIN_ROLE_ID = aggregated.BAO_ADMIN_ROLE_ID || config.roleId;
+    aggregated.BAO_ADMIN_SECRET_ID = aggregated.BAO_ADMIN_SECRET_ID || config.secretId;
     aggregated.BAO_APPROLE_AUTH_PATH = config.appRoleAuthPath;
     aggregated.BAO_KV_MOUNT = config.kvMount;
     aggregated.BAO_CONFIG_REQUEST_PATH =
