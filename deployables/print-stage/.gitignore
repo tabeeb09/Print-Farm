@@ -32,3 +32,4 @@ openbao-approle.env
 print-worker.env
 worker-config/
 worker-outbox/
+orca-lan-wrapper/bin/

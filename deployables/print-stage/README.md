@@ -26,11 +26,22 @@ The current default preset points workers at `print/prod` because that path alre
 
 The Docker worker polls the queue, but the actual Bambu LAN handoff must run on
 the Windows host where OrcaSlicer and its Bambu networking plugin are installed.
+Build the host helper from inside an OrcaSlicer checkout:
+
+```powershell
+Set-Location C:\website\Print-Farm\deployables\print-stage
+.\scripts\build-orca-lan-print-target.ps1 -OrcaRoot C:\website\OrcaSlicer -AllowInsecureHashPinnedDownloads
+```
+
+`-AllowInsecureHashPinnedDownloads` is only for Orca's dependency download
+phase on machines where CMake cannot find a CA bundle. Orca's dependency
+archives are still checked against the SHA hashes in Orca's CMake files.
+
 Run the host bridge beside Docker:
 
 ```powershell
 Set-Location C:\website\Print-Farm\deployables\print-stage
-$env:ORCA_LAN_WRAPPER="C:\path\to\orca-lan-helper.exe"
+$env:ORCA_LAN_WRAPPER="C:\website\Print-Farm\deployables\print-stage\orca-lan-wrapper\bin\OrcaSlicer_lan_print.exe"
 $env:ORCA_LAN_BRIDGE_OUTBOX_HOST_DIR="C:\website\Print-Farm\deployables\print-stage\worker-outbox"
 npm run host:orca-bridge
 ```
