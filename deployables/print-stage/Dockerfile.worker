@@ -14,9 +14,10 @@ COPY . .
 
 COPY scripts/ensure-openbao-approle.mjs ./scripts/ensure-openbao-approle.mjs
 COPY scripts/ensure-openbao-worker-env.mjs ./scripts/ensure-openbao-worker-env.mjs
+COPY scripts/ensure-printer-config.mjs ./scripts/ensure-printer-config.mjs
 
 RUN mkdir -p /config /outbox
 
 VOLUME ["/config", "/outbox"]
 
-ENTRYPOINT ["sh", "-lc", "node scripts/ensure-openbao-approle.mjs && node scripts/ensure-openbao-worker-env.mjs && set -a && . /config/openbao-approle.env && . /config/print-worker.env && set +a && node worker/print-worker.mjs"]
+ENTRYPOINT ["sh", "-lc", "node scripts/ensure-openbao-approle.mjs && node scripts/ensure-openbao-worker-env.mjs && set -a && . /config/openbao-approle.env && . /config/print-worker.env && set +a && node scripts/ensure-printer-config.mjs && node worker/print-worker.mjs"]

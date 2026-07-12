@@ -13,6 +13,16 @@ services:
       PRINT_WORKER_ONCE: "false"
       PRINT_WORKER_OPENBAO_CREDS_FILE: /config/openbao-approle.env
       PRINT_WORKER_RUNTIME_ENV_FILE: /config/print-worker.env
+      PRINT_WORKER_PRINTER_CONFIG_FILE: /config/caid-print-worker/printers.json
+      # Optional non-interactive printer provisioning. If these are omitted,
+      # the container prompts on first run because stdin_open/tty are enabled.
+      PRINT_WORKER_PRINTER_LABEL: ${PRINT_WORKER_PRINTER_LABEL:-}
+      PRINT_WORKER_PRINTER_HOST: ${PRINT_WORKER_PRINTER_HOST:-}
+      PRINT_WORKER_PRINTER_SERIAL: ${PRINT_WORKER_PRINTER_SERIAL:-}
+      PRINT_WORKER_PRINTER_ACCESS_CODE: ${PRINT_WORKER_PRINTER_ACCESS_CODE:-}
+      PRINT_WORKER_PRINTER_LAN_PORT: ${PRINT_WORKER_PRINTER_LAN_PORT:-6000}
+      PRINT_WORKER_PRINTER_FTPS_PORT: ${PRINT_WORKER_PRINTER_FTPS_PORT:-990}
+      PRINT_WORKER_AMS_SLOT: ${PRINT_WORKER_AMS_SLOT:-1}
       # The current deployed website AppRole can read print/prod. Switch this
       # to print-worker/prod after minting a narrower worker-only AppRole.
       BAO_SECRET_PATH_PRINT_WORKER: ${BAO_SECRET_PATH_PRINT_WORKER:-print/prod}
