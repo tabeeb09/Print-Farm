@@ -6,6 +6,7 @@
     "start": "next start",
     "preworker": "node scripts/ensure-worker-deps.mjs",
     "worker": "node worker/print-worker.mjs",
+    "host:orca-bridge": "node scripts/host-orca-lan-bridge.mjs",
     "worker:docker": "docker compose -f docker-compose.print.worker.yaml up --build"
   },
   "dependencies": {

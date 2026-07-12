@@ -28,3 +28,7 @@ yarn-error.log*
 .env.development.local
 .env.test.local
 .env.production.local
+openbao-approle.env
+print-worker.env
+worker-config/
+worker-outbox/

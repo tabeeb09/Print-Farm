@@ -23,13 +23,13 @@ services:
       PRINT_WORKER_PRINTER_LAN_PORT: ${PRINT_WORKER_PRINTER_LAN_PORT:-6000}
       PRINT_WORKER_PRINTER_FTPS_PORT: ${PRINT_WORKER_PRINTER_FTPS_PORT:-990}
       PRINT_WORKER_AMS_SLOT: ${PRINT_WORKER_AMS_SLOT:-1}
+      # The Windows host runs scripts/host-orca-lan-bridge.mjs and launches
+      # Orca's LAN helper. Docker cannot execute the host's Windows .exe.
+      ORCA_LAN_BRIDGE_URL: ${ORCA_LAN_BRIDGE_URL:-http://host.docker.internal:47831/print}
+      ORCA_LAN_BRIDGE_TOKEN: ${ORCA_LAN_BRIDGE_TOKEN:-}
       # The current deployed website AppRole can read print/prod. Switch this
       # to print-worker/prod after minting a narrower worker-only AppRole.
       BAO_SECRET_PATH_PRINT_WORKER: ${BAO_SECRET_PATH_PRINT_WORKER:-print/prod}
     volumes:
-      - print-worker-config:/config
-      - print-worker-outbox:/outbox
-
-volumes:
-  print-worker-config:
-  print-worker-outbox:
+      - ./worker-config:/config
+      - ./worker-outbox:/outbox

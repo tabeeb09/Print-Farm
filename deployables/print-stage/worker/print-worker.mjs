@@ -54,7 +54,8 @@ function run(command, args, cwd) {
 }
 
 async function downloadObjectToTemp(s3, bucket, key, filename) {
-  const targetDir = path.join(os.tmpdir(), 'caid-print-worker', randomUUID());
+  const baseDir = pick(process.env.PRINT_WORKER_OUTBOX_DIR, os.tmpdir());
+  const targetDir = path.join(baseDir, 'caid-print-worker', randomUUID());
   await fs.mkdir(targetDir, { recursive: true });
   const filePath = path.join(targetDir, filename || path.basename(key));
   const res = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
@@ -66,6 +67,55 @@ async function downloadObjectToTemp(s3, bucket, key, filename) {
     res.Body?.on('error', reject);
   });
   return filePath;
+}
+
+async function runOrcaLanBridge(job, localPath, printer) {
+  const bridgeUrl = pick(process.env.ORCA_LAN_BRIDGE_URL);
+  if (!bridgeUrl) return false;
+
+  const token = pick(process.env.ORCA_LAN_BRIDGE_TOKEN);
+  const response = await fetch(bridgeUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({
+      job: {
+        id: job.id,
+        originalFilename: job.originalFilename,
+        projectName: job.projectName,
+        plateIndex: job.plateIndex,
+      },
+      file: {
+        containerPath: localPath,
+        filename: path.basename(localPath),
+      },
+      printer: {
+        id: printer.id,
+        label: printer.label,
+        host: printer.host,
+        serial: printer.serial,
+        accessCode: printer.accessCode,
+        lanPort: printer.lanPort,
+        ftpPort: printer.ftpPort,
+        amsSlot: printer.amsSlot,
+        sslFtp: printer.sslFtp,
+        sslMqtt: printer.sslMqtt,
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    throw new Error(`Orca LAN bridge failed (${response.status}): ${text || response.statusText}`);
+  }
+
+  const payload = await response.json().catch(() => ({}));
+  if (payload?.ok === false) {
+    throw new Error(payload.error || 'Orca LAN bridge returned ok=false');
+  }
+  return true;
 }
 
 async function getPrinterConfig(job) {
@@ -91,6 +141,10 @@ async function getPrinterConfig(job) {
 }
 
 async function runOrcaLanWrapper(job, localPath, printer) {
+  if (await runOrcaLanBridge(job, localPath, printer)) {
+    return;
+  }
+
   const wrapper = pick(process.env.ORCA_LAN_WRAPPER);
   if (!wrapper && process.env.ORCA_LAN_DRY_RUN === '1') {
     console.log(`[worker] dry-run handoff for ${localPath} to ${printer.label || printer.host || 'printer'}`);
