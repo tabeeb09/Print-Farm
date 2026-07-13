@@ -7,7 +7,6 @@
 #include "slic3r/Utils/BBLNetworkPlugin.hpp"
 #include "slic3r/Utils/BBLPrinterAgent.hpp"
 #include "slic3r/Utils/NetworkAgent.hpp"
-#include "slic3r/Utils/NetworkAgentFactory.hpp"
 #include "slic3r/Utils/bambu_networking.hpp"
 
 using namespace Slic3r;
@@ -112,8 +111,6 @@ int run_lan_print(const Args& args)
         return 0;
     }
 
-    NetworkAgentFactory::register_all_agents();
-
     const std::string plugin_version = get_latest_network_version();
     if (NetworkAgent::initialize_network_module(false, plugin_version) != 0) {
         const auto load_error = NetworkAgent::get_load_error();
@@ -129,8 +126,9 @@ int run_lan_print(const Args& args)
         return 1;
     }
 
-    const std::string log_dir =
-        (std::filesystem::temp_directory_path() / "orca-bambu-lan-print").string();
+    const auto work_dir = std::filesystem::temp_directory_path() / "orca-bambu-lan-print";
+    const std::string log_dir = work_dir.string();
+    std::filesystem::create_directories(work_dir / "log");
     if (!BBLNetworkPlugin::instance().create_agent(log_dir)) {
         std::cerr << "Failed to create Orca/Bambu network agent\n";
         return 1;
@@ -165,7 +163,10 @@ int run_lan_print(const Args& args)
     };
 
     auto cancel_fn = []() { return false; };
-    auto wait_fn   = []() { return 0; };
+    auto wait_fn   = [](int status, std::string job_info) {
+        std::cout << "wait status=" << status << " info=" << job_info << "\n";
+        return false;
+    };
 
     const int result = args.send_to_sdcard ?
         agent.start_send_gcode_to_sdcard(params, update_fn, cancel_fn, wait_fn) :

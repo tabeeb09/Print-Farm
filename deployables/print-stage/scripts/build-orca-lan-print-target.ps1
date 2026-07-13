@@ -26,6 +26,12 @@ if ($drive.Free -lt 20GB) {
 
 $batch = Join-Path $env:TEMP "build-orca-lan-print-target.cmd"
 $tlsLine = if ($AllowInsecureHashPinnedDownloads) { "set CMAKE_TLS_VERIFY=0" } else { "rem CMAKE_TLS_VERIFY unchanged" }
+$nativePerlLine = if (Test-Path "C:\Strawberry\perl\bin\perl.exe") { "set PATH=C:\Strawberry\perl\bin;%PATH%" } else { "rem Native Windows Perl not found; OpenSSL dependency build may require Strawberry Perl" }
+$compilerParallelismLine = "set CL=/MP2"
+$depPrefix = Join-Path $OrcaRoot "deps\build\OrcaSlicer_dep\usr\local"
+$gmpLib = Join-Path $depPrefix "lib\libgmp-10.lib"
+$mpfrLib = Join-Path $depPrefix "lib\libmpfr-4.lib"
+$gmpInclude = Join-Path $depPrefix "include"
 $depsBlock = if ($SkipDeps) {
   "echo Skipping Orca dependency build"
 } else {
@@ -45,6 +51,8 @@ if errorlevel 1 exit /b 1
 @echo off
 setlocal
 $tlsLine
+$nativePerlLine
+$compilerParallelismLine
 call "$vsDevCmd" -arch=x64
 cd /d "$OrcaRoot"
 $depsBlock
@@ -53,9 +61,9 @@ cd /d "$OrcaRoot"
 if not exist build mkdir build
 cd build
 set CMAKE_POLICY_VERSION_MINIMUM=3.5
-cmake .. -G "Visual Studio 17 2022" -A x64 -DORCA_TOOLS=ON -DCMAKE_BUILD_TYPE=Release
+cmake .. -G "Visual Studio 17 2022" -A x64 -DORCA_TOOLS=ON -DCMAKE_BUILD_TYPE=Release -DGMP_INCLUDE_DIR="$gmpInclude" -DGMP_LIBRARY_RELEASE="$gmpLib" -DGMP_LIBRARY_DEBUG="$gmpLib" -DMPFR_INCLUDE_DIR="$gmpInclude" -DMPFR_LIBRARIES="$mpfrLib" -DMPFR_LIBRARIES_DIR="$(Split-Path -Parent $mpfrLib)"
 if errorlevel 1 exit /b 1
-cmake --build . --config Release --target OrcaSlicer_lan_print -- -m
+cmake --build . --config Release --target OrcaSlicer_lan_print -- /m:1
 if errorlevel 1 exit /b 1
 "@ | Set-Content -LiteralPath $batch -Encoding ASCII
 
@@ -69,5 +77,27 @@ if (-not (Test-Path $exe)) {
 $binDir = Join-Path $printStage "orca-lan-wrapper\bin"
 New-Item -ItemType Directory -Force $binDir | Out-Null
 Copy-Item -LiteralPath $exe -Destination (Join-Path $binDir "OrcaSlicer_lan_print.exe") -Force
+$pluginDir = Join-Path $binDir "plugins"
+New-Item -ItemType Directory -Force $pluginDir | Out-Null
+$pluginSearchRoots = @(
+  (Join-Path $env:APPDATA "OrcaSlicer\plugins"),
+  (Join-Path $env:APPDATA "OrcaSlicer\plugins\backup"),
+  (Join-Path $OrcaRoot "build\src\Release\plugins")
+)
+$plugins = @()
+foreach ($root in $pluginSearchRoots) {
+  if (Test-Path $root) {
+    $plugins += Get-ChildItem -LiteralPath $root -Filter "bambu_networking_*.dll" -File -ErrorAction SilentlyContinue
+  }
+}
+if ($plugins.Count -gt 0) {
+  $uniquePlugins = $plugins | Sort-Object FullName -Unique
+  $uniquePlugins | ForEach-Object {
+    Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $pluginDir $_.Name) -Force
+  }
+  Write-Host "[orca-lan] copied $($uniquePlugins.Count) Bambu networking plugin candidate(s) to $pluginDir"
+} else {
+  Write-Warning "No bambu_networking_*.dll plugin found. Copy it from an OrcaSlicer LAN-mode installation into $pluginDir before real printing."
+}
 Write-Host "[orca-lan] built $exe"
 Write-Host "[orca-lan] copied wrapper to $(Join-Path $binDir "OrcaSlicer_lan_print.exe")"

@@ -6,21 +6,21 @@ It is intended to be built against an OrcaSlicer source checkout, not against th
 
 ## Build
 
-Provide Orca include paths, library paths, and libraries via CMake cache variables:
+Use the print-stage build script from PowerShell:
 
 ```powershell
-cmake -S . -B build `
-  -DORCA_INCLUDE_DIRS=C:/src/OrcaSlicer/src `
-  -DORCA_LIBRARY_DIRS=C:/src/OrcaSlicer/build/lib `
-  -DORCA_LIBRARIES="orca_gui;orca_utils;orca_network"
-
-cmake --build build --config Release
+powershell -NoProfile -ExecutionPolicy Bypass `
+  -File C:\website\Print-Farm\deployables\print-stage\scripts\build-orca-lan-print-target.ps1 `
+  -OrcaRoot C:\website\OrcaSlicer `
+  -AllowInsecureHashPinnedDownloads
 ```
+
+The script injects a minimal headless target into the OrcaSlicer checkout. It compiles the wrapper plus Orca's Bambu networking source files, avoiding a full `libslic3r_gui` build. It also copies `bambu_networking_*.dll` from the local Orca profile plugin folder into `orca-lan-wrapper\bin\plugins` when available.
 
 ## Run
 
 ```powershell
-orca-lan-helper.exe `
+C:\website\Print-Farm\deployables\print-stage\orca-lan-wrapper\bin\OrcaSlicer_lan_print.exe `
   --job C:\temp\job.gcode.3mf `
   --ip 192.168.1.123 `
   --serial PRINTER_SERIAL `
