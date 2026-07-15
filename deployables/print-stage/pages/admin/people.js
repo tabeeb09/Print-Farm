@@ -18,6 +18,7 @@ function roleDescription(role) {
     openbao_admin: "Can mint OpenBao worker credentials.",
     infra_admin: "Infrastructure administration access.",
     identity_hr_manager: "Can manage people and permissions.",
+    asset_admin: "Can manage loanable assets, inventory, collections, returns, and damage records.",
   };
 
   return descriptions[role] || "Managed application role.";

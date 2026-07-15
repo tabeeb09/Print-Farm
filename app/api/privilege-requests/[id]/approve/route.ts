@@ -26,6 +26,7 @@ const assignableRoles = new Set([
   "openbao_admin",
   "rustfs_admin",
   "netbird_admin",
+  "asset_admin",
 ]);
 
 export async function POST(request: Request, context: RouteContext) {

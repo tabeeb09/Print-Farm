@@ -15,6 +15,7 @@ type NavItem = {
 
 const portfolioItems: NavItem[] = [
   { href: "/", label: "Home", kicker: "Index" },
+  { href: "/assets", label: "Borrow assets", kicker: "Makerspace" },
   { href: "/docs", label: "Deployment notes", kicker: "Docs" },
   { href: "/ops/secrets", label: "Secret status", kicker: "Ops" },
   { href: "/cms/media", label: "Media CMS", kicker: "Assets" },
@@ -23,7 +24,32 @@ const portfolioItems: NavItem[] = [
 ];
 
 const accountItems: NavItem[] = [
+  { href: "/assets/my-loans", label: "My bookings", kicker: "Loans" },
   { href: "/cms/media", label: "Media CMS", kicker: "RustFS" },
+  {
+    href: "/admin/assets/catalogue",
+    label: "Asset catalogue",
+    kicker: "Loans",
+    roles: ["owner", "asset_admin"],
+  },
+  {
+    href: "/admin/assets/inventory",
+    label: "Inventory",
+    kicker: "Assets",
+    roles: ["owner", "asset_admin"],
+  },
+  {
+    href: "/admin/assets/loans",
+    label: "Asset loans",
+    kicker: "Collections",
+    roles: ["owner", "asset_admin"],
+  },
+  {
+    href: "/admin/assets/lost-damaged",
+    label: "Lost/damaged",
+    kicker: "Repairs",
+    roles: ["owner", "asset_admin"],
+  },
   { href: "/admin/role-requests", label: "Role requests", kicker: "Identity", roles: ["owner"] },
   {
     href: "/admin/config-requests",

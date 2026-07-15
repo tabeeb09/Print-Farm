@@ -20,9 +20,13 @@ export default function SiteShell({ children, title = "3D Printer" }) {
   const isHrAdmin =
     session?.user?.email?.toLowerCase?.() === "tabeebrahman.logistics@gmail.com" ||
     ["owner", "identity_hr_manager"].some((role) => roles.includes(role));
+  const isAssetAdmin =
+    session?.user?.email?.toLowerCase?.() === "tabeebrahman.logistics@gmail.com" ||
+    ["owner", "asset_admin"].some((role) => roles.includes(role));
   const visibleMenuItems = menuItems.filter((item) => {
     if (item.openBaoAdminOnly) return isOpenBaoAdmin;
     if (item.hrAdminOnly) return isHrAdmin;
+    if (item.assetAdminOnly) return isAssetAdmin;
     if (item.adminOnly) return isQueueAdmin;
     return true;
   });
