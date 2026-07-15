@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-IMAGE="${IMAGE:-ghcr.io/tabeeb09/website:latest}"
+IMAGE="${IMAGE:-ghcr.io/tabeeb09/print-farm:latest}"
 
 if ! command -v docker >/dev/null 2>&1; then
   echo "Missing docker. Run scripts/provision-app-vps.sh first on a blank VPS." >&2

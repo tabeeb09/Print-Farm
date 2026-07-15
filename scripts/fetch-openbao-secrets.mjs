@@ -88,7 +88,7 @@ const config = {
   },
 };
 
-const selectedGroups = (groupsArg || "website,rustfs,oauth2Proxy,keycloak,supabase")
+const selectedGroups = (groupsArg || "website,rustfs,oauth2Proxy,keycloak")
   .split(",")
   .map((value) => value.trim())
   .filter(Boolean);
