@@ -357,7 +357,8 @@ export default function AssetClient({ mode }) {
 
   const groupedLoans = useMemo(() => {
     const groups = { future: [], present: [], overdue: [], historical: [] };
-    for (const loan of payload?.loans || []) {
+    const loans = Array.isArray(payload?.loans) ? payload.loans : [];
+    for (const loan of loans) {
       groups[loan.displayState || "historical"].push(loan);
     }
     return groups;
