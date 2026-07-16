@@ -70,7 +70,7 @@ Minimal manual flow:
 ```bash
 sudo apt-get update
 sudo apt-get install -y git
-git clone https://github.com/tabeeb09/oi.loftrop.com.git /srv/website/app
+git clone https://github.com/tabeeb09/Print-Farm.git /srv/website/app
 cd /srv/website/app
 sudo bash scripts/setup-app-vps.sh
 ```

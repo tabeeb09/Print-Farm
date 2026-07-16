@@ -404,7 +404,7 @@ function githubRepositoryFromUrl(repoUrl) {
     // Fall through to a safe default below.
   }
 
-  return "tabeeb09/oi.loftrop.com";
+  return "tabeeb09/Print-Farm";
 }
 
 function installRemoteFile({ host, keyPath, localPath, remotePath }) {
@@ -649,7 +649,7 @@ async function main() {
       config,
       "websiteRepoUrl",
       "Website code repository URL",
-      "https://github.com/tabeeb09/oi.loftrop.com.git",
+      "https://github.com/tabeeb09/Print-Farm.git",
     );
     const websiteRepoRef = await promptConfig(rl, config, "websiteRepoRef", "Website repository branch/ref", "main");
     const caidRepoUrl = await promptConfig(

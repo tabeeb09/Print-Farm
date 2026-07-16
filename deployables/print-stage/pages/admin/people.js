@@ -1,5 +1,6 @@
 import Head from "next/head";
 import { getServerSession } from "next-auth/next";
+import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 
 import SiteShell from "../../components/SiteShell";
@@ -25,6 +26,7 @@ function roleDescription(role) {
 }
 
 export default function PeopleAdminPage({ manageableRoles }) {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [managerEmail, setManagerEmail] = useState("");
@@ -158,6 +160,11 @@ export default function PeopleAdminPage({ manageableRoles }) {
             approved application roles. This is intentionally small: no raw Keycloak admin console,
             no arbitrary role names.
           </p>
+          <div style={{ marginTop: "0.75rem" }}>
+            <button type="button" onClick={() => router.push("/admin/people/balances")}>
+              Balances
+            </button>
+          </div>
         </section>
 
         <section className="panel">

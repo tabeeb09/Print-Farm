@@ -1,5 +1,5 @@
 param(
-  [string]$Repository = "tabeeb09/oi.loftrop.com",
+  [string]$Repository = "tabeeb09/Print-Farm",
   [string]$WorkflowName = "Build and Push Website",
   [string]$Ref = "main",
   [string]$HostName = "host.docker.internal",

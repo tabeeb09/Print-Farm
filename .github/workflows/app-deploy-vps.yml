@@ -11,13 +11,6 @@ on:
         description: "Deployment scope: app, full, rustfs, or status"
         required: false
         default: app
-  workflow_run:
-    workflows:
-      - Build and Push Website
-    types:
-      - completed
-    branches:
-      - main
 
 permissions:
   contents: read
@@ -28,7 +21,6 @@ concurrency:
 
 jobs:
   deploy:
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ${{ fromJSON(vars.DEPLOY_RUNNER_LABELS || '["self-hosted","linux","website-deploy","private-network"]') }}
     env:
       DEPLOY_PATH: /srv/website/app
