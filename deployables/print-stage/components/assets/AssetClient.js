@@ -32,6 +32,11 @@ function fromDatetimeLocal(value) {
   return value ? new Date(value).toISOString() : "";
 }
 
+function serialText(loan) {
+  const serials = Array.isArray(loan?.serials) ? loan.serials.filter(Boolean) : [];
+  return serials.length ? serials.join(", ") : "-";
+}
+
 function addDays(value, days) {
   const date = new Date(value);
   date.setDate(date.getDate() + days);
@@ -854,7 +859,7 @@ function AdminLoansView({ loans, tab, onTab, onCollect, onReturn, onExpire }) {
             <tr key={loan.id}>
               <td>{loan.assetName}</td>
               <td>{loan.userEmail || loan.userId}</td>
-              <td>{loan.serials.join(", ")}</td>
+              <td>{serialText(loan)}</td>
               <td>{formatDate(loan.collectionAt)}</td>
               <td>{formatDate(loan.returnDueAt)}</td>
               <td>{loan.overdue ? <StatusBadge tone="red">Overdue</StatusBadge> : loan.status}</td>
@@ -952,7 +957,7 @@ function MyLoansView({ groups, debts, onReschedule, onExtend, onLost }) {
                   <h3>{loan.assetName}</h3>
                   <StatusBadge tone={group === "overdue" ? "red" : group === "future" ? "amber" : "green"}>{group}</StatusBadge>
                 </div>
-                <p>Serials: {loan.serials.join(", ")}</p>
+                <p>Serials: {serialText(loan)}</p>
                 <p>Collection: {formatDate(loan.collectionAt)}</p>
                 <p>Return: {formatDate(loan.returnDueAt)}</p>
                 {group === "future" ? <p>Collection code: <strong>{loan.collectionCode}</strong></p> : null}

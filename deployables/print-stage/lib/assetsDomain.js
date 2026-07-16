@@ -805,7 +805,8 @@ export function classifyLoan(loan, now = new Date()) {
 
 function decorateLoan(state, loan, now = new Date()) {
   const asset = state.assets.find((entry) => entry.id === loan.assetId);
-  const units = (asset?.units || []).filter((unit) => loan.unitIds.includes(unit.id));
+  const unitIds = Array.isArray(loan.unitIds) ? loan.unitIds : [];
+  const units = (asset?.units || []).filter((unit) => unitIds.includes(unit.id));
   const overdue = loan.status === "collected" && new Date(loan.returnDueAt).getTime() < new Date(now).getTime();
   const failureAt = asset && loan.collectedAt
     ? new Date(new Date(loan.collectedAt).getTime() + (asset.totalFailureDays || DEFAULT_FAILURE_DAYS) * 24 * 60 * 60 * 1000).toISOString()
@@ -813,6 +814,7 @@ function decorateLoan(state, loan, now = new Date()) {
 
   return {
     ...loan,
+    unitIds,
     assetName: asset?.name || "Deleted asset",
     assetPricePence: asset?.pricePence || 0,
     lateFeePence: asset?.lateFeePence || DEFAULT_LATE_FEE_PENCE,
