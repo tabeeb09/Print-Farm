@@ -1,7 +1,11 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
-import { fromDatetimeLocalValue, toDatetimeLocalValue } from "../../lib/dateTimeLocal.js";
+import {
+  fromDatetimeLocalValue,
+  toDatetimeLocalValue,
+  toFutureDatetimeLocalValue,
+} from "../../lib/dateTimeLocal.js";
 
 const adminLinks = [
   ["/admin/assets/catalogue", "Catalogue"],
@@ -222,7 +226,7 @@ export default function AssetClient({ mode }) {
       assetId: asset.id,
       quantity: 1,
       unitIds: [],
-      collectionAt: toDatetimeLocalValue(collectionAt),
+      collectionAt: toFutureDatetimeLocalValue(collectionAt),
       returnAt: toDatetimeLocalValue(addDays(collectionAt, 7)),
       acceptTerms: false,
     });

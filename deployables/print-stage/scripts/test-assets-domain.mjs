@@ -26,7 +26,11 @@ import {
   verifyCollectionCode,
   verifyReturnCode,
 } from "../lib/assetsDomain.js";
-import { fromDatetimeLocalValue, toDatetimeLocalValue } from "../lib/dateTimeLocal.js";
+import {
+  fromDatetimeLocalValue,
+  toDatetimeLocalValue,
+  toFutureDatetimeLocalValue,
+} from "../lib/dateTimeLocal.js";
 
 function throwsMessage(fn, text) {
   assert.throws(fn, (error) => error instanceof Error && error.message.includes(text));
@@ -43,6 +47,10 @@ const wednesdayMorning = new Date("2026-07-08T10:00:00.000Z");
 assert.equal(
   fromDatetimeLocalValue(toDatetimeLocalValue("2026-07-06T10:30:00.000Z")),
   "2026-07-06T10:30:00.000Z",
+);
+assert.equal(
+  fromDatetimeLocalValue(toFutureDatetimeLocalValue("2026-07-06T10:30:30.000Z", new Date("2026-07-06T10:30:45.000Z"))),
+  "2026-07-06T10:35:00.000Z",
 );
 
 throwsMessage(
