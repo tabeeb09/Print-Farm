@@ -338,6 +338,17 @@ async function getClientRole(roleName) {
   return response.json();
 }
 
+async function listUsersWithClientRole(roleName) {
+  const role = await findClientRole(roleName);
+  if (!role) return [];
+
+  const clientUuid = await getWebsiteClientUuid();
+  const response = await keycloakAdminFetch(
+    `/clients/${clientUuid}/roles/${encodeURIComponent(roleName)}/users?max=100`,
+  );
+  return response.json();
+}
+
 async function findClientRole(roleName) {
   const clientUuid = await getWebsiteClientUuid();
   const response = await keycloakAdminFetch(
@@ -488,7 +499,37 @@ export async function syncSsoUserByEmail({ email, name, provider }) {
   return person;
 }
 
-export async function sendPasswordResetIfRegistered(email, redirectUri) {
+export async function getOwnerAlertRecipientEmails(maxRecipients = 4) {
+  const recipients = [];
+  const seen = new Set();
+
+  function add(email) {
+    const normalized = normalizeEmail(email);
+    if (!normalized || seen.has(normalized) || recipients.length >= maxRecipients) return;
+    seen.add(normalized);
+    recipients.push(normalized);
+  }
+
+  for (const email of parseCsv(env.SUPERADMIN_EMAILS)) {
+    add(email);
+  }
+
+  if (recipients.length < maxRecipients) {
+    for (const user of await listUsersWithClientRole("owner")) {
+      add(user.email);
+    }
+  }
+
+  if (recipients.length < maxRecipients) {
+    for (const user of await listUsersWithClientRole("owner_grant_super")) {
+      add(user.email);
+    }
+  }
+
+  return recipients;
+}
+
+export async function sendPasswordResetIfRegistered(email, redirectUri, options = {}) {
   const user = await findUniqueUserByEmail(email);
 
   if (!user || user.enabled === false) {
@@ -504,12 +545,16 @@ export async function sendPasswordResetIfRegistered(email, redirectUri) {
     params.set("redirect_uri", redirectUri);
   }
 
+  const beforeSendResult = options.beforeSend
+    ? await options.beforeSend({ email, user: sanitizeUser(user) })
+    : null;
+
   await keycloakAdminFetch(`/users/${user.id}/execute-actions-email?${params.toString()}`, {
     method: "PUT",
     body: JSON.stringify(["UPDATE_PASSWORD"]),
   });
 
-  return { sent: true };
+  return { sent: true, beforeSend: beforeSendResult };
 }
 
 export async function assignRoleByEmail(email, roleName, managerEmail = "", actor = null) {
@@ -598,9 +643,9 @@ async function getGroupDirectRoles(groupId) {
 }
 
 async function getGroupMembers(groupId) {
-  const response = await keycloakAdminFetch(`/groups/${encodeURIComponent(groupId)}/members?max=200`);
+  const response = await keycloakAdminFetch(`/groups/${encodeURIComponent(groupId)}/members?briefRepresentation=false&max=200`);
   const users = await response.json();
-  return users.filter((user) => user.email).map(sanitizeUser);
+  return users.map(sanitizeUser).filter((user) => user.email || user.username);
 }
 
 async function sanitizeGroup(group) {

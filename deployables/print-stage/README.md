@@ -77,3 +77,49 @@ The assignable role list is controlled by:
 ```env
 KEYCLOAK_MANAGEABLE_ROLES=viewer,editor,media_admin,technician,print_admin,config_admin,openbao_admin,infra_admin,identity_hr_manager
 ```
+
+## Account Recovery Email
+
+Password recovery goes through the app endpoint at `/api/auth/recover`, which
+checks the user in Keycloak, reserves one daily email quota event in S3, then
+asks Keycloak to send the reset email. The quota is intentionally conservative:
+if quota state cannot be written, no reset email is sent.
+
+The default daily hard limit is `95` total outbound email events per UTC day.
+By default one event is reserved for an owner alert, so user-facing reset
+emails stop at `94`; the alert email consumes event `95`.
+
+Resend can be configured in OpenBao with:
+
+```powershell
+$env:RESEND_API_KEY = "<resend-api-key>"
+$env:RESEND_FROM_EMAIL = "no-reply@mg.example.com"
+node scripts\configure-resend-openbao.mjs --bootstrap-env C:\path\to\openbao-bootstrap.env
+```
+
+This writes the equivalent Keycloak SMTP settings into `keycloak/prod`:
+
+```env
+KEYCLOAK_SMTP_HOST=smtp.resend.com
+KEYCLOAK_SMTP_PORT=465
+KEYCLOAK_SMTP_FROM=no-reply@mg.example.com
+KEYCLOAK_SMTP_USER=resend
+KEYCLOAK_SMTP_PASSWORD=<RESEND_API_KEY>
+KEYCLOAK_SMTP_SSL=true
+KEYCLOAK_SMTP_STARTTLS=false
+RESEND_API_KEY=<RESEND_API_KEY>
+RESEND_FROM_EMAIL=no-reply@mg.example.com
+EMAIL_DAILY_LIMIT=95
+EMAIL_DAILY_ALERT_RECIPIENT_LIMIT=4
+EMAIL_DAILY_ALERT_RESERVE=true
+```
+
+`scripts/sync-keycloak-realm-auth.mjs` applies those settings to Keycloak
+during print deploy. When the daily limit is reached, the app sends one alert
+email to at most four `SUPERADMIN_EMAILS`/`owner` users recommending either
+upgrading Resend/payment or implementing a self-hosted mail relay.
+
+The sync script disables Keycloak's built-in public "forgot password" link by
+default (`KEYCLOAK_LOGIN_RESET_PASSWORD_ALLOWED=false`) so recovery traffic goes
+through the app quota gate. The app still uses Keycloak admin
+`execute-actions-email` to issue the actual reset link after quota is reserved.

@@ -55,6 +55,7 @@ export default function PeopleAdminPage({ manageableRoles, initialRoleOptions })
   const [roleOptions, setRoleOptions] = useState(initialRoleOptions || []);
   const [groupModalOpen, setGroupModalOpen] = useState(false);
   const [groupForm, setGroupForm] = useState(emptyGroupForm);
+  const [expandedGroupIds, setExpandedGroupIds] = useState([]);
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -215,6 +216,14 @@ export default function PeopleAdminPage({ manageableRoles, initialRoleOptions })
     setGroupModalOpen(true);
     setError("");
     setMessage("");
+  }
+
+  function toggleGroupExpanded(groupId) {
+    setExpandedGroupIds((current) =>
+      current.includes(groupId)
+        ? current.filter((id) => id !== groupId)
+        : [...current, groupId],
+    );
   }
 
   function updateGroupField(field, value) {
@@ -409,11 +418,18 @@ export default function PeopleAdminPage({ manageableRoles, initialRoleOptions })
         </section>
 
         <section className="panel panelWide">
-          <h2 style={{ marginTop: 0 }}>People groups</h2>
-          <p style={{ color: "#555", marginTop: 0 }}>
-            Group members inherit the regular permissions applied here. Delegate variants can only be
-            assigned by someone who already has the matching super-delegation authority.
-          </p>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", alignItems: "start" }}>
+            <div>
+              <h2 style={{ marginTop: 0 }}>People groups</h2>
+              <p style={{ color: "#555", marginTop: 0 }}>
+                Group members inherit the regular permissions applied here. Delegate variants can only be
+                assigned by someone who already has the matching super-delegation authority.
+              </p>
+            </div>
+            <button type="button" onClick={() => openGroupModal()}>
+              Create people group
+            </button>
+          </div>
           {peopleGroups.length ? (
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
@@ -426,22 +442,40 @@ export default function PeopleAdminPage({ manageableRoles, initialRoleOptions })
                 </tr>
               </thead>
               <tbody>
-                {peopleGroups.map((group) => (
-                  <tr key={group.id} style={{ borderTop: "1px solid rgba(0,0,0,0.08)" }}>
-                    <td style={{ padding: "0.65rem 0" }}>{group.name}</td>
-                    <td style={{ padding: "0.65rem 0" }}>{group.admins?.join(", ") || "none"}</td>
-                    <td style={{ padding: "0.65rem 0" }}>{group.members?.length || 0}</td>
-                    <td style={{ padding: "0.65rem 0" }}>{group.directRoles?.join(", ") || "none"}</td>
-                    <td style={{ padding: "0.65rem 0", display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                      <button type="button" onClick={() => openGroupModal(group)}>
-                        Edit
-                      </button>
-                      <button type="button" onClick={() => deleteGroup(group)} disabled={pending}>
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {peopleGroups.map((group) => {
+                  const members = group.members || [];
+                  const expanded = expandedGroupIds.includes(group.id);
+
+                  return (
+                    <tr key={group.id} style={{ borderTop: "1px solid rgba(0,0,0,0.08)" }}>
+                      <td style={{ padding: "0.65rem 0" }}>{group.name}</td>
+                      <td style={{ padding: "0.65rem 0" }}>{group.admins?.join(", ") || "none"}</td>
+                      <td style={{ padding: "0.65rem 0" }}>
+                        <button type="button" onClick={() => toggleGroupExpanded(group.id)}>
+                          {expanded ? "Hide" : "Show"} {members.length} {members.length === 1 ? "member" : "members"}
+                        </button>
+                        {expanded ? (
+                          <ul style={{ margin: "0.5rem 0 0", paddingLeft: "1.25rem" }}>
+                            {members.length ? members.map((member) => (
+                              <li key={member.id || member.email}>
+                                {member.email || member.username || member.id}
+                              </li>
+                            )) : <li>No members in this group.</li>}
+                          </ul>
+                        ) : null}
+                      </td>
+                      <td style={{ padding: "0.65rem 0" }}>{group.directRoles?.join(", ") || "none"}</td>
+                      <td style={{ padding: "0.65rem 0", display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                        <button type="button" onClick={() => openGroupModal(group)}>
+                          Edit
+                        </button>
+                        <button type="button" onClick={() => deleteGroup(group)} disabled={pending}>
+                          Delete
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           ) : (

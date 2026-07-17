@@ -186,26 +186,102 @@ function pick(env, ...keys) {
   return "";
 }
 
+function parseCsv(value) {
+  return String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function getManageableRoleNames(env) {
+  const baseRoles = parseCsv(
+    env.KEYCLOAK_MANAGEABLE_ROLES ||
+      "viewer,editor,media_admin,technician,print_admin,config_admin,openbao_admin,infra_admin,identity_hr_manager,asset_admin",
+  );
+  const uniqueBaseRoles = Array.from(new Set(baseRoles));
+
+  return uniqueBaseRoles.flatMap((role) => [
+    role,
+    `${role}_grant`,
+    `${role}_grant_super`,
+  ]);
+}
+
+async function getClientUuid(env, origin, realm, token) {
+  const clientId = required(env.KEYCLOAK_CLIENT_ID, "KEYCLOAK_CLIENT_ID");
+  const clients = await keycloakJson(
+    `${origin}/admin/realms/${realm}/clients?clientId=${encodeURIComponent(clientId)}`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  const client = Array.isArray(clients) ? clients[0] : null;
+
+  if (!client?.id) {
+    throw new Error(`Keycloak client ${clientId} was not found.`);
+  }
+
+  return client.id;
+}
+
+async function syncClientRoles(env, origin, realm, token) {
+  const clientUuid = await getClientUuid(env, origin, realm, token);
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    "Content-Type": "application/json",
+  };
+  const existingRoles = await keycloakJson(
+    `${origin}/admin/realms/${realm}/clients/${clientUuid}/roles?max=1000`,
+    { headers },
+  );
+  const existingNames = new Set((Array.isArray(existingRoles) ? existingRoles : []).map((role) => role.name));
+  const created = [];
+
+  for (const roleName of getManageableRoleNames(env)) {
+    if (existingNames.has(roleName)) continue;
+    await keycloakJson(`${origin}/admin/realms/${realm}/clients/${clientUuid}/roles`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        name: roleName,
+        description: `Managed print-stage permission role: ${roleName}`,
+      }),
+    });
+    created.push(roleName);
+  }
+
+  return {
+    checked: getManageableRoleNames(env).length,
+    created,
+  };
+}
+
 function getSmtpConfig(env) {
-  const host = pick(env, "KEYCLOAK_SMTP_HOST", "SMTP_HOST");
-  const from = pick(env, "KEYCLOAK_SMTP_FROM", "SMTP_FROM", "MAIL_FROM", "EMAIL_FROM");
+  let host = pick(env, "KEYCLOAK_SMTP_HOST", "SMTP_HOST");
+  let from = pick(env, "KEYCLOAK_SMTP_FROM", "SMTP_FROM", "MAIL_FROM", "EMAIL_FROM");
+  const resendApiKey = pick(env, "RESEND_API_KEY");
+  const resendFrom = pick(env, "RESEND_FROM_EMAIL");
+
+  if (!host && resendApiKey && resendFrom) {
+    host = "smtp.resend.com";
+    from = resendFrom;
+  }
 
   if (!host || !from) return null;
 
+  const isResendDefault = host === "smtp.resend.com" && resendApiKey;
   const smtp = {
     host,
     from,
-    port: pick(env, "KEYCLOAK_SMTP_PORT", "SMTP_PORT") || "587",
-    ssl: envFlag(pick(env, "KEYCLOAK_SMTP_SSL", "SMTP_SSL")),
-    starttls: envFlag(pick(env, "KEYCLOAK_SMTP_STARTTLS", "SMTP_STARTTLS"), "true"),
-    auth: envFlag(pick(env, "KEYCLOAK_SMTP_AUTH", "SMTP_AUTH"), pick(env, "KEYCLOAK_SMTP_USER", "SMTP_USER") ? "true" : "false"),
+    port: pick(env, "KEYCLOAK_SMTP_PORT", "SMTP_PORT") || (isResendDefault ? "465" : "587"),
+    ssl: envFlag(pick(env, "KEYCLOAK_SMTP_SSL", "SMTP_SSL"), isResendDefault ? "true" : "false"),
+    starttls: envFlag(pick(env, "KEYCLOAK_SMTP_STARTTLS", "SMTP_STARTTLS"), isResendDefault ? "false" : "true"),
+    auth: envFlag(pick(env, "KEYCLOAK_SMTP_AUTH", "SMTP_AUTH"), pick(env, "KEYCLOAK_SMTP_USER", "SMTP_USER") || isResendDefault ? "true" : "false"),
   };
 
   const fromDisplayName = pick(env, "KEYCLOAK_SMTP_FROM_DISPLAY_NAME", "SMTP_FROM_DISPLAY_NAME");
   const replyTo = pick(env, "KEYCLOAK_SMTP_REPLY_TO", "SMTP_REPLY_TO");
   const replyToDisplayName = pick(env, "KEYCLOAK_SMTP_REPLY_TO_DISPLAY_NAME", "SMTP_REPLY_TO_DISPLAY_NAME");
-  const user = pick(env, "KEYCLOAK_SMTP_USER", "SMTP_USER");
-  const password = pick(env, "KEYCLOAK_SMTP_PASSWORD", "SMTP_PASSWORD");
+  const user = pick(env, "KEYCLOAK_SMTP_USER", "SMTP_USER") || (isResendDefault ? "resend" : "");
+  const password = pick(env, "KEYCLOAK_SMTP_PASSWORD", "SMTP_PASSWORD") || (isResendDefault ? resendApiKey : "");
 
   if (fromDisplayName) smtp.fromDisplayName = fromDisplayName;
   if (replyTo) smtp.replyTo = replyTo;
@@ -248,6 +324,33 @@ async function syncSmtp(env, origin, realm, token) {
   };
 }
 
+async function syncRealmRecoverySettings(env, origin, realm, token) {
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    "Content-Type": "application/json",
+  };
+  const resetPasswordAllowed = envFlag(
+    pick(env, "KEYCLOAK_LOGIN_RESET_PASSWORD_ALLOWED"),
+    "false",
+  ) === "true";
+  const realmConfig = await keycloakJson(`${origin}/admin/realms/${realm}`, { headers });
+
+  if (realmConfig.resetPasswordAllowed === resetPasswordAllowed) {
+    return { resetPasswordAllowed };
+  }
+
+  await keycloakJson(`${origin}/admin/realms/${realm}`, {
+    method: "PUT",
+    headers,
+    body: JSON.stringify({
+      ...realmConfig,
+      resetPasswordAllowed,
+    }),
+  });
+
+  return { resetPasswordAllowed };
+}
+
 async function main() {
   const args = parseArgs(process.argv);
   const env = mergeEnv(args.envFiles);
@@ -255,6 +358,8 @@ async function main() {
   const { origin, realm } = getRealmFromIssuer(issuer);
   const token = await getAdminToken(env, origin);
   const google = await syncGoogleIdentityProvider(env, origin, realm, token);
+  const roles = await syncClientRoles(env, origin, realm, token);
+  const recovery = await syncRealmRecoverySettings(env, origin, realm, token);
   const smtp = await syncSmtp(env, origin, realm, token);
 
   console.log(
@@ -262,6 +367,8 @@ async function main() {
       {
         keycloakRealm: realm,
         google,
+        roles,
+        recovery,
         smtp,
       },
       null,
