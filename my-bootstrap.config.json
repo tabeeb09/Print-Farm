@@ -3,7 +3,7 @@
   "projectName": "oi-loftrop",
   "baseDomain": "loftrop.com",
   "appHost": "oi.loftrop.com",
-  "websiteAliasHosts": "www.loftrop.com",
+  "websiteAliasHosts": "www.loftrop.com, loftrop.com",
   "authHost": "auth.loftrop.com",
   "baoHost": "bao.loftrop.com",
   "mediaHost": "media.loftrop.com",

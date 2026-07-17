@@ -240,6 +240,34 @@ jobs:
           cd "${DEPLOY_PATH}"
           sudo PROJECT_ROOT="${DEPLOY_PATH}" PROJECT_NAME="${PROJECT_NAME}" USE_LOCAL_RUSTFS_NETWORK="${USE_LOCAL_RUSTFS_NETWORK}" APP_EXTRA_COMPOSE_FILES="${APP_EXTRA_COMPOSE_FILES}" RUSTFS_EXTRA_COMPOSE_FILES="${RUSTFS_EXTRA_COMPOSE_FILES}" bash scripts/website-stack-vps.sh "${remote_command}"
 
+      - name: Configure single-VPS gateway routes locally when present
+        if: env.DEPLOY_MODE == 'local'
+        shell: bash
+        run: |
+          cd "${DEPLOY_PATH}"
+
+          if test ! -d /srv/caid || test ! -f scripts/configure-single-vps-routing.sh; then
+            echo "Single-VPS CAId gateway is not present on this runner; skipping route configuration."
+            exit 0
+          fi
+
+          read_config() {
+            node -e "const fs = require('fs'); const config = JSON.parse(fs.readFileSync('my-bootstrap.config.json', 'utf8')); process.stdout.write(String(config[process.argv[1]] ?? ''));" "$1"
+          }
+
+          APP_HOST="$(read_config appHost)"
+          WEBSITE_ALIAS_HOSTS="$(read_config websiteAliasHosts)"
+          MEDIA_HOST="$(read_config mediaHost)"
+          RUSTFS_ADMIN_HOST="$(read_config rustfsAdminHost)"
+          OAUTH2_PROXY_HOST="$(read_config oauth2Host)"
+
+          test -n "$APP_HOST" || { echo "Missing appHost in my-bootstrap.config.json"; exit 1; }
+          test -n "$MEDIA_HOST" || { echo "Missing mediaHost in my-bootstrap.config.json"; exit 1; }
+          test -n "$RUSTFS_ADMIN_HOST" || { echo "Missing rustfsAdminHost in my-bootstrap.config.json"; exit 1; }
+          test -n "$OAUTH2_PROXY_HOST" || { echo "Missing oauth2Host in my-bootstrap.config.json"; exit 1; }
+
+          sudo APP_HOST="$APP_HOST" WEBSITE_ALIAS_HOSTS="$WEBSITE_ALIAS_HOSTS" MEDIA_HOST="$MEDIA_HOST" RUSTFS_ADMIN_HOST="$RUSTFS_ADMIN_HOST" OAUTH2_PROXY_HOST="$OAUTH2_PROXY_HOST" bash scripts/configure-single-vps-routing.sh
+
       - name: Verify deployment status
         if: env.DEPLOY_MODE == 'ssh'
         env:
