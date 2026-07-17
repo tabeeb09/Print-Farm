@@ -231,11 +231,16 @@ prepare_deploy_env() {
   chmod 600 "$RUNTIME_ENV_FILE" "$DEPLOY_ENV_FILE"
 }
 
+sync_keycloak_realm_auth() {
+  run_node scripts/sync-keycloak-realm-auth.mjs --env "$DEPLOY_ENV_FILE"
+}
+
 main() {
   require_command docker
 
   wait_for_valid_bootstrap
   prepare_deploy_env
+  sync_keycloak_realm_auth
 
   echo "Print bootstrap complete."
   echo "Runtime env: $RUNTIME_ENV_FILE"
