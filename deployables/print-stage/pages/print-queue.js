@@ -136,7 +136,7 @@ export async function getServerSideProps(context) {
   if (!actor) {
     return {
       redirect: {
-        destination: "/api/auth/signin?callbackUrl=%2Fprint-queue",
+        destination: "/auth/signin?callbackUrl=%2Fprint-queue",
         permanent: false,
       },
     };

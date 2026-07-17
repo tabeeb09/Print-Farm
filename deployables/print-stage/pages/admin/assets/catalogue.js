@@ -23,7 +23,7 @@ export async function getServerSideProps(context) {
   if (!actor) {
     return {
       redirect: {
-        destination: "/api/auth/signin?callbackUrl=%2Fadmin%2Fassets%2Fcatalogue",
+        destination: "/auth/signin?callbackUrl=%2Fadmin%2Fassets%2Fcatalogue",
         permanent: false,
       },
     };

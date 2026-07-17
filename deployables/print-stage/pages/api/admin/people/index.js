@@ -4,9 +4,12 @@ import { toFileActor } from "../../../../lib/auth";
 import { authOptions } from "../../../../lib/authOptions";
 import {
   assignRoleByEmail,
+  actorCanOpenPeopleAdmin,
   ensurePersonByEmail,
+  getManageableRoleOptions,
   getManageableRoles,
   getPersonByEmail,
+  listPeopleGroupsForActor,
   listPeopleForActor,
   removeRoleByEmail,
 } from "../../../../lib/keycloakAdmin";
@@ -27,8 +30,11 @@ async function requireHrActor(req, res) {
     return { error: { status: 401, message: "Authentication required." } };
   }
 
-  if (!actor.isHrAdmin) {
-    return { error: { status: 403, message: "HR admin role required." } };
+  if (!actorCanOpenPeopleAdmin(actor)) {
+    const groups = await listPeopleGroupsForActor(actor);
+    if (!groups.length) {
+      return { error: { status: 403, message: "People admin, group admin, or delegated permission role required." } };
+    }
   }
 
   return { actor };
@@ -57,6 +63,7 @@ export default async function handler(req, res) {
         return res.status(200).json({
           people: await listPeopleForActor(actor),
           manageableRoles: getManageableRoles(),
+          roleOptions: getManageableRoleOptions(actor),
         });
       }
 
@@ -65,7 +72,7 @@ export default async function handler(req, res) {
         return res.status(403).json({ error: "This user is outside your HR management scope." });
       }
 
-      return res.status(200).json({ ...person, manageableRoles: getManageableRoles() });
+      return res.status(200).json({ ...person, manageableRoles: getManageableRoles(), roleOptions: getManageableRoleOptions(actor) });
     }
 
     if (req.method === "POST") {
@@ -83,11 +90,11 @@ export default async function handler(req, res) {
 
       if (!role) {
         const person = await ensurePersonByEmail({ email, name, managerEmail });
-        return res.status(201).json({ ...person, manageableRoles: getManageableRoles() });
+        return res.status(201).json({ ...person, manageableRoles: getManageableRoles(), roleOptions: getManageableRoleOptions(actor) });
       }
 
-      const person = await assignRoleByEmail(email, role, managerEmail);
-      return res.status(200).json({ ...person, manageableRoles: getManageableRoles() });
+      const person = await assignRoleByEmail(email, role, managerEmail, actor);
+      return res.status(200).json({ ...person, manageableRoles: getManageableRoles(), roleOptions: getManageableRoleOptions(actor) });
     }
 
     if (req.method === "DELETE") {
@@ -102,14 +109,14 @@ export default async function handler(req, res) {
         return res.status(403).json({ error: "This user is outside your HR management scope." });
       }
 
-      const person = await removeRoleByEmail(email, role);
-      return res.status(200).json({ ...person, manageableRoles: getManageableRoles() });
+      const person = await removeRoleByEmail(email, role, actor);
+      return res.status(200).json({ ...person, manageableRoles: getManageableRoles(), roleOptions: getManageableRoleOptions(actor) });
     }
 
     res.setHeader("Allow", "GET, POST, DELETE");
     return res.status(405).json({ error: "Method not allowed." });
   } catch (caught) {
     const message = caught instanceof Error ? caught.message : "People permission update failed.";
-    return res.status(400).json({ error: message, manageableRoles: getManageableRoles() });
+    return res.status(400).json({ error: message, manageableRoles: getManageableRoles(), roleOptions: getManageableRoleOptions(actor) });
   }
 }

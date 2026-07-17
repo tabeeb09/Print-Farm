@@ -186,7 +186,7 @@ export async function getServerSideProps(context) {
   if (!actor) {
     return {
       redirect: {
-        destination: "/api/auth/signin?callbackUrl=%2Fadmin%2Fapproles",
+        destination: "/auth/signin?callbackUrl=%2Fadmin%2Fapproles",
         permanent: false,
       },
     };

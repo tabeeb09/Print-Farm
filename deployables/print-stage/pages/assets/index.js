@@ -21,7 +21,7 @@ export async function getServerSideProps(context) {
   if (!session) {
     return {
       redirect: {
-        destination: "/api/auth/signin?callbackUrl=%2Fassets",
+        destination: "/auth/signin?callbackUrl=%2Fassets",
         permanent: false,
       },
     };

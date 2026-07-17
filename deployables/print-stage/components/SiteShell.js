@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { signIn, signOut, useSession } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
 import { useRouter } from "next/router";
 import { useState } from "react";
 
@@ -19,7 +19,8 @@ export default function SiteShell({ children, title = "3D Printer" }) {
     ["owner", "openbao_admin", "infra_admin"].some((role) => roles.includes(role));
   const isHrAdmin =
     session?.user?.email?.toLowerCase?.() === "tabeebrahman.logistics@gmail.com" ||
-    ["owner", "identity_hr_manager"].some((role) => roles.includes(role));
+    ["owner", "identity_hr_manager"].some((role) => roles.includes(role)) ||
+    roles.some((role) => role.endsWith("_grant") || role.endsWith("_grant_super"));
   const isAssetAdmin =
     session?.user?.email?.toLowerCase?.() === "tabeebrahman.logistics@gmail.com" ||
     ["owner", "asset_admin"].some((role) => roles.includes(role));
@@ -107,7 +108,7 @@ export default function SiteShell({ children, title = "3D Printer" }) {
             <button
               type="button"
               className={styles.signInButton}
-              onClick={() => signIn("keycloak", { callbackUrl: "/files", prompt: "login" })}
+              onClick={() => router.push("/auth/signin?callbackUrl=%2Ffiles")}
             >
               Sign in
             </button>

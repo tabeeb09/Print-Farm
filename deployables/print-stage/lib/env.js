@@ -25,6 +25,7 @@ const envSchema = z.object({
   KEYCLOAK_HR_ADMIN_ROLES: z.string().default("owner,identity_hr_manager"),
   KEYCLOAK_ASSET_ADMIN_ROLES: z.string().default("owner,asset_admin"),
   KEYCLOAK_HR_SCOPE_ATTRIBUTE: z.string().default("managed_by"),
+  KEYCLOAK_GROUP_ADMIN_ATTRIBUTE: z.string().default("group_admins"),
   KEYCLOAK_MANAGEABLE_ROLES: z
     .string()
     .default("viewer,editor,media_admin,technician,print_admin,config_admin,openbao_admin,infra_admin,identity_hr_manager,asset_admin"),

@@ -6,7 +6,12 @@ import { useEffect, useState } from "react";
 import SiteShell from "../../components/SiteShell";
 import { toFileActor } from "../../lib/auth";
 import { authOptions } from "../../lib/authOptions";
-import { getManageableRoles } from "../../lib/keycloakAdmin";
+import {
+  actorCanOpenPeopleAdmin,
+  getManageableRoleOptions,
+  getManageableRoles,
+  listPeopleGroupsForActor,
+} from "../../lib/keycloakAdmin";
 
 function roleDescription(role) {
   const descriptions = {
@@ -25,15 +30,31 @@ function roleDescription(role) {
   return descriptions[role] || "Managed application role.";
 }
 
-export default function PeopleAdminPage({ manageableRoles }) {
+function emptyGroupForm() {
+  return {
+    groupId: "",
+    name: "",
+    adminEmails: "",
+    memberEmails: "",
+    roles: [],
+  };
+}
+
+export default function PeopleAdminPage({ manageableRoles, initialRoleOptions }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [managerEmail, setManagerEmail] = useState("");
   const [person, setPerson] = useState(null);
   const [roles, setRoles] = useState([]);
+  const [directRoles, setDirectRoles] = useState([]);
+  const [personGroups, setPersonGroups] = useState([]);
   const [managedBy, setManagedBy] = useState([]);
   const [people, setPeople] = useState([]);
+  const [peopleGroups, setPeopleGroups] = useState([]);
+  const [roleOptions, setRoleOptions] = useState(initialRoleOptions || []);
+  const [groupModalOpen, setGroupModalOpen] = useState(false);
+  const [groupForm, setGroupForm] = useState(emptyGroupForm);
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -61,7 +82,12 @@ export default function PeopleAdminPage({ manageableRoles }) {
 
       setPerson(payload.user);
       setRoles(payload.roles || []);
+      setDirectRoles(payload.directRoles || []);
+      setPersonGroups(payload.groups || []);
       setManagedBy(payload.managedBy || []);
+      if (Array.isArray(payload.roleOptions)) {
+        setRoleOptions(payload.roleOptions);
+      }
       if (Array.isArray(payload.people)) {
         setPeople(payload.people);
       }
@@ -87,8 +113,13 @@ export default function PeopleAdminPage({ manageableRoles }) {
       }
 
       setPeople(payload.people || []);
+      if (Array.isArray(payload.roleOptions)) {
+        setRoleOptions(payload.roleOptions);
+      }
       setPerson(null);
       setRoles([]);
+      setDirectRoles([]);
+      setPersonGroups([]);
       setManagedBy([]);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to load managed users.");
@@ -99,8 +130,29 @@ export default function PeopleAdminPage({ manageableRoles }) {
 
   useEffect(() => {
     loadPeople();
+    loadGroups();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function loadGroups() {
+    setError("");
+
+    try {
+      const response = await fetch("/api/admin/people/groups");
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload.error || "Unable to load people groups.");
+      }
+
+      setPeopleGroups(payload.groups || []);
+      if (Array.isArray(payload.roleOptions)) {
+        setRoleOptions(payload.roleOptions);
+      }
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to load people groups.");
+    }
+  }
 
   async function searchPerson(event) {
     event.preventDefault();
@@ -141,9 +193,107 @@ export default function PeopleAdminPage({ manageableRoles }) {
     setEmail(entry.user.email || "");
     setName([entry.user.firstName, entry.user.lastName].filter(Boolean).join(" "));
     setRoles(entry.roles || []);
+    setDirectRoles(entry.directRoles || []);
+    setPersonGroups(entry.groups || []);
     setManagedBy(entry.managedBy || []);
     setMessage(`Selected ${entry.user.email}.`);
     setError("");
+  }
+
+  function openGroupModal(group = null) {
+    if (group) {
+      setGroupForm({
+        groupId: group.id,
+        name: group.name || "",
+        adminEmails: (group.admins || []).join(", "),
+        memberEmails: (group.members || []).map((member) => member.email).join(", "),
+        roles: group.directRoles || [],
+      });
+    } else {
+      setGroupForm(emptyGroupForm());
+    }
+    setGroupModalOpen(true);
+    setError("");
+    setMessage("");
+  }
+
+  function updateGroupField(field, value) {
+    setGroupForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function toggleGroupRole(role) {
+    setGroupForm((current) => {
+      const rolesSet = new Set(current.roles || []);
+      if (rolesSet.has(role)) {
+        rolesSet.delete(role);
+      } else {
+        rolesSet.add(role);
+      }
+      return { ...current, roles: Array.from(rolesSet).sort() };
+    });
+  }
+
+  async function saveGroup(event) {
+    event.preventDefault();
+    setPending(true);
+    setError("");
+    setMessage("");
+
+    try {
+      const response = await fetch("/api/admin/people/groups", {
+        method: groupForm.groupId ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(groupForm),
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload.error || "Unable to save group.");
+      }
+
+      setPeopleGroups(payload.groups || []);
+      if (Array.isArray(payload.roleOptions)) {
+        setRoleOptions(payload.roleOptions);
+      }
+      setGroupModalOpen(false);
+      setMessage(`Saved group ${payload.group?.name || groupForm.name}.`);
+      await loadPeople();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to save group.");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function deleteGroup(group) {
+    if (!window.confirm(`Delete people group "${group.name}"? This removes the group and its inherited permissions.`)) {
+      return;
+    }
+
+    setPending(true);
+    setError("");
+    setMessage("");
+
+    try {
+      const response = await fetch("/api/admin/people/groups", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ groupId: group.id }),
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload.error || "Unable to delete group.");
+      }
+
+      setPeopleGroups(payload.groups || []);
+      setMessage(`Deleted group ${group.name}.`);
+      await loadPeople();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to delete group.");
+    } finally {
+      setPending(false);
+    }
   }
 
   return (
@@ -163,6 +313,9 @@ export default function PeopleAdminPage({ manageableRoles }) {
           <div style={{ marginTop: "0.75rem" }}>
             <button type="button" onClick={() => router.push("/admin/people/balances")}>
               Balances
+            </button>
+            <button type="button" onClick={() => openGroupModal()} style={{ marginLeft: "0.75rem" }}>
+              Create people group
             </button>
           </div>
         </section>
@@ -256,6 +409,47 @@ export default function PeopleAdminPage({ manageableRoles }) {
         </section>
 
         <section className="panel panelWide">
+          <h2 style={{ marginTop: 0 }}>People groups</h2>
+          <p style={{ color: "#555", marginTop: 0 }}>
+            Group members inherit the regular permissions applied here. Delegate variants can only be
+            assigned by someone who already has the matching super-delegation authority.
+          </p>
+          {peopleGroups.length ? (
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: "left", padding: "0.5rem 0" }}>Group</th>
+                  <th style={{ textAlign: "left", padding: "0.5rem 0" }}>Admins</th>
+                  <th style={{ textAlign: "left", padding: "0.5rem 0" }}>Members</th>
+                  <th style={{ textAlign: "left", padding: "0.5rem 0" }}>Direct permissions</th>
+                  <th style={{ textAlign: "left", padding: "0.5rem 0" }}>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {peopleGroups.map((group) => (
+                  <tr key={group.id} style={{ borderTop: "1px solid rgba(0,0,0,0.08)" }}>
+                    <td style={{ padding: "0.65rem 0" }}>{group.name}</td>
+                    <td style={{ padding: "0.65rem 0" }}>{group.admins?.join(", ") || "none"}</td>
+                    <td style={{ padding: "0.65rem 0" }}>{group.members?.length || 0}</td>
+                    <td style={{ padding: "0.65rem 0" }}>{group.directRoles?.join(", ") || "none"}</td>
+                    <td style={{ padding: "0.65rem 0", display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                      <button type="button" onClick={() => openGroupModal(group)}>
+                        Edit
+                      </button>
+                      <button type="button" onClick={() => deleteGroup(group)} disabled={pending}>
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p style={{ color: "#666" }}>No people groups are currently visible in your management scope.</p>
+          )}
+        </section>
+
+        <section className="panel panelWide">
           <h2 style={{ marginTop: 0 }}>Current person</h2>
           {person ? (
             <div style={{ display: "grid", gap: "0.4rem" }}>
@@ -263,7 +457,13 @@ export default function PeopleAdminPage({ manageableRoles }) {
               <span style={{ color: "#555" }}>User ID: {person.id}</span>
               <span style={{ color: "#555" }}>Enabled: {person.enabled === false ? "No" : "Yes"}</span>
               <span>
-                Current roles: <strong>{roles.length ? roles.join(", ") : "none"}</strong>
+                Effective roles: <strong>{roles.length ? roles.join(", ") : "none"}</strong>
+              </span>
+              <span>
+                Direct roles: <strong>{directRoles.length ? directRoles.join(", ") : "none"}</strong>
+              </span>
+              <span>
+                Groups: <strong>{personGroups.length ? personGroups.map((group) => group.name).join(", ") : "none"}</strong>
               </span>
               <span>
                 Managed by: <strong>{managedBy.length ? managedBy.join(", ") : "owner only"}</strong>
@@ -277,37 +477,146 @@ export default function PeopleAdminPage({ manageableRoles }) {
         <section className="panel panelWide">
           <h2 style={{ marginTop: 0 }}>Manage roles</h2>
           <div style={{ display: "grid", gap: "0.75rem" }}>
-            {manageableRoles.map((role) => {
-              const assigned = roles.includes(role);
+            {roleOptions.map((option) => {
               return (
                 <div
-                  key={role}
+                  key={option.role}
                   style={{
-                    display: "grid",
-                    gridTemplateColumns: "minmax(10rem, 1fr) minmax(12rem, 2fr) auto",
-                    gap: "0.75rem",
-                    alignItems: "center",
                     borderTop: "1px solid rgba(0,0,0,0.08)",
                     paddingTop: "0.75rem",
                   }}
                 >
-                  <strong>{role}</strong>
-                  <span style={{ color: "#555" }}>{roleDescription(role)}</span>
-                  {assigned ? (
-                    <button type="button" disabled={pending || !email} onClick={() => removeRole(role)}>
-                      Remove
-                    </button>
-                  ) : (
-                    <button type="button" disabled={pending || !email} onClick={() => assignRole(role)}>
-                      Assign
-                    </button>
-                  )}
+                  <strong>{option.role}</strong>
+                  <p style={{ color: "#555", margin: "0.2rem 0 0.6rem" }}>{roleDescription(option.role)}</p>
+                  <div style={{ display: "grid", gap: "0.5rem" }}>
+                    {option.variants.map((variant) => {
+                      const directlyAssigned = directRoles.includes(variant.role);
+                      const inherited = !directlyAssigned && roles.includes(variant.role);
+                      return (
+                        <div
+                          key={variant.role}
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "minmax(12rem, 1fr) minmax(12rem, 2fr) auto",
+                            gap: "0.75rem",
+                            alignItems: "center",
+                          }}
+                        >
+                          <span>
+                            <strong>{variant.role}</strong>
+                            {inherited ? <small style={{ marginLeft: "0.5rem", color: "#8a5a00" }}>inherited</small> : null}
+                          </span>
+                          <span style={{ color: "#555" }}>{variant.description}</span>
+                          {directlyAssigned ? (
+                            <button
+                              type="button"
+                              disabled={pending || !email || !variant.canAssign}
+                              onClick={() => removeRole(variant.role)}
+                            >
+                              Remove
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled={pending || !email || inherited || !variant.canAssign}
+                              onClick={() => assignRole(variant.role)}
+                            >
+                              Assign
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               );
             })}
           </div>
         </section>
       </div>
+
+      {groupModalOpen ? (
+        <div className="assetModalBackdrop" role="presentation">
+          <section className="assetModal" role="dialog" aria-modal="true" aria-label="People group">
+            <form onSubmit={saveGroup} style={{ display: "grid", gap: "1rem" }}>
+              <header style={{ display: "flex", justifyContent: "space-between", gap: "1rem" }}>
+                <div>
+                  <h2 style={{ margin: 0 }}>{groupForm.groupId ? "Edit people group" : "Create people group"}</h2>
+                  <p style={{ margin: "0.35rem 0 0", color: "#555" }}>
+                    Members inherit selected group roles. By default, assign the regular role unless
+                    this group is meant to delegate that permission onward.
+                  </p>
+                </div>
+                <button type="button" onClick={() => setGroupModalOpen(false)}>
+                  Close
+                </button>
+              </header>
+
+              <label style={{ display: "grid", gap: "0.35rem" }}>
+                <span>Group name</span>
+                <input
+                  value={groupForm.name}
+                  onChange={(event) => updateGroupField("name", event.target.value)}
+                  required
+                />
+              </label>
+
+              <label style={{ display: "grid", gap: "0.35rem" }}>
+                <span>Group admins, comma-separated emails</span>
+                <textarea
+                  rows={3}
+                  value={groupForm.adminEmails}
+                  onChange={(event) => updateGroupField("adminEmails", event.target.value)}
+                  placeholder="admin@example.com, lead@example.com"
+                />
+              </label>
+
+              <label style={{ display: "grid", gap: "0.35rem" }}>
+                <span>Members, comma-separated emails</span>
+                <textarea
+                  rows={4}
+                  value={groupForm.memberEmails}
+                  onChange={(event) => updateGroupField("memberEmails", event.target.value)}
+                  placeholder="member@example.com, trainee@example.com"
+                />
+              </label>
+
+              <div style={{ display: "grid", gap: "0.75rem" }}>
+                <strong>Group permissions</strong>
+                {roleOptions.map((option) => (
+                  <fieldset key={option.role} style={{ border: "1px solid rgba(0,0,0,0.12)", borderRadius: "0.75rem" }}>
+                    <legend>{option.role}</legend>
+                    {option.variants.map((variant) => (
+                      <label key={variant.role} style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "0.5rem", margin: "0.45rem 0" }}>
+                        <input
+                          type="checkbox"
+                          checked={groupForm.roles.includes(variant.role)}
+                          disabled={!variant.canAssign && !groupForm.roles.includes(variant.role)}
+                          onChange={() => toggleGroupRole(variant.role)}
+                        />
+                        <span>
+                          <strong>{variant.role}</strong>
+                          <br />
+                          <small>{variant.description}</small>
+                        </span>
+                      </label>
+                    ))}
+                  </fieldset>
+                ))}
+              </div>
+
+              <div style={{ display: "flex", gap: "0.75rem", justifyContent: "flex-end" }}>
+                <button type="button" onClick={() => setGroupModalOpen(false)}>
+                  Cancel
+                </button>
+                <button type="submit" disabled={pending}>
+                  {pending ? "Saving..." : "Save group"}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      ) : null}
     </SiteShell>
   );
 }
@@ -319,13 +628,23 @@ export async function getServerSideProps(context) {
   if (!actor) {
     return {
       redirect: {
-        destination: "/api/auth/signin?callbackUrl=%2Fadmin%2Fpeople",
+        destination: "/auth/signin?callbackUrl=%2Fadmin%2Fpeople",
         permanent: false,
       },
     };
   }
 
-  if (!actor.isHrAdmin) {
+  if (!actorCanOpenPeopleAdmin(actor)) {
+    const groups = await listPeopleGroupsForActor(actor);
+    if (groups.length) {
+      return {
+        props: {
+          manageableRoles: getManageableRoles(),
+          initialRoleOptions: getManageableRoleOptions(actor),
+        },
+      };
+    }
+
     return {
       notFound: true,
     };
@@ -334,6 +653,7 @@ export async function getServerSideProps(context) {
   return {
     props: {
       manageableRoles: getManageableRoles(),
+      initialRoleOptions: getManageableRoleOptions(actor),
     },
   };
 }

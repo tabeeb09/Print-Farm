@@ -227,18 +227,31 @@ function writeStatus(summary) {
 function getMissingKeys(secretName, secretValues) {
   const provider = secretValues.FILE_STORAGE_PROVIDER || process.env.FILE_STORAGE_PROVIDER || "local";
   const keys = requiredKeys[secretName] ?? [];
+  const missing = [];
 
-  return keys.filter((key) => {
+  for (const key of keys) {
     if (secretName === "supabase" && provider !== "supabase") {
-      return false;
+      continue;
     }
 
     if (secretName === "rustfs" && key === "S3_PRIVATE_BUCKET" && provider !== "s3") {
-      return false;
+      continue;
     }
 
-    return !(key in secretValues);
-  });
+    if (!(key in secretValues)) {
+      missing.push(key);
+    }
+  }
+
+  if (
+    secretName === "keycloak" &&
+    !secretValues.KEYCLOAK_ADMIN_CLIENT_SECRET &&
+    !(secretValues.KEYCLOAK_ADMIN_USERNAME && secretValues.KEYCLOAK_ADMIN_PASSWORD)
+  ) {
+    missing.push("KEYCLOAK_ADMIN_CLIENT_SECRET or KEYCLOAK_ADMIN_USERNAME/PASSWORD");
+  }
+
+  return missing;
 }
 
 async function main() {

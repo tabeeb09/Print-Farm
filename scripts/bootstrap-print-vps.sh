@@ -178,8 +178,8 @@ wait_for_valid_bootstrap() {
       : "${BAO_ADDR:?Missing BAO_ADDR for token-based OpenBao bootstrap}"
       migrate_legacy_env_if_needed || fetch_status=$?
       if [[ "$fetch_status" -eq 0 ]]; then
-        BAO_SECRET_GROUPS="${BAO_SECRET_GROUPS:-print,keycloak}" \
-          run_node scripts/fetch-openbao-secrets.mjs --groups "${BAO_SECRET_GROUPS:-print,keycloak}" || fetch_status=$?
+        BAO_SECRET_GROUPS="${BAO_SECRET_GROUPS:-website,print,keycloak}" \
+          run_node scripts/fetch-openbao-secrets.mjs --groups "${BAO_SECRET_GROUPS:-website,print,keycloak}" || fetch_status=$?
       fi
     else
       load_bootstrap_env
@@ -188,8 +188,8 @@ wait_for_valid_bootstrap() {
         BAO_ADDR="$BAO_ADDR" \
           OPENBAO_ROLE_ID="$OPENBAO_ROLE_ID" \
           OPENBAO_SECRET_ID="$OPENBAO_SECRET_ID" \
-          BAO_SECRET_GROUPS="${BAO_SECRET_GROUPS:-print,keycloak}" \
-          run_node scripts/fetch-openbao-secrets.mjs --groups "${BAO_SECRET_GROUPS:-print,keycloak}" || fetch_status=$?
+          BAO_SECRET_GROUPS="${BAO_SECRET_GROUPS:-website,print,keycloak}" \
+          run_node scripts/fetch-openbao-secrets.mjs --groups "${BAO_SECRET_GROUPS:-website,print,keycloak}" || fetch_status=$?
       fi
     fi
 

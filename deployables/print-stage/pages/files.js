@@ -50,7 +50,7 @@ export async function getServerSideProps(context) {
   if (!session) {
     return {
       redirect: {
-        destination: "/api/auth/signin?callbackUrl=%2Ffiles",
+        destination: "/auth/signin?callbackUrl=%2Ffiles",
         permanent: false,
       },
     };
