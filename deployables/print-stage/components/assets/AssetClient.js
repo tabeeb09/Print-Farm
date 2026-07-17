@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
+import { fromDatetimeLocalValue, toDatetimeLocalValue } from "../../lib/dateTimeLocal.js";
+
 const adminLinks = [
   ["/admin/assets/catalogue", "Catalogue"],
   ["/admin/assets/inventory", "Inventory"],
@@ -21,15 +23,6 @@ function formatMoney(pence) {
     style: "currency",
     currency: "GBP",
   }).format((Number(pence) || 0) / 100);
-}
-
-function datetimeLocal(value) {
-  if (!value) return "";
-  return new Date(value).toISOString().slice(0, 16);
-}
-
-function fromDatetimeLocal(value) {
-  return value ? new Date(value).toISOString() : "";
 }
 
 function serialText(loan) {
@@ -229,8 +222,8 @@ export default function AssetClient({ mode }) {
       assetId: asset.id,
       quantity: 1,
       unitIds: [],
-      collectionAt: datetimeLocal(collectionAt),
-      returnAt: datetimeLocal(addDays(collectionAt, 7)),
+      collectionAt: toDatetimeLocalValue(collectionAt),
+      returnAt: toDatetimeLocalValue(addDays(collectionAt, 7)),
       acceptTerms: false,
     });
     setModal({ type: "book", title: `Book ${asset.name}`, asset });
@@ -290,8 +283,8 @@ export default function AssetClient({ mode }) {
         assetId: form.assetId,
         quantity: form.unitIds?.length || Number.parseInt(form.quantity, 10) || 1,
         unitIds: form.unitIds?.length ? form.unitIds : undefined,
-        collectionAt: fromDatetimeLocal(form.collectionAt),
-        returnAt: fromDatetimeLocal(form.returnAt),
+        collectionAt: fromDatetimeLocalValue(form.collectionAt),
+        returnAt: fromDatetimeLocalValue(form.returnAt),
         acceptTerms: form.acceptTerms,
       },
       "Booking created.",
@@ -428,13 +421,13 @@ export default function AssetClient({ mode }) {
           onReschedule={(loan) => {
             setForm({
               loanId: loan.id,
-              collectionAt: datetimeLocal(loan.collectionAt),
-              returnAt: datetimeLocal(loan.returnDueAt),
+              collectionAt: toDatetimeLocalValue(loan.collectionAt),
+              returnAt: toDatetimeLocalValue(loan.returnDueAt),
             });
             setModal({ type: "reschedule", title: `Edit booking: ${loan.assetName}`, loan });
           }}
           onExtend={(loan) => {
-            setForm({ loanId: loan.id, returnAt: datetimeLocal(loan.returnDueAt) });
+            setForm({ loanId: loan.id, returnAt: toDatetimeLocalValue(loan.returnDueAt) });
             setModal({ type: "extend", title: `Update return: ${loan.assetName}`, loan });
           }}
           onLost={(loan) => post({ action: "markLoanLost", loanId: loan.id }, "Loan marked lost and account charge added.")}
@@ -630,8 +623,8 @@ export default function AssetClient({ mode }) {
             post({
               action: "rescheduleLoan",
               loanId: form.loanId,
-              collectionAt: fromDatetimeLocal(form.collectionAt),
-              returnAt: fromDatetimeLocal(form.returnAt),
+              collectionAt: fromDatetimeLocalValue(form.collectionAt),
+              returnAt: fromDatetimeLocalValue(form.returnAt),
             }, "Booking updated.");
           }}>
             <label>
@@ -653,7 +646,7 @@ export default function AssetClient({ mode }) {
         <Modal title={modal.title} onClose={() => setModal(null)}>
           <form className="assetForm" onSubmit={(event) => {
             event.preventDefault();
-            post({ action: "extendLoan", loanId: form.loanId, returnAt: fromDatetimeLocal(form.returnAt) }, "Return date updated.");
+            post({ action: "extendLoan", loanId: form.loanId, returnAt: fromDatetimeLocalValue(form.returnAt) }, "Return date updated.");
           }}>
             <label>
               Return date

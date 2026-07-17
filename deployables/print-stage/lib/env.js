@@ -37,6 +37,8 @@ const envSchema = z.object({
   KEYCLOAK_ADMIN_CLIENT_SECRET: optionalNonEmptyString,
   KEYCLOAK_ADMIN_USERNAME: optionalNonEmptyString,
   KEYCLOAK_ADMIN_PASSWORD: optionalNonEmptyString,
+  GOOGLE_CLIENT_ID: optionalNonEmptyString,
+  GOOGLE_CLIENT_SECRET: optionalNonEmptyString,
   SUPERADMIN_EMAILS: z.string().default("tabeebrahman.logistics@gmail.com"),
   APP_BASE_URL: optionalUrl,
   S3_ENDPOINT: optionalUrl,

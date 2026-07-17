@@ -135,6 +135,16 @@ async function findUsersByEmail(email) {
   return users.filter((user) => user.email?.toLowerCase() === normalized);
 }
 
+export async function findUniqueUserByEmail(email) {
+  const users = await findUsersByEmail(email);
+
+  if (users.length > 1) {
+    throw new Error(`Duplicate Keycloak users exist for ${normalizeEmail(email)}.`);
+  }
+
+  return users[0] || null;
+}
+
 function sanitizeUser(user) {
   return {
     id: user.id,
@@ -289,6 +299,40 @@ export async function ensurePersonByEmail({ email, name, managerEmail }) {
     managedBy: getManagedBy(user),
     roles: await getUserRoles(user.id),
   };
+}
+
+export async function syncSsoUserByEmail({ email, name, provider }) {
+  const person = await ensurePersonByEmail({ email, name });
+
+  if (!person.roles.length) {
+    return assignRoleByEmail(email, "viewer");
+  }
+
+  return person;
+}
+
+export async function sendPasswordResetIfRegistered(email, redirectUri) {
+  const user = await findUniqueUserByEmail(email);
+
+  if (!user || user.enabled === false) {
+    return { sent: false };
+  }
+
+  const params = new URLSearchParams({
+    client_id: env.KEYCLOAK_CLIENT_ID,
+    lifespan: "1800",
+  });
+
+  if (redirectUri) {
+    params.set("redirect_uri", redirectUri);
+  }
+
+  await keycloakAdminFetch(`/users/${user.id}/execute-actions-email?${params.toString()}`, {
+    method: "PUT",
+    body: JSON.stringify(["UPDATE_PASSWORD"]),
+  });
+
+  return { sent: true };
 }
 
 export async function assignRoleByEmail(email, roleName, managerEmail = "") {

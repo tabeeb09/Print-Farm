@@ -1,7 +1,9 @@
 import KeycloakProvider from "next-auth/providers/keycloak";
+import GoogleProvider from "next-auth/providers/google";
 import { decodeJwt } from "jose";
 
 import { env } from "./env";
+import { syncSsoUserByEmail } from "./keycloakAdmin";
 
 function readPath(source, dottedPath) {
   return dottedPath.split(".").reduce((value, key) => {
@@ -51,16 +53,53 @@ function readNumericClaim(source, claimPaths) {
   return null;
 }
 
-export const authOptions = {
-  secret: env.NEXTAUTH_SECRET,
-  providers: [
+const providers = [];
+
+if (env.KEYCLOAK_ISSUER && env.KEYCLOAK_CLIENT_ID && env.KEYCLOAK_CLIENT_SECRET) {
+  providers.push(
     KeycloakProvider({
       issuer: env.KEYCLOAK_ISSUER,
       clientId: env.KEYCLOAK_CLIENT_ID,
       clientSecret: env.KEYCLOAK_CLIENT_SECRET,
     }),
-  ],
+  );
+}
+
+if (env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET) {
+  providers.push(
+    GoogleProvider({
+      clientId: env.GOOGLE_CLIENT_ID,
+      clientSecret: env.GOOGLE_CLIENT_SECRET,
+    }),
+  );
+}
+
+export const authOptions = {
+  secret: env.NEXTAUTH_SECRET,
+  providers,
+  pages: {
+    signIn: "/auth/signin",
+  },
   callbacks: {
+    async signIn({ user, account, profile }) {
+      if (!user.email) {
+        return false;
+      }
+
+      if (account?.provider === "google" && profile && "email_verified" in profile && !profile.email_verified) {
+        return false;
+      }
+
+      if (account?.provider === "google") {
+        await syncSsoUserByEmail({
+          email: user.email,
+          name: user.name,
+          provider: account.provider,
+        });
+      }
+
+      return true;
+    },
     async jwt({ token, account, profile }) {
       if (account?.access_token) {
         token.accessToken = account.access_token;
@@ -88,14 +127,44 @@ export const authOptions = {
         (accumulator, current) => ({ ...accumulator, ...current }),
         {},
       );
+      const email =
+        typeof token.email === "string"
+          ? token.email
+          : typeof mergedSource.email === "string"
+            ? mergedSource.email
+            : null;
       const uploadLimitBytes = readNumericClaim(
         mergedSource,
         env.KEYCLOAK_FILE_UPLOAD_LIMIT_CLAIMS.split(",").map((value) => value.trim()).filter(Boolean),
       );
 
-      token.roles = Array.from(new Set(extractRoles(mergedSource)));
+      token.email = email;
+      const tokenRoles = Array.from(new Set(extractRoles(mergedSource)));
+      const shouldSyncGoogleRoles =
+        token.provider === "google" &&
+        email &&
+        (!token.lastRoleSyncAt || Date.now() - token.lastRoleSyncAt > 60_000 || account);
+
+      if (shouldSyncGoogleRoles) {
+        try {
+          const synced = await syncSsoUserByEmail({
+            email,
+            name: typeof token.name === "string" ? token.name : null,
+            provider: token.provider,
+          });
+          token.keycloakSub = synced.user?.id || token.keycloakSub || null;
+          token.roles = Array.from(new Set(synced.roles));
+          token.roleSyncFailed = false;
+          token.lastRoleSyncAt = Date.now();
+        } catch {
+          token.roleSyncFailed = true;
+          token.roles = [];
+        }
+      } else {
+        token.roles = token.roles?.length ? token.roles : tokenRoles;
+      }
       token.keycloakSub =
-        typeof mergedSource.sub === "string" && mergedSource.sub
+        token.provider === "keycloak" && typeof mergedSource.sub === "string" && mergedSource.sub
           ? mergedSource.sub
           : token.keycloakSub || null;
       token.uploadLimitBytes = uploadLimitBytes ?? token.uploadLimitBytes ?? null;

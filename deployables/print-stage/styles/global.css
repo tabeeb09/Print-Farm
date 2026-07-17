@@ -260,6 +260,56 @@ select {
   color: #66717f;
 }
 
+.authPage {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  background:
+    radial-gradient(circle at top left, rgba(255, 220, 153, 0.45), transparent 32rem),
+    linear-gradient(135deg, #f7efe0 0%, #f6f8ef 50%, #edf4f6 100%);
+}
+
+.authPanel {
+  width: min(28rem, 100%);
+  display: grid;
+  gap: 1rem;
+}
+
+.authPanel h1,
+.authPanel p {
+  margin: 0;
+}
+
+.authButtonStack {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.authButtonStack button {
+  border: 1px solid rgba(23, 27, 31, 0.2);
+  background: #171b1f;
+  color: #fffaf1;
+  padding: 0.75rem 0.9rem;
+  cursor: pointer;
+}
+
+.authLinks {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  color: #4f5d68;
+  text-decoration: underline;
+}
+
+.eyebrow {
+  color: #6b5c3f;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .assetErrorInline {
   color: #8d170f;
   font-weight: 700;
