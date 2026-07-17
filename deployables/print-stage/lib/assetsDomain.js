@@ -400,6 +400,7 @@ export function deleteUnit(state, assetId, unitId, now = new Date()) {
 
 function availableUnitsForRange(state, asset, start, end, exceptLoanId = null) {
   return normalLoanableUnits(asset).filter((unit) =>
+    !isUnitOutOfPremises(state, unit.id) &&
     !conflictingLoans(state, unit.id, start, end, exceptLoanId).length,
   );
 }
@@ -785,13 +786,30 @@ export function selectInventory(state, now = new Date()) {
     .filter((asset) => asset.units.length);
 }
 
+function loanableStatus(asset) {
+  if (asset.bookableNow) {
+    return { loanStatus: "bookable_now", loanStatusLabel: "Bookable now" };
+  }
+
+  const presentNormalUnits = Math.max(0, asset.quantityNormal - asset.quantityOutOfPremises);
+
+  if (presentNormalUnits > 0) {
+    return { loanStatus: "bookable_later", loanStatusLabel: "Bookable later" };
+  }
+
+  if (asset.quantityOutOfPremises > 0) {
+    return { loanStatus: "currently_out_of_premises", loanStatusLabel: "Currently out of premises" };
+  }
+
+  return { loanStatus: "not_currently_available", loanStatusLabel: "Not currently available" };
+}
+
 export function selectLoanableListings(state, now = new Date()) {
   return selectCatalogue(state, now)
     .filter((asset) => asset.loanable)
     .map((asset) => ({
       ...asset,
-      loanStatus: asset.bookableNow ? "bookable_now" : "currently_out_of_premises",
-      loanStatusLabel: asset.bookableNow ? "Bookable now" : "Currently out of premises",
+      ...loanableStatus(asset),
     }));
 }
 

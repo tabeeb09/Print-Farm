@@ -53,6 +53,48 @@ assert.equal(
   "2026-07-06T10:35:00.000Z",
 );
 
+let statusState = createInitialAssetState();
+let statusResult = createAsset(
+  statusState,
+  {
+    name: "Collection Window Tester",
+    loanable: true,
+    quantity: 1,
+    availability: {
+      weekly: [{ day: 1, start: "09:00", end: "17:00" }],
+      dateRanges: [{ start: "2026-07-01T00:00:00.000Z", end: "2026-08-01T00:00:00.000Z" }],
+    },
+  },
+  mondayMorning,
+);
+statusState = statusResult.state;
+assert.equal(
+  selectLoanableListings(statusState, new Date("2026-07-05T10:00:00.000Z"))[0].loanStatus,
+  "bookable_later",
+);
+statusResult = bookLoan(
+  statusState,
+  {
+    id: "status-loan",
+    assetId: statusResult.asset.id,
+    quantity: 1,
+    collectionAt: "2026-07-06T11:00:00.000Z",
+    returnAt: "2026-07-08T11:00:00.000Z",
+    acceptTerms: true,
+    collectionCode: "777777",
+    returnCode: "888888",
+    ...actor("status-borrower"),
+  },
+  mondayMorning,
+);
+statusState = statusResult.state;
+statusResult = verifyCollectionCode(statusState, { loanId: "status-loan", code: "777777", adminId: "admin" }, mondayMorning);
+statusState = statusResult.state;
+assert.equal(
+  selectLoanableListings(statusState, mondayMorning)[0].loanStatus,
+  "currently_out_of_premises",
+);
+
 throwsMessage(
   () =>
     normalizeAvailability({

@@ -915,7 +915,7 @@ function LoanableView({ listings, onBook }) {
   return (
     <section className="panel assetStack">
       <h1>Borrow makerspace assets</h1>
-      <p>Green items can be booked immediately. Amber items are unavailable right now but can be booked for the next available window.</p>
+      <p>Green items can be booked immediately. Amber items can be booked for their next collection window or when units return.</p>
       <div className="assetCards">
         {listings.map((asset) => (
           <article key={asset.id} className={`assetCard ${asset.bookableNow ? "assetCardGreen" : "assetCardAmber"}`}>
