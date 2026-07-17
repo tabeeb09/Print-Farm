@@ -1,6 +1,8 @@
 import Link from "next/link";
-import { getProviders, signIn } from "next-auth/react";
+import { signIn } from "next-auth/react";
 import { useRouter } from "next/router";
+
+import { env } from "../../lib/env";
 
 const providerLabels = {
   keycloak: "Sign in with Keycloak",
@@ -37,11 +39,17 @@ export default function SignInPage({ providers = [] }) {
 }
 
 export async function getServerSideProps() {
-  const providers = await getProviders();
+  const providers = [];
+
+  if (env.KEYCLOAK_ISSUER && env.KEYCLOAK_CLIENT_ID && env.KEYCLOAK_CLIENT_SECRET) {
+    providers.push({ id: "keycloak", name: "Keycloak" });
+  }
+
+  if (env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET) {
+    providers.push({ id: "google", name: "Google" });
+  }
 
   return {
-    props: {
-      providers: Object.values(providers || {}),
-    },
+    props: { providers },
   };
 }
