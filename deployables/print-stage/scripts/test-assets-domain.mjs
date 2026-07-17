@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 
 import {
+  adjustAccountBalance,
   bookLoan,
   createAsset,
   createInitialAssetState,
@@ -10,10 +11,13 @@ import {
   extendLoan,
   markLoanLostByUser,
   normalizeAvailability,
+  recordPrintPaymentTransaction,
   recoverLostUnits,
   repairUnits,
   rescheduleLoan,
+  selectAccountBalance,
   selectAccountDebts,
+  selectAccountTransactions,
   selectAdminLoans,
   selectCatalogue,
   selectInventory,
@@ -134,12 +138,14 @@ assert.equal(camera.units.length, 2);
 assert.equal(camera.lateFeePence, 500);
 assert.equal(camera.units[0].serial, "THERMAL-CAMERA-001");
 assert.equal(selectLoanableListings(state, mondayMorning).length, 1);
+assert.equal(selectCatalogue(state, mondayMorning).find((asset) => asset.id === camera.id).loanabilityHistory.length, 1);
 
 result = setAssetLoanable(state, camera.id, false, mondayMorning);
 state = result.state;
 assert.equal(selectLoanableListings(state, mondayMorning).length, 0);
 result = setAssetLoanable(state, camera.id, true, mondayMorning);
 state = result.state;
+assert.equal(selectCatalogue(state, mondayMorning).find((asset) => asset.id === camera.id).loanabilityHistory.length, 2);
 
 throwsMessage(
   () =>
@@ -273,6 +279,52 @@ result = repairUnits(
 state = result.state;
 assert.equal(selectLostDamaged(state, wednesdayMorning).length, 0);
 assert.equal(selectAccountDebts(state, actor("borrower-a")).reduce((sum, debt) => sum + debt.amountPence, 0), 1000);
+assert.equal(selectAccountBalance(state, actor("borrower-a")), 1000);
+
+result = adjustAccountBalance(
+  state,
+  {
+    userId: "borrower-a",
+    userEmail: "borrower-a@example.com",
+    adjustmentType: "surcharge",
+    amountPence: 750,
+    description: "Manual surcharge for missing accessory",
+  },
+  { id: "admin", email: "admin@example.com" },
+  new Date("2026-07-08T11:10:00.000Z"),
+);
+state = result.state;
+result = adjustAccountBalance(
+  state,
+  {
+    userId: "borrower-a",
+    userEmail: "borrower-a@example.com",
+    adjustmentType: "refund",
+    amountPence: 250,
+    description: "Partial refund after accessory found",
+  },
+  { id: "admin", email: "admin@example.com" },
+  new Date("2026-07-08T11:20:00.000Z"),
+);
+state = result.state;
+assert.equal(selectAccountBalance(state, actor("borrower-a")), 1500);
+assert.equal(selectAccountTransactions(state, actor("borrower-a"))[0].transactionType, "manual_refund");
+assert.equal(selectAccountTransactions(state, actor("borrower-a"))[0].description, "Partial refund after accessory found");
+result = recordPrintPaymentTransaction(
+  state,
+  {
+    fileId: "print-job-a",
+    userId: "borrower-a",
+    amountPence: 4200,
+    printName: "gearbox-case.3mf",
+    paidAt: "2026-07-08T11:30:00.000Z",
+  },
+  new Date("2026-07-08T11:30:00.000Z"),
+);
+state = result.state;
+assert.equal(selectAccountBalance(state, actor("borrower-a")), 1500);
+assert.equal(selectAccountTransactions(state, actor("borrower-a"))[0].transactionType, "print_payment");
+assert.equal(selectAccountTransactions(state, actor("borrower-a"))[0].description, "3D print payment: gearbox-case.3mf");
 
 result = verifyCollectionCode(state, { loanId: loanB.id, code: "333333", adminId: "admin" }, mondayMorning);
 state = result.state;
@@ -398,5 +450,8 @@ assert.equal(selectCatalogue(state, mondayMorning).some((asset) => asset.id === 
 
 const borrowerALoans = selectUserLoans(state, actor("borrower-a"), wednesdayMorning);
 assert.equal(borrowerALoans[0].displayState, "historical");
+const cameraInventory = selectInventory(state, wednesdayMorning).find((asset) => asset.id === camera.id);
+assert.ok(cameraInventory.loanabilityHistory.some((entry) => entry.endAt));
+assert.ok(cameraInventory.units.some((unit) => unit.loanHistory.length));
 
 console.log("asset domain tests passed");

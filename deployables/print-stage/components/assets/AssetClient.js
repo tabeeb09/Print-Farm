@@ -29,6 +29,30 @@ function formatMoney(pence) {
   }).format((Number(pence) || 0) / 100);
 }
 
+function formatSignedMoney(pence) {
+  const amount = Number(pence) || 0;
+  const formatted = formatMoney(Math.abs(amount));
+  if (amount < 0) return `-${formatted}`;
+  if (amount > 0) return `+${formatted}`;
+  return formatted;
+}
+
+function transactionTypeLabel(type) {
+  const labels = {
+    asset_charge: "Asset charge",
+    asset_damage: "Damage charge",
+    lost_replacement: "Lost replacement",
+    recovered_damage: "Recovered damage",
+    damage_refund: "Damage refund",
+    late_fee: "Late fee",
+    manual_refund: "Manual refund",
+    manual_surcharge: "Manual surcharge",
+    print_payment: "3D print payment",
+    print_refund: "3D print refund",
+  };
+  return labels[type] || "Transaction";
+}
+
 function serialText(loan) {
   const serials = Array.isArray(loan?.serials) ? loan.serials.filter(Boolean) : [];
   return serials.length ? serials.join(", ") : "-";
@@ -422,6 +446,8 @@ export default function AssetClient({ mode }) {
         <MyLoansView
           groups={groupedLoans}
           debts={payload?.debts || []}
+          transactions={payload?.transactions || payload?.debts || []}
+          balancePence={payload?.balancePence || 0}
           onReschedule={(loan) => {
             setForm({
               loanId: loan.id,
@@ -783,6 +809,38 @@ function AssetList({ assets, onEdit, onDelete, onLoanable, onDamage }) {
   );
 }
 
+function LoanabilityHistory({ history = [] }) {
+  const periods = Array.isArray(history) ? history.filter((entry) => entry.loanable !== false) : [];
+  if (!periods.length) return <p className="assetMuted">No recorded loanable periods.</p>;
+
+  return (
+    <ul className="assetHistoryList">
+      {periods.map((entry) => (
+        <li key={entry.id || `${entry.startAt}-${entry.endAt || "open"}`}>
+          Loanable from {formatDate(entry.startAt)} to {entry.endAt ? formatDate(entry.endAt) : "now"}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function UnitLoanHistory({ history = [] }) {
+  if (!history.length) return <p className="assetMuted">No loans recorded for this serial.</p>;
+
+  return (
+    <ul className="assetHistoryList">
+      {history.map((entry) => (
+        <li key={entry.loanId}>
+          {entry.status}: {formatDate(entry.collectionAt)} to {formatDate(entry.returnDueAt)}
+          {entry.borrowerEmail ? `, ${entry.borrowerEmail}` : ""}
+          {entry.returnedAt ? `, returned ${formatDate(entry.returnedAt)}` : ""}
+          {entry.lostAt ? `, lost ${formatDate(entry.lostAt)}` : ""}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function InventoryView({ assets, onDamage, onRepair, onDelete }) {
   return (
     <section className="panel assetStack">
@@ -803,6 +861,10 @@ function InventoryView({ assets, onDamage, onRepair, onDelete }) {
               <span>Damaged: {asset.quantityDamaged}</span>
               <span>Out of premises: {asset.quantityOutOfPremises}</span>
             </div>
+            <details>
+              <summary>Loanable periods</summary>
+              <LoanabilityHistory history={asset.loanabilityHistory || []} />
+            </details>
             <div className="assetUnitList">
               {(asset.units || []).map((unit) => (
                 <div key={unit.id} className="assetUnitRow">
@@ -814,6 +876,10 @@ function InventoryView({ assets, onDamage, onRepair, onDelete }) {
                     <button type="button" onClick={() => onDamage(asset, [unit.id])}>Mark damaged</button>
                   )}
                   <button type="button" className="assetDanger" onClick={() => onDelete(asset, unit)}>Dustbin</button>
+                  <details className="assetUnitHistory">
+                    <summary>Loan history</summary>
+                    <UnitLoanHistory history={unit.loanHistory || []} />
+                  </details>
                 </div>
               ))}
             </div>
@@ -935,17 +1001,22 @@ function LoanableView({ listings, onBook }) {
   );
 }
 
-function MyLoansView({ groups, debts, onReschedule, onExtend, onLost }) {
+function MyLoansView({ groups, transactions, balancePence, onReschedule, onExtend, onLost }) {
+  const [tab, setTab] = useState("loans");
   const order = ["overdue", "present", "future", "historical"];
   return (
     <section className="panel assetStack">
       <h1>My bookings</h1>
-      {debts.length ? (
+      {transactions.length ? (
         <div className="assetDebt">
-          Account charges: {formatMoney(debts.reduce((total, debt) => total + debt.amountPence, 0))}
+          Account balance: {formatMoney(balancePence)}
         </div>
       ) : null}
-      {order.map((group) => (
+      <div className="assetTabs">
+        <button type="button" onClick={() => setTab("loans")}>Loans</button>
+        <button type="button" onClick={() => setTab("transactions")}>Transactions</button>
+      </div>
+      {tab === "loans" ? order.map((group) => (
         <div key={group}>
           <h2>{group}</h2>
           <div className="assetCards">
@@ -971,7 +1042,34 @@ function MyLoansView({ groups, debts, onReschedule, onExtend, onLost }) {
           </div>
           {!groups[group]?.length ? <p className="assetMuted">No {group} loans.</p> : null}
         </div>
-      ))}
+      )) : (
+        <div>
+          <h2>Transactions</h2>
+          <table className="assetTable">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Type</th>
+                <th>Description</th>
+                <th>Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {transactions.map((transaction) => (
+                <tr key={transaction.id}>
+                  <td>{formatDate(transaction.createdAt)}</td>
+                  <td>{transactionTypeLabel(transaction.transactionType)}</td>
+                  <td>{transaction.description || transaction.reason || "Account transaction"}</td>
+                  <td>{formatSignedMoney(transaction.amountPence)}</td>
+                </tr>
+              ))}
+              {!transactions.length ? (
+                <tr><td colSpan={4}>No account transactions yet.</td></tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
+      )}
     </section>
   );
 }

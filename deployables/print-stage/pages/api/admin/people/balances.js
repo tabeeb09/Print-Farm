@@ -2,8 +2,12 @@ import { getServerSession } from "next-auth/next";
 
 import { toFileActor } from "../../../../lib/auth";
 import { authOptions } from "../../../../lib/authOptions";
-import { readAssetState } from "../../../../lib/assetsStore";
-import { selectAccountDebts } from "../../../../lib/assetsDomain";
+import { readAssetState, updateAssetState } from "../../../../lib/assetsStore";
+import {
+  adjustAccountBalance,
+  selectAccountBalance,
+  selectAccountTransactions,
+} from "../../../../lib/assetsDomain";
 import { listPeopleForActor } from "../../../../lib/keycloakAdmin";
 
 async function requireHrActor(req, res) {
@@ -21,8 +25,31 @@ async function requireHrActor(req, res) {
   return { actor };
 }
 
-function debtTotalPence(debts) {
-  return debts.reduce((total, debt) => total + Math.max(0, Number(debt.amountPence || 0)), 0);
+async function buildBalances(actor, state) {
+  const people = await listPeopleForActor(actor);
+  const balances = people.map((entry) => {
+    const accountActor = {
+      userId: entry.user.id,
+      userEmail: entry.user.email,
+    };
+    const transactions = selectAccountTransactions(state, accountActor);
+
+    return {
+      user: entry.user,
+      roles: entry.roles,
+      managedBy: entry.managedBy,
+      debts: transactions,
+      transactions,
+      balancePence: selectAccountBalance(state, accountActor),
+    };
+  });
+
+  balances.sort((left, right) =>
+    right.balancePence - left.balancePence ||
+    (left.user.email || "").localeCompare(right.user.email || ""),
+  );
+
+  return balances;
 }
 
 export default async function handler(req, res) {
@@ -31,34 +58,23 @@ export default async function handler(req, res) {
     return res.status(error.status).json({ error: error.message });
   }
 
-  if (req.method !== "GET") {
-    res.setHeader("Allow", "GET");
+  if (!["GET", "POST"].includes(req.method)) {
+    res.setHeader("Allow", "GET, POST");
     return res.status(405).json({ error: "Method not allowed." });
   }
 
   try {
+    if (req.method === "POST") {
+      const payload = req.body && typeof req.body === "object" ? req.body : {};
+      const result = await updateAssetState((state) =>
+        adjustAccountBalance(state, payload, { id: actor.sub, email: actor.email }),
+      );
+      const balances = await buildBalances(actor, result.state);
+      return res.status(200).json({ ok: true, transaction: result.transaction, balances });
+    }
+
     const state = await readAssetState();
-    const people = await listPeopleForActor(actor);
-    const balances = people.map((entry) => {
-      const debts = selectAccountDebts(state, {
-        userId: entry.user.id,
-        userEmail: entry.user.email,
-      });
-
-      return {
-        user: entry.user,
-        roles: entry.roles,
-        managedBy: entry.managedBy,
-        debts,
-        balancePence: debtTotalPence(debts),
-      };
-    });
-
-    balances.sort((left, right) =>
-      right.balancePence - left.balancePence ||
-      (left.user.email || "").localeCompare(right.user.email || ""),
-    );
-
+    const balances = await buildBalances(actor, state);
     return res.status(200).json({ balances });
   } catch (caught) {
     const message = caught instanceof Error ? caught.message : "Unable to load balances.";

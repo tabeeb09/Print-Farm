@@ -14,6 +14,8 @@ import {
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
+import { recordPrintPaymentTransaction } from "./assetsDomain.js";
+import { updateAssetState } from "./assetsStore.js";
 import { env, parseCsv } from "./env.js";
 import { extractOrca3mfMetadataFromBuffer } from "./orca3mf";
 import { inspect3mfPackageFromBuffer } from "./orca3mfPackage";
@@ -838,6 +840,15 @@ export async function markPaymentSessionPending(actor, fileId, paymentSession) {
   };
 
   await writeManifest(updated);
+  await updateAssetState((state) =>
+    recordPrintPaymentTransaction(state, {
+      fileId: updated.id,
+      userId: updated.ownerSub,
+      amountPence: updated.paymentAmountTotalMinor,
+      printName: updated.originalFilename,
+      paidAt: updated.paidAt,
+    }),
+  );
   return hydrateManifest(updated);
 }
 

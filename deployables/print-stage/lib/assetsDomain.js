@@ -95,7 +95,19 @@ export function migrateAssetState(input) {
   state.version = 1;
   state.assets = Array.isArray(state.assets) ? state.assets : [];
   state.loans = Array.isArray(state.loans) ? state.loans : [];
-  state.debts = Array.isArray(state.debts) ? state.debts : [];
+  state.debts = Array.isArray(state.debts)
+    ? state.debts.map((transaction) => normalizeTransaction(transaction)).filter(Boolean)
+    : [];
+
+  for (const asset of state.assets) {
+    asset.units = Array.isArray(asset.units) ? asset.units : [];
+    asset.loanabilityHistory = normalizeLoanabilityHistory(asset);
+
+    for (const unit of asset.units) {
+      unit.damageHistory = Array.isArray(unit.damageHistory) ? unit.damageHistory : [];
+    }
+  }
+
   return state;
 }
 
@@ -224,22 +236,119 @@ function collectionMissed(loan, now) {
 
 function addDebt(state, entry) {
   if (!entry.userId && !entry.userEmail) return null;
-  if (!entry.amountPence) return null;
+  const amountPence = Math.round(Number(entry.amountPence || 0));
+  if (!Number.isFinite(amountPence) || amountPence === 0) return null;
+  if (entry.id) {
+    const existing = state.debts.find((transaction) => transaction.id === entry.id);
+    if (existing) return existing;
+  }
 
   const debt = {
     id: entry.id || id("debt"),
     userId: entry.userId || null,
     userEmail: entry.userEmail || null,
-    amountPence: Math.round(entry.amountPence),
+    amountPence,
     currency: "GBP",
     reason: entry.reason || "Asset charge",
+    description: String(entry.description || entry.reason || "Asset charge").trim(),
+    transactionType: entry.transactionType || entry.type || (amountPence < 0 ? "refund" : "asset_charge"),
+    affectsBalance: entry.affectsBalance !== false,
     assetId: entry.assetId || null,
     unitIds: entry.unitIds || [],
     loanId: entry.loanId || null,
+    fileId: entry.fileId || null,
+    printName: entry.printName || null,
+    createdByAdminId: entry.createdByAdminId || null,
+    createdByAdminEmail: entry.createdByAdminEmail || null,
     createdAt: entry.createdAt || nowIso(),
   };
   state.debts.push(debt);
   return debt;
+}
+
+function normalizeTransaction(entry) {
+  if (!entry || typeof entry !== "object") return null;
+  const amountPence = Math.round(Number(entry.amountPence || 0));
+  if (!Number.isFinite(amountPence) || amountPence === 0) return null;
+
+  return {
+    ...entry,
+    id: entry.id || id("debt"),
+    userId: entry.userId || null,
+    userEmail: entry.userEmail || null,
+    amountPence,
+    currency: entry.currency || "GBP",
+    reason: entry.reason || entry.description || (amountPence < 0 ? "Refund" : "Account charge"),
+    description: String(entry.description || entry.reason || "").trim(),
+    transactionType: entry.transactionType || entry.type || (amountPence < 0 ? "refund" : "asset_charge"),
+    affectsBalance: entry.affectsBalance !== false,
+    assetId: entry.assetId || null,
+    unitIds: Array.isArray(entry.unitIds) ? entry.unitIds : [],
+    loanId: entry.loanId || null,
+    fileId: entry.fileId || null,
+    printName: entry.printName || null,
+    createdByAdminId: entry.createdByAdminId || null,
+    createdByAdminEmail: entry.createdByAdminEmail || null,
+    createdAt: entry.createdAt || nowIso(),
+  };
+}
+
+function normalizeLoanabilityHistory(asset) {
+  const history = Array.isArray(asset.loanabilityHistory) ? asset.loanabilityHistory : [];
+  const normalized = history
+    .filter((entry) => entry && typeof entry === "object" && (entry.startAt || entry.startedAt))
+    .map((entry) => ({
+      id: entry.id || id("loanable"),
+      loanable: entry.loanable !== false,
+      startAt: nowIso(entry.startAt || entry.startedAt),
+      endAt: entry.endAt || entry.endedAt ? nowIso(entry.endAt || entry.endedAt) : null,
+      changedByAdminId: entry.changedByAdminId || null,
+      changedByAdminEmail: entry.changedByAdminEmail || null,
+    }))
+    .sort((left, right) => new Date(left.startAt).getTime() - new Date(right.startAt).getTime());
+
+  if (!normalized.length && asset.loanable) {
+    normalized.push({
+      id: id("loanable"),
+      loanable: true,
+      startAt: asset.createdAt || asset.updatedAt || nowIso(),
+      endAt: null,
+      changedByAdminId: null,
+      changedByAdminEmail: null,
+    });
+  }
+
+  return normalized;
+}
+
+function setLoanability(asset, loanable, timestamp, admin = {}) {
+  const nextLoanable = Boolean(loanable);
+  asset.loanabilityHistory = normalizeLoanabilityHistory(asset);
+
+  if (Boolean(asset.loanable) === nextLoanable) {
+    asset.loanable = nextLoanable;
+    return;
+  }
+
+  if (nextLoanable) {
+    asset.loanabilityHistory.push({
+      id: id("loanable"),
+      loanable: true,
+      startAt: timestamp,
+      endAt: null,
+      changedByAdminId: admin.id || admin.sub || null,
+      changedByAdminEmail: admin.email || null,
+    });
+  } else {
+    const openPeriod = [...asset.loanabilityHistory].reverse().find((entry) => entry.loanable && !entry.endAt);
+    if (openPeriod) {
+      openPeriod.endAt = timestamp;
+      openPeriod.changedByAdminId = admin.id || admin.sub || openPeriod.changedByAdminId || null;
+      openPeriod.changedByAdminEmail = admin.email || openPeriod.changedByAdminEmail || null;
+    }
+  }
+
+  asset.loanable = nextLoanable;
 }
 
 function recordUnitHistory(unit, entry) {
@@ -280,6 +389,7 @@ export function createAsset(state, input, now = new Date()) {
 
   const quantity = toPositiveInteger(input.quantity, 1);
   const timestamp = nowIso(now);
+  const loanable = Boolean(input.loanable);
   const units = makeSerials(name, quantity).map((serial) => ({
     id: id("unit"),
     serial,
@@ -292,12 +402,22 @@ export function createAsset(state, input, now = new Date()) {
     id: input.id || id("asset"),
     name,
     description: String(input.description || "").trim(),
-    loanable: Boolean(input.loanable),
+    loanable,
     pricePence: toPence(input.pricePence ?? input.assetPricePence ?? input.assetPrice, 0),
     lateFeePence: toPence(input.lateFeePence ?? input.lateFee, DEFAULT_LATE_FEE_PENCE),
     totalFailureDays: toPositiveInteger(input.totalFailureDays, DEFAULT_FAILURE_DAYS),
     availability: normalizeAvailability(input.availability),
     units,
+    loanabilityHistory: loanable
+      ? [{
+          id: id("loanable"),
+          loanable: true,
+          startAt: timestamp,
+          endAt: null,
+          changedByAdminId: null,
+          changedByAdminEmail: null,
+        }]
+      : [],
     createdAt: timestamp,
     updatedAt: timestamp,
     deletedAt: null,
@@ -317,7 +437,7 @@ export function updateAsset(state, assetId, input, now = new Date()) {
 
   asset.name = name;
   asset.description = String(input.description ?? asset.description ?? "").trim();
-  asset.loanable = Boolean(input.loanable ?? asset.loanable);
+  setLoanability(asset, Boolean(input.loanable ?? asset.loanable), timestamp);
   asset.pricePence = toPence(input.pricePence ?? input.assetPricePence ?? input.assetPrice, asset.pricePence);
   asset.lateFeePence = toPence(input.lateFeePence ?? input.lateFee, asset.lateFeePence ?? DEFAULT_LATE_FEE_PENCE);
   asset.totalFailureDays = toPositiveInteger(input.totalFailureDays, asset.totalFailureDays ?? DEFAULT_FAILURE_DAYS);
@@ -359,7 +479,7 @@ export function setAssetLoanable(state, assetId, loanable, now = new Date()) {
   const next = migrateAssetState(state);
   const asset = findAsset(next, assetId);
   const timestamp = nowIso(now);
-  asset.loanable = Boolean(loanable);
+  setLoanability(asset, loanable, timestamp);
   asset.updatedAt = timestamp;
   next.updatedAt = timestamp;
   return { state: next, asset };
@@ -512,6 +632,8 @@ export function verifyReturnCode(state, input, now = new Date()) {
       userEmail: loan.userEmail,
       amountPence: chargePence,
       reason: "Asset damage charge",
+      description: `Damage charge for ${asset.name}`,
+      transactionType: "asset_damage",
       assetId: asset.id,
       unitIds: Array.from(damagedUnitIds),
       loanId: loan.id,
@@ -600,6 +722,8 @@ export function markLoanLostByUser(state, input, now = new Date()) {
     userEmail: loan.userEmail,
     amountPence: chargePence,
     reason: "Full replacement value for lost asset",
+    description: `Lost asset replacement charge for ${asset.name}`,
+    transactionType: "lost_replacement",
     assetId: asset.id,
     unitIds: loan.unitIds,
     loanId: loan.id,
@@ -639,6 +763,8 @@ export function markUnitsDamaged(state, input, now = new Date()) {
       userEmail: input.chargeUserEmail || null,
       amountPence: input.chargePence,
       reason: "Asset damage charge",
+      description: `Damage charge for ${asset.name}`,
+      transactionType: "asset_damage",
       assetId: asset.id,
       unitIds,
       createdAt: timestamp,
@@ -677,6 +803,8 @@ export function recoverLostUnits(state, input, now = new Date()) {
       userEmail: input.chargeUserEmail || null,
       amountPence: input.chargePence,
       reason: "Recovered asset damage charge",
+      description: `Recovered asset damage charge for ${asset.name}`,
+      transactionType: "recovered_damage",
       assetId: asset.id,
       unitIds,
       createdAt: timestamp,
@@ -714,6 +842,8 @@ export function repairUnits(state, input, now = new Date()) {
       userEmail: input.chargedUserEmail || null,
       amountPence: repairCostPence - input.originalChargePence,
       reason: "Damage repair discount",
+      description: `Damage repair discount for ${asset.name}`,
+      transactionType: "damage_refund",
       assetId: asset.id,
       unitIds,
       createdAt: timestamp,
@@ -723,6 +853,68 @@ export function repairUnits(state, input, now = new Date()) {
   asset.updatedAt = timestamp;
   next.updatedAt = timestamp;
   return { state: next, asset };
+}
+
+export function adjustAccountBalance(state, input, admin = {}, now = new Date()) {
+  const next = migrateAssetState(state);
+  const userId = input.userId || null;
+  const userEmail = String(input.userEmail || "").trim() || null;
+  assert(userId || userEmail, "A user id or email is required.");
+
+  const adjustmentType = String(input.adjustmentType || input.type || "").trim();
+  assert(["surcharge", "refund"].includes(adjustmentType), "Adjustment type must be surcharge or refund.");
+
+  const amountPence = toPence(input.amountPence ?? input.amount, 0);
+  assert(amountPence > 0, "Adjustment amount must be greater than zero.");
+
+  const description = String(input.description || "").trim();
+  assert(description, "Adjustment description is required.");
+
+  const timestamp = nowIso(now);
+  const transaction = addDebt(next, {
+    userId,
+    userEmail,
+    amountPence: adjustmentType === "refund" ? -amountPence : amountPence,
+    reason: adjustmentType === "refund" ? "Manual refund" : "Manual surcharge",
+    description,
+    transactionType: adjustmentType === "refund" ? "manual_refund" : "manual_surcharge",
+    createdByAdminId: admin.id || admin.sub || null,
+    createdByAdminEmail: admin.email || null,
+    createdAt: timestamp,
+  });
+
+  next.updatedAt = timestamp;
+  return { state: next, transaction };
+}
+
+export function recordPrintPaymentTransaction(state, input, now = new Date()) {
+  const next = migrateAssetState(state);
+  const userId = input.userId || input.ownerSub || null;
+  const userEmail = String(input.userEmail || "").trim() || null;
+  assert(userId || userEmail, "A print payment owner is required.");
+
+  const amountPence = Math.round(Number(input.amountPence || input.amountMinor || 0));
+  assert(amountPence > 0, "Print payment amount must be greater than zero.");
+
+  const printName = String(input.printName || input.filename || input.originalFilename || input.fileId || "3D print").trim();
+  const fileId = String(input.fileId || "").trim();
+  const timestamp = input.paidAt ? nowIso(input.paidAt) : nowIso(now);
+  const transaction = addDebt(next, {
+    id: fileId ? `print_payment_${fileId}` : undefined,
+    userId,
+    userEmail,
+    amountPence,
+    reason: "3D print payment",
+    description: `3D print payment: ${printName}`,
+    transactionType: "print_payment",
+    affectsBalance: false,
+    fileId,
+    printName,
+    createdAt: timestamp,
+  });
+
+  next.updatedAt = timestamp;
+  return { state: next, transaction };
 }
 
 function nextAvailability(asset, state, now = new Date()) {
@@ -743,6 +935,27 @@ function nextAvailability(asset, state, now = new Date()) {
   return null;
 }
 
+function loanHistoryForUnit(state, unitId) {
+  return state.loans
+    .filter((loan) => Array.isArray(loan.unitIds) && loan.unitIds.includes(unitId))
+    .map((loan) => ({
+      loanId: loan.id,
+      assetId: loan.assetId,
+      borrowerId: loan.userId || null,
+      borrowerEmail: loan.userEmail || null,
+      status: loan.status,
+      collectionAt: loan.collectionAt,
+      collectedAt: loan.collectedAt || null,
+      returnDueAt: loan.returnDueAt,
+      returnedAt: loan.returnedAt || null,
+      cancelledAt: loan.cancelledAt || null,
+      lostAt: loan.lostAt || null,
+      createdAt: loan.createdAt || null,
+      updatedAt: loan.updatedAt || null,
+    }))
+    .sort((left, right) => new Date(right.collectionAt).getTime() - new Date(left.collectionAt).getTime());
+}
+
 function decorateAsset(state, asset, now = new Date()) {
   const units = activeUnits(asset);
   const normalUnits = units.filter((unit) => unit.condition === "normal");
@@ -758,6 +971,11 @@ function decorateAsset(state, asset, now = new Date()) {
 
   return {
     ...asset,
+    units: units.map((unit) => ({
+      ...unit,
+      loanHistory: loanHistoryForUnit(state, unit.id),
+    })),
+    loanabilityHistory: normalizeLoanabilityHistory(asset),
     quantityTotal: units.length,
     quantityNormal: normalUnits.length,
     quantityDamaged: damagedUnits.length,
@@ -884,9 +1102,57 @@ export function selectLostDamaged(state, now = new Date()) {
   return entries.sort((left, right) => left.assetName.localeCompare(right.assetName) || left.unit.serial.localeCompare(right.unit.serial));
 }
 
-export function selectAccountDebts(state, actor) {
-  return migrateAssetState(state).debts.filter((debt) =>
+function describeTransaction(state, transaction) {
+  if (transaction.description) return transaction.description;
+
+  const asset = transaction.assetId
+    ? state.assets.find((entry) => entry.id === transaction.assetId)
+    : null;
+  const assetName = asset?.name || "asset";
+  const printName = transaction.printName || transaction.fileName || transaction.filename || transaction.fileId || "3D print";
+
+  const descriptions = {
+    asset_damage: `Damage charge for ${assetName}`,
+    lost_replacement: `Lost asset replacement charge for ${assetName}`,
+    recovered_damage: `Recovered asset damage charge for ${assetName}`,
+    damage_refund: `Damage repair refund for ${assetName}`,
+    late_fee: `Late fee for ${assetName}`,
+    manual_refund: "Manual refund",
+    manual_surcharge: "Manual surcharge",
+    print_payment: `3D print payment: ${printName}`,
+    print_refund: `3D print refund: ${printName}`,
+  };
+
+  return descriptions[transaction.transactionType] || transaction.reason || "Account transaction";
+}
+
+function decorateTransaction(state, transaction) {
+  return {
+    ...transaction,
+    description: describeTransaction(state, transaction),
+  };
+}
+
+export function selectAccountTransactions(state, actor) {
+  const current = migrateAssetState(state);
+  return current.debts.filter((debt) =>
     (actor.userId && debt.userId === actor.userId) || (actor.userEmail && debt.userEmail === actor.userEmail),
+  )
+    .map((transaction) => decorateTransaction(current, transaction))
+    .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
+}
+
+export function selectAccountDebts(state, actor) {
+  return selectAccountTransactions(state, actor);
+}
+
+export function selectAccountBalance(state, actor) {
+  return selectAccountTransactions(state, actor).reduce(
+    (total, transaction) =>
+      transaction.affectsBalance === false
+        ? total
+        : total + Math.round(Number(transaction.amountPence || 0)),
+    0,
   );
 }
 

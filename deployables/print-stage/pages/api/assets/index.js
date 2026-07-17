@@ -14,7 +14,8 @@ import {
   recoverLostUnits,
   repairUnits,
   rescheduleLoan,
-  selectAccountDebts,
+  selectAccountBalance,
+  selectAccountTransactions,
   selectAdminLoans,
   selectCatalogue,
   selectInventory,
@@ -78,16 +79,22 @@ function getViewPayload(state, actor, view) {
   }
 
   if (view === "my-loans") {
+    const transactions = selectAccountTransactions(state, borrower);
     return {
       loans: selectUserLoans(state, borrower),
-      debts: selectAccountDebts(state, borrower),
+      debts: transactions,
+      transactions,
+      balancePence: selectAccountBalance(state, borrower),
       actor: { isAssetAdmin: actor.isAssetAdmin },
     };
   }
 
+  const transactions = selectAccountTransactions(state, borrower);
   return {
     listings: selectLoanableListings(state),
-    debts: selectAccountDebts(state, borrower),
+    debts: transactions,
+    transactions,
+    balancePence: selectAccountBalance(state, borrower),
     actor: { isAssetAdmin: actor.isAssetAdmin },
   };
 }
