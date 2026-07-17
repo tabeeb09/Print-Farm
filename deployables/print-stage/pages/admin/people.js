@@ -40,6 +40,19 @@ function emptyGroupForm() {
   };
 }
 
+function parseEmailEntries(value) {
+  return String(value || "")
+    .split(/[,\n]/)
+    .map((entry) => entry.trim().toLowerCase())
+    .filter((entry) => entry && entry.includes("@"));
+}
+
+function formatEmailEntries(emails) {
+  return Array.from(new Set(emails.map((email) => email.trim().toLowerCase()).filter(Boolean)))
+    .sort()
+    .join("\n");
+}
+
 export default function PeopleAdminPage({ manageableRoles, initialRoleOptions }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -55,6 +68,7 @@ export default function PeopleAdminPage({ manageableRoles, initialRoleOptions })
   const [roleOptions, setRoleOptions] = useState(initialRoleOptions || []);
   const [groupModalOpen, setGroupModalOpen] = useState(false);
   const [groupForm, setGroupForm] = useState(emptyGroupForm);
+  const [groupMemberDraft, setGroupMemberDraft] = useState("");
   const [expandedGroupIds, setExpandedGroupIds] = useState([]);
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState("");
@@ -207,12 +221,13 @@ export default function PeopleAdminPage({ manageableRoles, initialRoleOptions })
         groupId: group.id,
         name: group.name || "",
         adminEmails: (group.admins || []).join(", "),
-        memberEmails: (group.members || []).map((member) => member.email).join(", "),
+        memberEmails: formatEmailEntries((group.members || []).map((member) => member.email || member.username)),
         roles: group.directRoles || [],
       });
     } else {
       setGroupForm(emptyGroupForm());
     }
+    setGroupMemberDraft("");
     setGroupModalOpen(true);
     setError("");
     setMessage("");
@@ -240,6 +255,29 @@ export default function PeopleAdminPage({ manageableRoles, initialRoleOptions })
       }
       return { ...current, roles: Array.from(rolesSet).sort() };
     });
+  }
+
+  function addGroupMembersFromDraft() {
+    const additions = parseEmailEntries(groupMemberDraft);
+    if (!additions.length) return;
+
+    setGroupForm((current) => ({
+      ...current,
+      memberEmails: formatEmailEntries([
+        ...parseEmailEntries(current.memberEmails),
+        ...additions,
+      ]),
+    }));
+    setGroupMemberDraft("");
+  }
+
+  function removeGroupMember(emailToRemove) {
+    setGroupForm((current) => ({
+      ...current,
+      memberEmails: formatEmailEntries(
+        parseEmailEntries(current.memberEmails).filter((email) => email !== emailToRemove),
+      ),
+    }));
   }
 
   async function saveGroup(event) {
@@ -304,6 +342,8 @@ export default function PeopleAdminPage({ manageableRoles, initialRoleOptions })
       setPending(false);
     }
   }
+
+  const groupFormMembers = parseEmailEntries(groupForm.memberEmails);
 
   return (
     <SiteShell title="People permissions">
@@ -467,6 +507,9 @@ export default function PeopleAdminPage({ manageableRoles, initialRoleOptions })
                       <td style={{ padding: "0.65rem 0" }}>{group.directRoles?.join(", ") || "none"}</td>
                       <td style={{ padding: "0.65rem 0", display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
                         <button type="button" onClick={() => openGroupModal(group)}>
+                          Add people
+                        </button>
+                        <button type="button" onClick={() => openGroupModal(group)}>
                           Edit
                         </button>
                         <button type="button" onClick={() => deleteGroup(group)} disabled={pending}>
@@ -605,15 +648,66 @@ export default function PeopleAdminPage({ manageableRoles, initialRoleOptions })
                 />
               </label>
 
-              <label style={{ display: "grid", gap: "0.35rem" }}>
-                <span>Members, comma-separated emails</span>
-                <textarea
-                  rows={4}
-                  value={groupForm.memberEmails}
-                  onChange={(event) => updateGroupField("memberEmails", event.target.value)}
-                  placeholder="member@example.com, trainee@example.com"
-                />
-              </label>
+              <fieldset style={{ border: "1px solid rgba(0,0,0,0.12)", borderRadius: "0.75rem" }}>
+                <legend>People in this group</legend>
+                <div style={{ display: "grid", gap: "0.85rem" }}>
+                  <label style={{ display: "grid", gap: "0.35rem" }}>
+                    <span>Add people by email</span>
+                    <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                      <input
+                        type="text"
+                        value={groupMemberDraft}
+                        onChange={(event) => setGroupMemberDraft(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            addGroupMembersFromDraft();
+                          }
+                        }}
+                        placeholder="member@example.com, trainee@example.com"
+                        style={{ flex: "1 1 18rem" }}
+                      />
+                      <button type="button" onClick={addGroupMembersFromDraft}>
+                        Add people
+                      </button>
+                    </div>
+                  </label>
+
+                  {groupFormMembers.length ? (
+                    <div style={{ display: "grid", gap: "0.45rem" }}>
+                      <strong>{groupFormMembers.length} selected {groupFormMembers.length === 1 ? "person" : "people"}</strong>
+                      <ul style={{ margin: 0, paddingLeft: "1.25rem" }}>
+                        {groupFormMembers.map((memberEmail) => (
+                          <li key={memberEmail} style={{ marginBottom: "0.35rem" }}>
+                            <span>{memberEmail}</span>
+                            <button
+                              type="button"
+                              onClick={() => removeGroupMember(memberEmail)}
+                              style={{ marginLeft: "0.5rem" }}
+                            >
+                              Remove
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : (
+                    <p style={{ margin: 0, color: "#666" }}>
+                      No people selected yet. Add one or more email addresses above, then save the group.
+                    </p>
+                  )}
+
+                  <label style={{ display: "grid", gap: "0.35rem" }}>
+                    <span>Bulk edit member emails</span>
+                    <textarea
+                      rows={4}
+                      value={groupForm.memberEmails}
+                      onChange={(event) => updateGroupField("memberEmails", event.target.value)}
+                      placeholder={"member@example.com\ntrainee@example.com"}
+                    />
+                  </label>
+                </div>
+              </fieldset>
 
               <div style={{ display: "grid", gap: "0.75rem" }}>
                 <strong>Group permissions</strong>
