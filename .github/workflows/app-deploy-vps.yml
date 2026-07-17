@@ -1,6 +1,11 @@
 name: App Deploy To VPS
 
 on:
+  workflow_run:
+    workflows:
+      - Build and Push Website
+    types:
+      - completed
   workflow_dispatch:
     inputs:
       ref:
@@ -21,6 +26,7 @@ concurrency:
 
 jobs:
   deploy:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ${{ fromJSON(vars.DEPLOY_RUNNER_LABELS || '["self-hosted","linux","website-deploy","private-network"]') }}
     env:
       DEPLOY_PATH: /srv/website/app
