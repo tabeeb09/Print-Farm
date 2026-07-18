@@ -1,0 +1,82 @@
+name: Print Stage Deploy To VPS
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref to deploy
+        required: false
+        default: main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: print-stage-deploy-vps
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ${{ fromJSON(vars.DEPLOY_RUNNER_LABELS || '["self-hosted","linux","website-deploy","private-network"]') }}
+    env:
+      DEPLOY_PATH: /srv/website/app
+      DEPLOY_MODE: ${{ vars.DEPLOY_MODE || 'local' }}
+      DEPLOY_PORT: ${{ vars.DEPLOY_PORT || '22' }}
+      SSH_OPTS: -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=2
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Resolve deployment ref
+        id: ref
+        shell: bash
+        run: echo "ref=${{ github.event.inputs.ref || 'main' }}" >> "$GITHUB_OUTPUT"
+
+      - name: Configure SSH key
+        if: env.DEPLOY_MODE == 'ssh'
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+          SSH_PRIVATE_KEY_B64: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY_B64 }}
+          SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_SSH_KNOWN_HOSTS }}
+          SSH_KNOWN_HOSTS_B64: ${{ secrets.DEPLOY_SSH_KNOWN_HOSTS_B64 }}
+        run: |
+          install -m 700 -d ~/.ssh
+          if test -n "$SSH_PRIVATE_KEY_B64"; then
+            printf '%s' "$SSH_PRIVATE_KEY_B64" | base64 -d > ~/.ssh/id_ed25519
+          else
+            printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          fi
+          chmod 600 ~/.ssh/id_ed25519
+          if test -n "$SSH_KNOWN_HOSTS_B64"; then
+            printf '%s' "$SSH_KNOWN_HOSTS_B64" | base64 -d > ~/.ssh/known_hosts
+          else
+            printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          fi
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Deploy print stage locally
+        if: env.DEPLOY_MODE == 'local'
+        env:
+          REPO_REF: ${{ steps.ref.outputs.ref }}
+        run: |
+          cd "${DEPLOY_PATH}"
+          sudo git config --global --add safe.directory "${DEPLOY_PATH}"
+          sudo git fetch --all --tags --prune
+          sudo git checkout "${REPO_REF}"
+          if sudo git show-ref --verify --quiet "refs/remotes/origin/${REPO_REF}"; then
+            sudo git reset --hard "origin/${REPO_REF}"
+          else
+            sudo git reset --hard "${REPO_REF}"
+          fi
+          sudo REPO_ROOT="${DEPLOY_PATH}" bash scripts/live-print-stage-deploy.sh
+
+      - name: Deploy print stage over SSH
+        if: env.DEPLOY_MODE == 'ssh'
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          REPO_REF: ${{ steps.ref.outputs.ref }}
+        run: |
+          test -n "$DEPLOY_HOST" || { echo "Missing secret DEPLOY_HOST"; exit 1; }
+          test -n "$DEPLOY_USER" || { echo "Missing secret DEPLOY_USER"; exit 1; }
+          ssh ${SSH_OPTS} -p "${DEPLOY_PORT}" "${DEPLOY_USER}@${DEPLOY_HOST}" "cd '${DEPLOY_PATH}' && sudo git config --global --add safe.directory '${DEPLOY_PATH}' && sudo git fetch --all --tags --prune && sudo git checkout '${REPO_REF}' && if sudo git show-ref --verify --quiet 'refs/remotes/origin/${REPO_REF}'; then sudo git reset --hard 'origin/${REPO_REF}'; else sudo git reset --hard '${REPO_REF}'; fi && sudo REPO_ROOT='${DEPLOY_PATH}' bash scripts/live-print-stage-deploy.sh"
