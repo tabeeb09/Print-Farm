@@ -120,6 +120,11 @@ async function main() {
     KEYCLOAK_SMTP_PASSWORD: resendApiKey,
     KEYCLOAK_SMTP_SSL: "true",
     KEYCLOAK_SMTP_STARTTLS: "false",
+    KEYCLOAK_SMTP_AUTH: "true",
+    KEYCLOAK_LOGIN_RESET_PASSWORD_ALLOWED:
+      process.env.KEYCLOAK_LOGIN_RESET_PASSWORD_ALLOWED ||
+      current.KEYCLOAK_LOGIN_RESET_PASSWORD_ALLOWED ||
+      "true",
     EMAIL_DAILY_LIMIT: process.env.EMAIL_DAILY_LIMIT || current.EMAIL_DAILY_LIMIT || "95",
     EMAIL_DAILY_ALERT_RECIPIENT_LIMIT:
       process.env.EMAIL_DAILY_ALERT_RECIPIENT_LIMIT ||
@@ -129,6 +134,14 @@ async function main() {
       process.env.EMAIL_DAILY_ALERT_RESERVE ||
       current.EMAIL_DAILY_ALERT_RESERVE ||
       "true",
+    PASSWORD_RESET_TOKEN_S3_PREFIX:
+      process.env.PASSWORD_RESET_TOKEN_S3_PREFIX ||
+      current.PASSWORD_RESET_TOKEN_S3_PREFIX ||
+      "private/system/password-reset-tokens",
+    PASSWORD_RESET_TOKEN_TTL_MINUTES:
+      process.env.PASSWORD_RESET_TOKEN_TTL_MINUTES ||
+      current.PASSWORD_RESET_TOKEN_TTL_MINUTES ||
+      "30",
   });
 
   console.log(`Stored Resend SMTP settings in ${config.kvMount}/data/${config.path}.`);

@@ -111,7 +111,7 @@ export async function getEmailQuotaStatus(day = getUtcDay()) {
   };
 }
 
-export async function reservePasswordResetEmail({ recipientEmail }) {
+export async function reservePasswordResetEmail({ recipientEmail, trigger = EVENT_PASSWORD_RESET }) {
   const status = await getEmailQuotaStatus();
 
   if (status.count >= status.userLimit) {
@@ -120,6 +120,7 @@ export async function reservePasswordResetEmail({ recipientEmail }) {
 
   await putEmailEvent(EVENT_PASSWORD_RESET, {
     recipientHash: hashEmail(recipientEmail),
+    trigger,
   }, status.day);
 
   return getEmailQuotaStatus(status.day);

@@ -78,15 +78,19 @@ The assignable role list is controlled by:
 KEYCLOAK_MANAGEABLE_ROLES=viewer,editor,media_admin,technician,print_admin,config_admin,openbao_admin,infra_admin,identity_hr_manager
 ```
 
-## Account Recovery Email
+## Password Emails
 
-Password recovery goes through the app endpoint at `/api/auth/recover`, which
-checks the user in Keycloak, reserves one daily email quota event in S3, then
-asks Keycloak to send the reset email. The quota is intentionally conservative:
-if quota state cannot be written, no reset email is sent.
+Password recovery goes through the app endpoint at `/api/auth/recover`.
+Signed-in users can request a password-change email from `/account/security`,
+which calls `/api/auth/change-password-email`.
+
+Both flows check the user in Keycloak, reserve one daily email quota event in
+S3, create a short-lived one-time reset token in S3, and send the reset link
+through Resend's HTTPS API. The quota is intentionally conservative: if quota
+state cannot be written, no password email is sent.
 
 The default daily hard limit is `95` total outbound email events per UTC day.
-By default one event is reserved for an owner alert, so user-facing reset
+By default one event is reserved for an owner alert, so user-facing password
 emails stop at `94`; the alert email consumes event `95`.
 
 Resend can be configured in OpenBao with:
@@ -107,11 +111,15 @@ KEYCLOAK_SMTP_USER=resend
 KEYCLOAK_SMTP_PASSWORD=<RESEND_API_KEY>
 KEYCLOAK_SMTP_SSL=true
 KEYCLOAK_SMTP_STARTTLS=false
+KEYCLOAK_SMTP_AUTH=true
+KEYCLOAK_LOGIN_RESET_PASSWORD_ALLOWED=true
 RESEND_API_KEY=<RESEND_API_KEY>
 RESEND_FROM_EMAIL=no-reply@mg.example.com
 EMAIL_DAILY_LIMIT=95
 EMAIL_DAILY_ALERT_RECIPIENT_LIMIT=4
 EMAIL_DAILY_ALERT_RESERVE=true
+PASSWORD_RESET_TOKEN_S3_PREFIX=private/system/password-reset-tokens
+PASSWORD_RESET_TOKEN_TTL_MINUTES=30
 ```
 
 `scripts/sync-keycloak-realm-auth.mjs` applies those settings to Keycloak
@@ -119,7 +127,8 @@ during print deploy. When the daily limit is reached, the app sends one alert
 email to at most four `SUPERADMIN_EMAILS`/`owner` users recommending either
 upgrading Resend/payment or implementing a self-hosted mail relay.
 
-The sync script disables Keycloak's built-in public "forgot password" link by
-default (`KEYCLOAK_LOGIN_RESET_PASSWORD_ALLOWED=false`) so recovery traffic goes
-through the app quota gate. The app still uses Keycloak admin
-`execute-actions-email` to issue the actual reset link after quota is reserved.
+The sync script keeps Keycloak's public "forgot password" action enabled by
+default (`KEYCLOAK_LOGIN_RESET_PASSWORD_ALLOWED=true`), but the print app's
+`/auth/recover` page does not rely on Keycloak SMTP. It routes recovery through
+the S3 quota gate, sends through Resend HTTPS, then uses Keycloak admin
+`reset-password` only after the one-time app token is verified.

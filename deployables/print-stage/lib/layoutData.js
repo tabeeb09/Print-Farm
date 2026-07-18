@@ -4,6 +4,7 @@ export const menuItems = [
   { href: "/print-queue", title: "Print farm queue", label: "Operator panel", adminOnly: true },
   { href: "/assets", title: "Borrow assets", label: "Loan catalogue" },
   { href: "/assets/my-loans", title: "My bookings", label: "Loans and codes" },
+  { href: "/account/security", title: "Account security", label: "Password email" },
   { href: "/admin/assets/catalogue", title: "Asset catalogue", label: "Loan settings", assetAdminOnly: true },
   { href: "/admin/assets/inventory", title: "Inventory", label: "On-premises assets", assetAdminOnly: true },
   { href: "/admin/assets/loans", title: "Asset loans", label: "Collections and returns", assetAdminOnly: true },

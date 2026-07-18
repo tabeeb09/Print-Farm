@@ -557,6 +557,19 @@ export async function sendPasswordResetIfRegistered(email, redirectUri, options 
   return { sent: true, beforeSend: beforeSendResult };
 }
 
+export async function resetUserPasswordById(userId, password) {
+  await keycloakAdminFetch(`/users/${encodeURIComponent(userId)}/reset-password`, {
+    method: "PUT",
+    body: JSON.stringify({
+      type: "password",
+      value: password,
+      temporary: false,
+    }),
+  });
+
+  return { reset: true };
+}
+
 export async function assignRoleByEmail(email, roleName, managerEmail = "", actor = null) {
   assertManageableRole(roleName);
   if (actor) {

@@ -268,20 +268,21 @@ function getSmtpConfig(env) {
   if (!host || !from) return null;
 
   const isResendDefault = host === "smtp.resend.com" && resendApiKey;
+  const user = pick(env, "KEYCLOAK_SMTP_USER", "SMTP_USER") || (isResendDefault ? "resend" : "");
+  const password = pick(env, "KEYCLOAK_SMTP_PASSWORD", "SMTP_PASSWORD") || (isResendDefault ? resendApiKey : "");
+  const authDefault = user || password || isResendDefault ? "true" : "false";
   const smtp = {
     host,
     from,
     port: pick(env, "KEYCLOAK_SMTP_PORT", "SMTP_PORT") || (isResendDefault ? "465" : "587"),
     ssl: envFlag(pick(env, "KEYCLOAK_SMTP_SSL", "SMTP_SSL"), isResendDefault ? "true" : "false"),
     starttls: envFlag(pick(env, "KEYCLOAK_SMTP_STARTTLS", "SMTP_STARTTLS"), isResendDefault ? "false" : "true"),
-    auth: envFlag(pick(env, "KEYCLOAK_SMTP_AUTH", "SMTP_AUTH"), pick(env, "KEYCLOAK_SMTP_USER", "SMTP_USER") || isResendDefault ? "true" : "false"),
+    auth: envFlag(pick(env, "KEYCLOAK_SMTP_AUTH", "SMTP_AUTH"), authDefault),
   };
 
   const fromDisplayName = pick(env, "KEYCLOAK_SMTP_FROM_DISPLAY_NAME", "SMTP_FROM_DISPLAY_NAME");
   const replyTo = pick(env, "KEYCLOAK_SMTP_REPLY_TO", "SMTP_REPLY_TO");
   const replyToDisplayName = pick(env, "KEYCLOAK_SMTP_REPLY_TO_DISPLAY_NAME", "SMTP_REPLY_TO_DISPLAY_NAME");
-  const user = pick(env, "KEYCLOAK_SMTP_USER", "SMTP_USER") || (isResendDefault ? "resend" : "");
-  const password = pick(env, "KEYCLOAK_SMTP_PASSWORD", "SMTP_PASSWORD") || (isResendDefault ? resendApiKey : "");
 
   if (fromDisplayName) smtp.fromDisplayName = fromDisplayName;
   if (replyTo) smtp.replyTo = replyTo;
@@ -331,7 +332,7 @@ async function syncRealmRecoverySettings(env, origin, realm, token) {
   };
   const resetPasswordAllowed = envFlag(
     pick(env, "KEYCLOAK_LOGIN_RESET_PASSWORD_ALLOWED"),
-    "false",
+    "true",
   ) === "true";
   const realmConfig = await keycloakJson(`${origin}/admin/realms/${realm}`, { headers });
 
