@@ -5,13 +5,22 @@ import { useRouter } from "next/router";
 import { env } from "../../lib/env";
 
 const providerLabels = {
-  keycloak: "Sign in with Keycloak",
-  google: "Continue with Google",
+  keycloak: "Sign in with makerspace account",
+  keycloakGoogle: "Continue with Google",
 };
 
 export default function SignInPage({ providers = [] }) {
   const router = useRouter();
   const callbackUrl = typeof router.query.callbackUrl === "string" ? router.query.callbackUrl : "/";
+
+  function handleProviderSignIn(provider) {
+    if (provider.id === "keycloakGoogle") {
+      signIn("keycloak", { callbackUrl }, { kc_idp_hint: "google" });
+      return;
+    }
+
+    signIn(provider.id, { callbackUrl });
+  }
 
   return (
     <main className="authPage">
@@ -24,7 +33,7 @@ export default function SignInPage({ providers = [] }) {
             <button
               key={provider.id}
               type="button"
-              onClick={() => signIn(provider.id, { callbackUrl })}
+              onClick={() => handleProviderSignIn(provider)}
             >
               {providerLabels[provider.id] || `Sign in with ${provider.name}`}
             </button>
@@ -46,7 +55,7 @@ export async function getServerSideProps() {
   }
 
   if (env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET) {
-    providers.push({ id: "google", name: "Google" });
+    providers.push({ id: "keycloakGoogle", name: "Google" });
   }
 
   return {

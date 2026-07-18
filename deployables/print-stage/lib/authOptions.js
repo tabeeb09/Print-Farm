@@ -1,9 +1,7 @@
 import KeycloakProvider from "next-auth/providers/keycloak";
-import GoogleProvider from "next-auth/providers/google";
 import { decodeJwt } from "jose";
 
 import { env } from "./env";
-import { syncSsoUserByEmail } from "./keycloakAdmin";
 
 function readPath(source, dottedPath) {
   return dottedPath.split(".").reduce((value, key) => {
@@ -65,15 +63,6 @@ if (env.KEYCLOAK_ISSUER && env.KEYCLOAK_CLIENT_ID && env.KEYCLOAK_CLIENT_SECRET)
   );
 }
 
-if (env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET) {
-  providers.push(
-    GoogleProvider({
-      clientId: env.GOOGLE_CLIENT_ID,
-      clientSecret: env.GOOGLE_CLIENT_SECRET,
-    }),
-  );
-}
-
 export const authOptions = {
   secret: env.NEXTAUTH_SECRET,
   providers,
@@ -84,18 +73,6 @@ export const authOptions = {
     async signIn({ user, account, profile }) {
       if (!user.email) {
         return false;
-      }
-
-      if (account?.provider === "google" && profile && "email_verified" in profile && !profile.email_verified) {
-        return false;
-      }
-
-      if (account?.provider === "google") {
-        await syncSsoUserByEmail({
-          email: user.email,
-          name: user.name,
-          provider: account.provider,
-        });
       }
 
       return true;
@@ -140,29 +117,7 @@ export const authOptions = {
 
       token.email = email;
       const tokenRoles = Array.from(new Set(extractRoles(mergedSource)));
-      const shouldSyncGoogleRoles =
-        token.provider === "google" &&
-        email &&
-        (!token.lastRoleSyncAt || Date.now() - token.lastRoleSyncAt > 60_000 || account);
-
-      if (shouldSyncGoogleRoles) {
-        try {
-          const synced = await syncSsoUserByEmail({
-            email,
-            name: typeof token.name === "string" ? token.name : null,
-            provider: token.provider,
-          });
-          token.keycloakSub = synced.user?.id || token.keycloakSub || null;
-          token.roles = Array.from(new Set(synced.roles));
-          token.roleSyncFailed = false;
-          token.lastRoleSyncAt = Date.now();
-        } catch {
-          token.roleSyncFailed = true;
-          token.roles = [];
-        }
-      } else {
-        token.roles = token.roles?.length ? token.roles : tokenRoles;
-      }
+      token.roles = token.roles?.length ? token.roles : tokenRoles;
       token.keycloakSub =
         token.provider === "keycloak" && typeof mergedSource.sub === "string" && mergedSource.sub
           ? mergedSource.sub
