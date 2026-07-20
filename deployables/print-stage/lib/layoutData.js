@@ -2,6 +2,8 @@ export const menuItems = [
   { href: "/", title: "Home", label: "Index" },
   { href: "/files", title: "Submit prints", label: "Upload and quote" },
   { href: "/print-queue", title: "Print farm queue", label: "Operator panel", adminOnly: true },
+  { href: "/admin/printers", title: "Printers", label: "LAN worker config", adminOnly: true },
+  { href: "/admin/filament", title: "Filament tracking", label: "Autoprint usage", adminOnly: true },
   { href: "/assets", title: "Borrow assets", label: "Loan catalogue" },
   { href: "/assets/my-loans", title: "My bookings", label: "Loans and codes" },
   { href: "/account/security", title: "Account security", label: "Password email" },
@@ -10,5 +12,7 @@ export const menuItems = [
   { href: "/admin/assets/loans", title: "Asset loans", label: "Collections and returns", assetAdminOnly: true },
   { href: "/admin/assets/lost-damaged", title: "Lost and damaged", label: "Repair ledger", assetAdminOnly: true },
   { href: "/admin/people", title: "People", label: "Permissions", hrAdminOnly: true },
+  { href: "/admin/discounts", title: "Discounts", label: "Group pricing", hrAdminOnly: true },
+  { href: "/admin/audit", title: "Audit log", label: "User actions", adminAnyOnly: true },
   { href: "/admin/approles", title: "OpenBao AppRoles", label: "Credential minting", openBaoAdminOnly: true },
 ];

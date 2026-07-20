@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth/next";
 
 import { toFileActor } from "../../../../lib/auth";
 import { authOptions } from "../../../../lib/authOptions";
+import { recordAuditEvent } from "../../../../lib/auditLog";
 import { readAssetState, updateAssetState } from "../../../../lib/assetsStore";
 import {
   adjustAccountBalance,
@@ -69,6 +70,12 @@ export default async function handler(req, res) {
       const result = await updateAssetState((state) =>
         adjustAccountBalance(state, payload, { id: actor.sub, email: actor.email }),
       );
+      await recordAuditEvent(actor, {
+        action: `balance.${payload.adjustmentType || "adjustment"}`,
+        targetType: "user",
+        targetId: payload.userId || payload.userEmail,
+        metadata: payload,
+      });
       const balances = await buildBalances(actor, result.state);
       return res.status(200).json({ ok: true, transaction: result.transaction, balances });
     }

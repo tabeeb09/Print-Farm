@@ -24,7 +24,9 @@ export default function SiteShell({ children, title = "3D Printer" }) {
   const isAssetAdmin =
     session?.user?.email?.toLowerCase?.() === "tabeebrahman.logistics@gmail.com" ||
     ["owner", "asset_admin"].some((role) => roles.includes(role));
+  const isAnyAdmin = isQueueAdmin || isOpenBaoAdmin || isHrAdmin || isAssetAdmin;
   const visibleMenuItems = menuItems.filter((item) => {
+    if (item.adminAnyOnly) return isAnyAdmin;
     if (item.openBaoAdminOnly) return isOpenBaoAdmin;
     if (item.hrAdminOnly) return isHrAdmin;
     if (item.assetAdminOnly) return isAssetAdmin;

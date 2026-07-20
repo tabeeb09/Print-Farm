@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth/next";
 
 import { toFileActor } from "../../../../lib/auth";
 import { authOptions } from "../../../../lib/authOptions";
+import { recordAuditEvent } from "../../../../lib/auditLog";
 import {
   actorCanOpenPeopleAdmin,
   deletePeopleGroup,
@@ -44,6 +45,12 @@ export default async function handler(req, res) {
 
     if (req.method === "POST" || req.method === "PUT") {
       const group = await savePeopleGroup(actor, req.body || {});
+      await recordAuditEvent(actor, {
+        action: "peopleGroup.save",
+        targetType: "peopleGroup",
+        targetId: group?.id || req.body?.name,
+        metadata: req.body,
+      });
       return res.status(req.method === "POST" ? 201 : 200).json({
         group,
         groups: await listPeopleGroupsForActor(actor),
@@ -58,6 +65,11 @@ export default async function handler(req, res) {
       }
 
       const deleted = await deletePeopleGroup(actor, groupId);
+      await recordAuditEvent(actor, {
+        action: "peopleGroup.delete",
+        targetType: "peopleGroup",
+        targetId: groupId,
+      });
       return res.status(200).json({
         ...deleted,
         groups: await listPeopleGroupsForActor(actor),

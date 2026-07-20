@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth/next";
 
 import { authOptions } from "../../../lib/authOptions";
 import { toFileActor } from "../../../lib/auth";
+import { recordAuditEvent } from "../../../lib/auditLog";
 import { listPrintQueue, markNextQueuedFileAsPrinting } from "../../../lib/s3Files";
 
 export default async function handler(req, res) {
@@ -19,6 +20,12 @@ export default async function handler(req, res) {
   try {
     if (req.method === "POST") {
       const file = await markNextQueuedFileAsPrinting(actor);
+      await recordAuditEvent(actor, {
+        action: "printQueue.markNextPrinting",
+        targetType: "printFile",
+        targetId: file.id,
+        metadata: { originalFilename: file.originalFilename },
+      });
       return res.status(200).json({ file });
     }
 

@@ -17,6 +17,7 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { recordPrintPaymentTransaction } from "./assetsDomain.js";
 import { updateAssetState } from "./assetsStore.js";
 import { env, parseCsv } from "./env.js";
+import { recordFilamentUsageForPrint } from "./filamentLedger.js";
 import { extractOrca3mfMetadataFromBuffer } from "./orca3mf";
 import { inspect3mfPackageFromBuffer } from "./orca3mfPackage";
 import { sliceModelTo3mf } from "./orcaSlicer";
@@ -1133,6 +1134,9 @@ export async function markFilePrinting(fileId, updates = {}) {
     updatedAt: new Date().toISOString(),
   };
   await writeManifest(updated);
+  if (updates?.queuedByWorker) {
+    await recordFilamentUsageForPrint(updated, "autoprint");
+  }
   return hydrateManifest(updated);
 }
 

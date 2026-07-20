@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth/next";
 
 import { toFileActor } from "../../../lib/auth";
 import { authOptions } from "../../../lib/authOptions";
+import { recordAuditEvent } from "../../../lib/auditLog";
 import {
   bookLoan,
   createAsset,
@@ -224,6 +225,12 @@ export default async function handler(req, res) {
     if (req.method === "POST") {
       const result = await runAction(actor, req.body);
       const view = String(req.body?.view || "loanable");
+      await recordAuditEvent(actor, {
+        action: `asset.${String(req.body?.action || "unknown")}`,
+        targetType: "asset",
+        targetId: req.body?.assetId || req.body?.loanId || null,
+        metadata: req.body,
+      });
       return res.status(200).json({
         ok: true,
         ...result,

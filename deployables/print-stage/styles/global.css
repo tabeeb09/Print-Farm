@@ -200,7 +200,8 @@ select {
 }
 
 .assetForm input,
-.assetForm textarea {
+.assetForm textarea,
+.assetForm select {
   border: 1px solid rgba(23, 27, 31, 0.2);
   padding: 0.55rem;
   background: #fff;
@@ -329,8 +330,26 @@ select {
   font-weight: 700;
 }
 
+.adminGrid {
+  max-width: 86rem;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(18rem, 28rem) 1fr;
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.adminSingle {
+  max-width: 86rem;
+  margin: 0 auto;
+}
+
 @media (max-width: 760px) {
   .assetUnitRow {
+    grid-template-columns: 1fr;
+  }
+
+  .adminGrid {
     grid-template-columns: 1fr;
   }
 }
