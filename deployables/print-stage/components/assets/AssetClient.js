@@ -586,6 +586,7 @@ export default function AssetClient({ mode }) {
               label="Booking range"
               value={bookingRangeText(form.collectionAt, form.returnAt)}
               blockedRanges={activeBlockedRangesForAsset(modal.asset)}
+              replaceOnSelect
               onChange={(rangeValue) => {
                 const [range] = parseRangeLines(rangeValue);
                 if (range) {
@@ -780,6 +781,7 @@ export default function AssetClient({ mode }) {
             <DateRangeCalendar
               label="Booking range"
               value={bookingRangeText(form.collectionAt, form.returnAt)}
+              replaceOnSelect
               onChange={(rangeValue) => {
                 const [range] = parseRangeLines(rangeValue);
                 if (range) {
@@ -910,7 +912,7 @@ function WeeklyAvailabilityEditor({ form, setForm }) {
   );
 }
 
-function DateRangeCalendar({ label, value, onChange, blockedRanges = [] }) {
+function DateRangeCalendar({ label, value, onChange, blockedRanges = [], replaceOnSelect = false }) {
   const [month, setMonth] = useState(startOfMonth(new Date()));
   const [start, setStart] = useState(null);
   const [hover, setHover] = useState(null);
@@ -926,6 +928,12 @@ function DateRangeCalendar({ label, value, onChange, blockedRanges = [] }) {
     }
     const next = [start, picked].sort();
     const proposed = { start: next[0], end: next[1] };
+    if (replaceOnSelect) {
+      onChange(rangeLinesFromRanges([proposed]));
+      setStart(null);
+      setHover(null);
+      return;
+    }
     const intersects = ranges.some((range) =>
       new Date(proposed.start).getTime() <= new Date(range.end).getTime() &&
       new Date(proposed.end).getTime() >= new Date(range.start).getTime()
