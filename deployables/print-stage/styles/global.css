@@ -214,6 +214,141 @@ select {
   gap: 0.45rem;
 }
 
+.assetInlineFields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.dayChipRow,
+.rangePills {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.dayChip,
+.rangePills button {
+  border: 1px solid rgba(23, 27, 31, 0.18);
+  background: #fff;
+  padding: 0.45rem 0.65rem;
+}
+
+.dayChipActive {
+  background: #173f35;
+  color: #fffaf1;
+  border-color: #173f35;
+}
+
+.calendarHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.rangeCalendar {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(2.25rem, 1fr));
+  gap: 0.25rem;
+}
+
+.calendarDow {
+  text-align: center;
+  color: #66717f;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.calendarDay {
+  min-height: 2.35rem;
+  border: 1px solid rgba(23, 27, 31, 0.12);
+  background: #fff;
+  cursor: pointer;
+}
+
+.calendarFaded {
+  opacity: 0.38;
+}
+
+.calendarPreview {
+  background: #d9ebff;
+  border-color: #7eb2ee;
+}
+
+.calendarSelected {
+  background: #173f35;
+  color: #fffaf1;
+  border-color: #173f35;
+}
+
+.calendarBlocked {
+  background: repeating-linear-gradient(135deg, #ece7dc, #ece7dc 0.35rem, #d7d0c3 0.35rem, #d7d0c3 0.7rem);
+  color: #70675b;
+  cursor: not-allowed;
+}
+
+.loanGantt {
+  display: grid;
+  gap: 0.55rem;
+  overflow-x: auto;
+  border: 1px solid rgba(23, 27, 31, 0.1);
+  padding: 0.75rem;
+  background: #fffdf8;
+}
+
+.loanGanttScale {
+  min-width: 48rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(4rem, 1fr));
+  color: #66717f;
+  font-size: 0.75rem;
+}
+
+.loanGanttRow {
+  min-width: 48rem;
+  display: grid;
+  grid-template-columns: 12rem 1fr;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.loanGanttLabel {
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.loanGanttTrack {
+  position: relative;
+  min-height: 2rem;
+  border-radius: 999px;
+  background: #efe8db;
+  overflow: hidden;
+}
+
+.loanGanttBar {
+  position: absolute;
+  inset-block: 0.25rem;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  border-radius: 999px;
+  padding: 0 0.65rem;
+  color: #171b1f;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.loanGanttActive {
+  background: #ffc857;
+}
+
+.loanGanttUpcoming {
+  background: #88d498;
+}
+
 .assetForm textarea {
   min-height: 5rem;
 }

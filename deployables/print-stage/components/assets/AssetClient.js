@@ -81,6 +81,111 @@ function rangeText(availability) {
     .join("\n");
 }
 
+const dayOptions = [
+  [1, "Mon"],
+  [2, "Tue"],
+  [3, "Wed"],
+  [4, "Thu"],
+  [5, "Fri"],
+  [6, "Sat"],
+  [0, "Sun"],
+];
+
+function dateOnly(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toISOString().slice(0, 10);
+}
+
+function parseRangeLines(value) {
+  return String(value || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [start, end] = line.split(",").map((part) => dateOnly(part.trim()) || part.trim().slice(0, 10));
+      return start && end ? { start, end } : null;
+    })
+    .filter(Boolean);
+}
+
+function rangeLinesFromRanges(ranges) {
+  return ranges
+    .map((range) => `${range.start}T00:00:00.000Z,${range.end}T23:59:59.999Z`)
+    .join("\n");
+}
+
+function parseWeeklyLines(value) {
+  return String(value || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [day, start, end] = line.split(",").map((part) => part.trim());
+      return { day: Number.parseInt(day, 10), start: start || "09:00", end: end || "17:00" };
+    })
+    .filter((entry) => Number.isFinite(entry.day));
+}
+
+function weeklyLinesFromWindows(windows) {
+  return windows.map((window) => `${window.day},${window.start},${window.end}`).join("\n");
+}
+
+function startOfMonth(value = new Date()) {
+  return new Date(value.getFullYear(), value.getMonth(), 1);
+}
+
+function addMonths(value, count) {
+  return new Date(value.getFullYear(), value.getMonth() + count, 1);
+}
+
+function calendarDays(month) {
+  const first = startOfMonth(month);
+  const start = new Date(first);
+  start.setDate(first.getDate() - ((first.getDay() + 6) % 7));
+  return Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(start);
+    date.setDate(start.getDate() + index);
+    return date;
+  });
+}
+
+function sameDate(left, right) {
+  return dateOnly(left) === dateOnly(right);
+}
+
+function inDateSpan(day, start, end) {
+  if (!start || !end) return false;
+  const time = new Date(dateOnly(day)).getTime();
+  const low = Math.min(new Date(start).getTime(), new Date(end).getTime());
+  const high = Math.max(new Date(start).getTime(), new Date(end).getTime());
+  return time >= low && time <= high;
+}
+
+function datetimeWithDate(currentValue, date, fallbackTime = "09:00") {
+  const time = String(currentValue || "").match(/T(\d\d:\d\d)/)?.[1] || fallbackTime;
+  return `${date}T${time}`;
+}
+
+function bookingRangeText(collectionAt, returnAt) {
+  const start = dateOnly(fromDatetimeLocalValue(collectionAt) || collectionAt);
+  const end = dateOnly(fromDatetimeLocalValue(returnAt) || returnAt);
+  return start && end ? rangeLinesFromRanges([{ start, end }]) : "";
+}
+
+function activeBlockedRangesForAsset(asset) {
+  const ranges = [];
+  for (const unit of asset?.units || []) {
+    for (const loan of unit.loanHistory || []) {
+      if (["reserved", "collected"].includes(loan.status)) {
+        ranges.push({ start: dateOnly(loan.collectionAt), end: dateOnly(loan.returnDueAt) });
+      }
+    }
+  }
+  return ranges.filter((range) => range.start && range.end);
+}
+
 function parseAssetForm(form) {
   const weekly = String(form.weekly || "")
     .split(/\r?\n/)
@@ -477,12 +582,27 @@ export default function AssetClient({ mode }) {
               Quantity
               <input type="number" min="1" value={form.quantity} onChange={(event) => setForm({ ...form, quantity: event.target.value })} />
             </label>
+            <DateRangeCalendar
+              label="Booking range"
+              value={bookingRangeText(form.collectionAt, form.returnAt)}
+              blockedRanges={activeBlockedRangesForAsset(modal.asset)}
+              onChange={(rangeValue) => {
+                const [range] = parseRangeLines(rangeValue);
+                if (range) {
+                  setForm({
+                    ...form,
+                    collectionAt: datetimeWithDate(form.collectionAt, range.start, "09:00"),
+                    returnAt: datetimeWithDate(form.returnAt, range.end, "17:00"),
+                  });
+                }
+              }}
+            />
             <label>
-              Collection date
+              Collection date and time
               <input type="datetime-local" value={form.collectionAt} onChange={(event) => setForm({ ...form, collectionAt: event.target.value })} required />
             </label>
             <label>
-              Return date
+              Return date and time
               <input type="datetime-local" value={form.returnAt} onChange={(event) => setForm({ ...form, returnAt: event.target.value })} required />
             </label>
             <fieldset className="assetFieldset">
@@ -657,6 +777,20 @@ export default function AssetClient({ mode }) {
               returnAt: fromDatetimeLocalValue(form.returnAt),
             }, "Booking updated.");
           }}>
+            <DateRangeCalendar
+              label="Booking range"
+              value={bookingRangeText(form.collectionAt, form.returnAt)}
+              onChange={(rangeValue) => {
+                const [range] = parseRangeLines(rangeValue);
+                if (range) {
+                  setForm({
+                    ...form,
+                    collectionAt: datetimeWithDate(form.collectionAt, range.start, "09:00"),
+                    returnAt: datetimeWithDate(form.returnAt, range.end, "17:00"),
+                  });
+                }
+              }}
+            />
             <label>
               Collection date
               <input type="datetime-local" value={form.collectionAt} onChange={(event) => setForm({ ...form, collectionAt: event.target.value })} required />
@@ -725,20 +859,124 @@ function AssetForm({ form, setForm, onSubmit, pending }) {
             Total failure to return after days
             <input type="number" min="1" value={form.totalFailureDays || 30} onChange={(event) => setForm({ ...form, totalFailureDays: event.target.value })} />
           </label>
-          <label>
-            Collection windows, one per line as weekday,start,end. 1 is Monday, 0 is Sunday.
-            <textarea value={form.weekly || ""} onChange={(event) => setForm({ ...form, weekly: event.target.value })} />
-          </label>
-          <label>
-            Optional available date ranges, one per line as ISO start,ISO end. Blank means indefinite.
-            <textarea value={form.dateRanges || ""} onChange={(event) => setForm({ ...form, dateRanges: event.target.value })} />
-          </label>
+          <WeeklyAvailabilityEditor form={form} setForm={setForm} />
+          <DateRangeCalendar
+            label="Optional available date ranges. Blank means indefinite."
+            value={form.dateRanges || ""}
+            onChange={(dateRanges) => setForm({ ...form, dateRanges })}
+          />
         </>
       ) : null}
       <button type="submit" disabled={pending}>
         Save asset
       </button>
     </form>
+  );
+}
+
+function WeeklyAvailabilityEditor({ form, setForm }) {
+  const windows = parseWeeklyLines(form.weekly);
+  const first = windows[0] || { start: "09:00", end: "17:00" };
+  const selected = new Set(windows.map((entry) => entry.day));
+
+  function toggle(day) {
+    const next = selected.has(day)
+      ? windows.filter((entry) => entry.day !== day)
+      : [...windows, { day, start: first.start, end: first.end }];
+    setForm({ ...form, weekly: weeklyLinesFromWindows(next.sort((a, b) => a.day - b.day)) });
+  }
+
+  function updateTimes(field, value) {
+    const next = windows.map((entry) => ({ ...entry, [field]: value }));
+    setForm({ ...form, weekly: weeklyLinesFromWindows(next) });
+  }
+
+  return (
+    <fieldset className="assetFieldset">
+      <legend>Weekly collection windows</legend>
+      <div className="dayChipRow">
+        {dayOptions.map(([day, label]) => (
+          <button key={day} type="button" className={selected.has(day) ? "dayChip dayChipActive" : "dayChip"} onClick={() => toggle(day)}>
+            {label}
+          </button>
+        ))}
+      </div>
+      <div className="assetInlineFields">
+        <label>Start<input type="time" value={first.start} onChange={(event) => updateTimes("start", event.target.value)} /></label>
+        <label>End<input type="time" value={first.end} onChange={(event) => updateTimes("end", event.target.value)} /></label>
+      </div>
+      <p className="assetMuted">Selected days use the shown collection time range.</p>
+    </fieldset>
+  );
+}
+
+function DateRangeCalendar({ label, value, onChange, blockedRanges = [] }) {
+  const [month, setMonth] = useState(startOfMonth(new Date()));
+  const [start, setStart] = useState(null);
+  const [hover, setHover] = useState(null);
+  const ranges = parseRangeLines(value);
+  const days = calendarDays(month);
+
+  function commit(day) {
+    const picked = dateOnly(day);
+    if (!start) {
+      setStart(picked);
+      setHover(picked);
+      return;
+    }
+    const next = [start, picked].sort();
+    const proposed = { start: next[0], end: next[1] };
+    const intersects = ranges.some((range) =>
+      new Date(proposed.start).getTime() <= new Date(range.end).getTime() &&
+      new Date(proposed.end).getTime() >= new Date(range.start).getTime()
+    );
+    if (!intersects) onChange(rangeLinesFromRanges([...ranges, proposed]));
+    setStart(null);
+    setHover(null);
+  }
+
+  function remove(index) {
+    onChange(rangeLinesFromRanges(ranges.filter((_, itemIndex) => itemIndex !== index)));
+  }
+
+  return (
+    <fieldset className="assetFieldset">
+      <legend>{label}</legend>
+      <div className="calendarHeader">
+        <button type="button" onClick={() => setMonth(addMonths(month, -1))}>Previous</button>
+        <strong>{month.toLocaleDateString("en-GB", { month: "long", year: "numeric" })}</strong>
+        <button type="button" onClick={() => setMonth(addMonths(month, 1))}>Next</button>
+      </div>
+      <div className="rangeCalendar">
+        {["M", "T", "W", "T", "F", "S", "S"].map((day, index) => <span key={`${day}-${index}`} className="calendarDow">{day}</span>)}
+        {days.map((day) => {
+          const current = dateOnly(day);
+          const selected = ranges.some((range) => inDateSpan(day, range.start, range.end));
+          const preview = start && hover && inDateSpan(day, start, hover);
+          const blocked = blockedRanges.some((range) => inDateSpan(day, range.start, range.end));
+          return (
+            <button
+              key={current}
+              type="button"
+              className={`calendarDay ${day.getMonth() !== month.getMonth() ? "calendarFaded" : ""} ${selected ? "calendarSelected" : ""} ${preview ? "calendarPreview" : ""} ${blocked ? "calendarBlocked" : ""}`}
+              onMouseEnter={() => setHover(current)}
+              onFocus={() => setHover(current)}
+              onClick={() => !blocked && commit(day)}
+              disabled={blocked}
+            >
+              {day.getDate()}
+            </button>
+          );
+        })}
+      </div>
+      <div className="rangePills">
+        {ranges.map((range, index) => (
+          <button type="button" key={`${range.start}-${range.end}`} onClick={() => remove(index)}>
+            {range.start} to {range.end} x
+          </button>
+        ))}
+      </div>
+    </fieldset>
   );
 }
 
@@ -891,6 +1129,48 @@ function InventoryView({ assets, onDamage, onRepair, onDelete }) {
   );
 }
 
+function LoanGantt({ loans = [] }) {
+  const visible = loans.filter((loan) => ["reserved", "collected"].includes(loan.status));
+  if (!visible.length) return <p className="assetMuted">No active or upcoming loans to chart.</p>;
+
+  const starts = visible.map((loan) => new Date(loan.collectionAt).getTime()).filter(Number.isFinite);
+  const ends = visible.map((loan) => new Date(loan.returnDueAt).getTime()).filter(Number.isFinite);
+  const min = Math.min(...starts, Date.now());
+  const max = Math.max(...ends, min + 7 * 24 * 60 * 60 * 1000);
+  const span = Math.max(1, max - min);
+  const dayCount = Math.min(45, Math.max(7, Math.ceil(span / (24 * 60 * 60 * 1000))));
+  const ticks = Array.from({ length: dayCount + 1 }, (_, index) => {
+    const date = new Date(min + index * 24 * 60 * 60 * 1000);
+    return date.toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
+  });
+
+  return (
+    <div className="loanGantt">
+      <div className="loanGanttScale">
+        {ticks.map((tick) => <span key={tick}>{tick}</span>)}
+      </div>
+      {visible.map((loan) => {
+        const left = Math.max(0, ((new Date(loan.collectionAt).getTime() - min) / span) * 100);
+        const width = Math.max(2, ((new Date(loan.returnDueAt).getTime() - new Date(loan.collectionAt).getTime()) / span) * 100);
+        return (
+          <div key={loan.id} className="loanGanttRow">
+            <span className="loanGanttLabel">{loan.assetName}</span>
+            <div className="loanGanttTrack">
+              <span
+                className={`loanGanttBar ${loan.status === "collected" ? "loanGanttActive" : "loanGanttUpcoming"}`}
+                style={{ left: `${left}%`, width: `${Math.min(width, 100 - left)}%` }}
+                title={`${loan.assetName}: ${formatDate(loan.collectionAt)} to ${formatDate(loan.returnDueAt)}`}
+              >
+                {loan.userEmail || loan.userId || loan.status}
+              </span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function AdminLoansView({ loans, tab, onTab, onCollect, onReturn, onExpire }) {
   const rows = tab === "active" ? loans.active || [] : loans.upcoming || [];
   return (
@@ -905,7 +1185,10 @@ function AdminLoansView({ loans, tab, onTab, onCollect, onReturn, onExpire }) {
       <div className="assetTabs">
         <button type="button" onClick={() => onTab("upcoming")}>Upcoming collections</button>
         <button type="button" onClick={() => onTab("active")}>Out of premises</button>
+        <button type="button" onClick={() => onTab("timeline")}>Timeline</button>
       </div>
+      {tab === "timeline" ? <LoanGantt loans={loans.all || [...(loans.upcoming || []), ...(loans.active || [])]} /> : null}
+      {tab !== "timeline" ? (
       <table className="assetTable">
         <thead>
           <tr>
@@ -941,6 +1224,7 @@ function AdminLoansView({ loans, tab, onTab, onCollect, onReturn, onExpire }) {
           ) : null}
         </tbody>
       </table>
+      ) : null}
     </section>
   );
 }
