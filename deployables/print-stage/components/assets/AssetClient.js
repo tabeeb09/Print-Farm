@@ -93,9 +93,28 @@ const dayOptions = [
 
 function dateOnly(value) {
   if (!value) return "";
+  if (typeof value === "string") {
+    const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (match) return `${match[1]}-${match[2]}-${match[3]}`;
+  }
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
-  return date.toISOString().slice(0, 10);
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-");
+}
+
+function dateKeyTime(value) {
+  const key = dateOnly(value);
+  if (!key) return Number.NaN;
+  const [year, month, day] = key.split("-").map(Number);
+  return new Date(year, month - 1, day).getTime();
+}
+
+function todayKey() {
+  return dateOnly(new Date());
 }
 
 function parseRangeLines(value) {
@@ -157,10 +176,14 @@ function sameDate(left, right) {
 
 function inDateSpan(day, start, end) {
   if (!start || !end) return false;
-  const time = new Date(dateOnly(day)).getTime();
-  const low = Math.min(new Date(start).getTime(), new Date(end).getTime());
-  const high = Math.max(new Date(start).getTime(), new Date(end).getTime());
+  const time = dateKeyTime(day);
+  const low = Math.min(dateKeyTime(start), dateKeyTime(end));
+  const high = Math.max(dateKeyTime(start), dateKeyTime(end));
   return time >= low && time <= high;
+}
+
+function dateKeyBefore(left, right) {
+  return dateKeyTime(left) < dateKeyTime(right);
 }
 
 function datetimeWithDate(currentValue, date, fallbackTime = "09:00") {
@@ -865,6 +888,7 @@ function AssetForm({ form, setForm, onSubmit, pending }) {
           <DateRangeCalendar
             label="Optional available date ranges. Blank means indefinite."
             value={form.dateRanges || ""}
+            weeklyValue={form.weekly || ""}
             onChange={(dateRanges) => setForm({ ...form, dateRanges })}
           />
         </>
@@ -912,15 +936,18 @@ function WeeklyAvailabilityEditor({ form, setForm }) {
   );
 }
 
-function DateRangeCalendar({ label, value, onChange, blockedRanges = [], replaceOnSelect = false }) {
+function DateRangeCalendar({ label, value, onChange, blockedRanges = [], replaceOnSelect = false, weeklyValue = "" }) {
   const [month, setMonth] = useState(startOfMonth(new Date()));
   const [start, setStart] = useState(null);
   const [hover, setHover] = useState(null);
   const ranges = parseRangeLines(value);
+  const weeklyDays = new Set(parseWeeklyLines(weeklyValue).map((entry) => entry.day));
   const days = calendarDays(month);
+  const minDate = todayKey();
 
   function commit(day) {
     const picked = dateOnly(day);
+    if (dateKeyBefore(picked, minDate)) return;
     if (!start) {
       setStart(picked);
       setHover(picked);
@@ -935,8 +962,8 @@ function DateRangeCalendar({ label, value, onChange, blockedRanges = [], replace
       return;
     }
     const intersects = ranges.some((range) =>
-      new Date(proposed.start).getTime() <= new Date(range.end).getTime() &&
-      new Date(proposed.end).getTime() >= new Date(range.start).getTime()
+      dateKeyTime(proposed.start) <= dateKeyTime(range.end) &&
+      dateKeyTime(proposed.end) >= dateKeyTime(range.start)
     );
     if (!intersects) onChange(rangeLinesFromRanges([...ranges, proposed]));
     setStart(null);
@@ -962,15 +989,17 @@ function DateRangeCalendar({ label, value, onChange, blockedRanges = [], replace
           const selected = ranges.some((range) => inDateSpan(day, range.start, range.end));
           const preview = start && hover && inDateSpan(day, start, hover);
           const blocked = blockedRanges.some((range) => inDateSpan(day, range.start, range.end));
+          const past = dateKeyBefore(current, minDate);
+          const weekly = weeklyDays.has(day.getDay());
           return (
             <button
               key={current}
               type="button"
-              className={`calendarDay ${day.getMonth() !== month.getMonth() ? "calendarFaded" : ""} ${selected ? "calendarSelected" : ""} ${preview ? "calendarPreview" : ""} ${blocked ? "calendarBlocked" : ""}`}
+              className={`calendarDay ${day.getMonth() !== month.getMonth() ? "calendarFaded" : ""} ${weekly ? "calendarWeekly" : ""} ${selected ? "calendarSelected" : ""} ${preview ? "calendarPreview" : ""} ${blocked ? "calendarBlocked" : ""} ${past ? "calendarPast" : ""}`}
               onMouseEnter={() => setHover(current)}
               onFocus={() => setHover(current)}
-              onClick={() => !blocked && commit(day)}
-              disabled={blocked}
+              onClick={() => !blocked && !past && commit(day)}
+              disabled={blocked || past}
             >
               {day.getDate()}
             </button>
@@ -1193,7 +1222,7 @@ function AdminLoansView({ loans, tab, onTab, onCollect, onReturn, onExpire }) {
       <div className="assetTabs">
         <button type="button" onClick={() => onTab("upcoming")}>Upcoming collections</button>
         <button type="button" onClick={() => onTab("active")}>Out of premises</button>
-        <button type="button" onClick={() => onTab("timeline")}>Timeline</button>
+        <button type="button" onClick={() => onTab("timeline")}>Gantt board</button>
       </div>
       {tab === "timeline" ? <LoanGantt loans={loans.all || [...(loans.upcoming || []), ...(loans.active || [])]} /> : null}
       {tab !== "timeline" ? (

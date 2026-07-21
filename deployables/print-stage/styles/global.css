@@ -238,6 +238,7 @@ select {
   background: #173f35;
   color: #fffaf1;
   border-color: #173f35;
+  box-shadow: 0 0 0 3px rgba(23, 63, 53, 0.16);
 }
 
 .calendarHeader {
@@ -276,16 +277,28 @@ select {
   border-color: #7eb2ee;
 }
 
+.calendarWeekly {
+  box-shadow: inset 0 -0.28rem 0 #f4c95d;
+}
+
 .calendarSelected {
   background: #173f35;
   color: #fffaf1;
   border-color: #173f35;
+  box-shadow: inset 0 0 0 2px #173f35;
 }
 
 .calendarBlocked {
   background: repeating-linear-gradient(135deg, #ece7dc, #ece7dc 0.35rem, #d7d0c3 0.35rem, #d7d0c3 0.7rem);
   color: #70675b;
   cursor: not-allowed;
+}
+
+.calendarPast {
+  background: #f1eee8;
+  color: #a59b8e;
+  cursor: not-allowed;
+  text-decoration: line-through;
 }
 
 .loanGantt {
