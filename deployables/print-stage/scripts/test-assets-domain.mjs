@@ -92,7 +92,7 @@ statusResult = bookLoan(
   mondayMorning,
 );
 statusState = statusResult.state;
-statusResult = verifyCollectionCode(statusState, { loanId: "status-loan", code: "777777", adminId: "admin" }, mondayMorning);
+statusResult = verifyCollectionCode(statusState, { loanId: "status-loan", code: "777777", adminId: "admin", allowEarlyCollection: true }, mondayMorning);
 statusState = statusResult.state;
 assert.equal(
   selectLoanableListings(statusState, mondayMorning)[0].loanStatus,
@@ -189,9 +189,15 @@ throwsMessage(
   "incorrect",
 );
 
-result = verifyCollectionCode(state, { loanId: loanA.id, code: "111111", adminId: "admin" }, mondayMorning);
+throwsMessage(
+  () => verifyCollectionCode(state, { loanId: loanA.id, code: "111111", adminId: "admin" }, mondayMorning),
+  "Early collection",
+);
+
+result = verifyCollectionCode(state, { loanId: loanA.id, code: "111111", adminId: "admin", allowEarlyCollection: true }, mondayMorning);
 state = result.state;
 assert.equal(result.loan.status, "collected");
+assert.equal(result.loan.collectedEarly, true);
 assert.equal(selectInventory(state, mondayMorning)[0].quantityPhysicallyPresent, 1);
 
 result = bookLoan(
@@ -218,7 +224,7 @@ throwsMessage(
       state,
       {
         assetId: camera.id,
-        quantity: 1,
+        quantity: "nonsense",
         collectionAt: "2026-07-06T13:00:00.000Z",
         returnAt: "2026-07-08T13:00:00.000Z",
         acceptTerms: true,
@@ -226,7 +232,24 @@ throwsMessage(
       },
       mondayMorning,
     ),
-  "Not enough",
+  "positive whole number",
+);
+
+throwsMessage(
+  () =>
+    bookLoan(
+      state,
+      {
+        assetId: camera.id,
+        quantity: "2abc",
+        collectionAt: "2026-07-06T13:00:00.000Z",
+        returnAt: "2026-07-08T13:00:00.000Z",
+        acceptTerms: true,
+        ...actor("borrower-c"),
+      },
+      mondayMorning,
+    ),
+  "positive whole number",
 );
 
 throwsMessage(
@@ -326,7 +349,7 @@ assert.equal(selectAccountBalance(state, actor("borrower-a")), 1500);
 assert.equal(selectAccountTransactions(state, actor("borrower-a"))[0].transactionType, "print_payment");
 assert.equal(selectAccountTransactions(state, actor("borrower-a"))[0].description, "3D print payment: gearbox-case.3mf");
 
-result = verifyCollectionCode(state, { loanId: loanB.id, code: "333333", adminId: "admin" }, mondayMorning);
+result = verifyCollectionCode(state, { loanId: loanB.id, code: "333333", adminId: "admin", allowEarlyCollection: true }, mondayMorning);
 state = result.state;
 assert.equal(selectAdminLoans(state, new Date("2026-07-09T10:00:00.000Z")).active[0].overdue, true);
 assert.equal(userHasOverdueLoan(state, actor("borrower-b"), new Date("2026-07-09T10:00:00.000Z")), true);
@@ -453,5 +476,57 @@ assert.equal(borrowerALoans[0].displayState, "historical");
 const cameraInventory = selectInventory(state, wednesdayMorning).find((asset) => asset.id === camera.id);
 assert.ok(cameraInventory.loanabilityHistory.some((entry) => entry.endAt));
 assert.ok(cameraInventory.units.some((unit) => unit.loanHistory.length));
+
+let maxState = createInitialAssetState();
+let maxResult = createAsset(
+  maxState,
+  {
+    name: "Torque Wrench",
+    loanable: true,
+    quantity: 1,
+    maxLoanDays: 2,
+    availability: {
+      weekly: [{ day: 1, start: "09:00", end: "17:00" }],
+      dateRanges: [{ start: "2026-07-01T00:00:00.000Z", end: "2026-08-01T00:00:00.000Z" }],
+    },
+  },
+  mondayMorning,
+);
+maxState = maxResult.state;
+throwsMessage(
+  () =>
+    bookLoan(
+      maxState,
+      {
+        assetId: maxResult.asset.id,
+        quantity: 1,
+        collectionAt: "2026-07-06T10:00:00.000Z",
+        returnAt: "2026-07-09T10:00:01.000Z",
+        acceptTerms: true,
+        ...actor("borrower-max"),
+      },
+      mondayMorning,
+    ),
+  "cannot exceed 2 days",
+);
+maxResult = bookLoan(
+  maxState,
+  {
+    id: "loan-max",
+    assetId: maxResult.asset.id,
+    quantity: 1,
+    collectionAt: "2026-07-06T12:00:00.000Z",
+    returnAt: "2026-07-08T12:00:00.000Z",
+    acceptTerms: true,
+    collectionCode: "121212",
+    returnCode: "343434",
+    ...actor("borrower-max"),
+  },
+  mondayMorning,
+);
+maxState = maxResult.state;
+maxResult = verifyCollectionCode(maxState, { loanId: "loan-max", code: "121212", allowEarlyCollection: true }, mondayMorning);
+assert.equal(maxResult.loan.returnDueAt, "2026-07-08T10:00:00.000Z");
+assert.equal(selectAdminLoans(maxResult.state, mondayMorning).active[0].collectedEarly, true);
 
 console.log("asset domain tests passed");

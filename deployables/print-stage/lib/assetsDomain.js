@@ -54,6 +54,22 @@ function toPositiveInteger(value, fallback = 1) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+function toOptionalPositiveInteger(value) {
+  if (value === undefined || value === null || value === "") return null;
+  const text = String(value).trim();
+  assert(/^[1-9]\d*$/.test(text), "Optional day limits must be positive whole numbers.");
+  const parsed = Number.parseInt(text, 10);
+  assert(Number.isInteger(parsed) && parsed > 0, "Optional day limits must be positive whole numbers.");
+  return parsed;
+}
+
+function toRequiredPositiveInteger(value, label) {
+  const text = String(value ?? "").trim();
+  assert(/^[1-9]\d*$/.test(text), `${label} must be a positive whole number.`);
+  const parsed = Number.parseInt(text, 10);
+  return parsed;
+}
+
 function slug(value) {
   const normalized = String(value || "asset")
     .normalize("NFKC")
@@ -102,6 +118,7 @@ export function migrateAssetState(input) {
   for (const asset of state.assets) {
     asset.units = Array.isArray(asset.units) ? asset.units : [];
     asset.loanabilityHistory = normalizeLoanabilityHistory(asset);
+    asset.maxLoanDays = toOptionalPositiveInteger(asset.maxLoanDays);
 
     for (const unit of asset.units) {
       unit.damageHistory = Array.isArray(unit.damageHistory) ? unit.damageHistory : [];
@@ -212,6 +229,20 @@ function conflictingLoans(state, unitId, start, end, exceptLoanId = null) {
       end.getTime(),
     );
   });
+}
+
+function assertMaxLoanDuration(asset, start, end) {
+  if (!asset.maxLoanDays) return;
+  const maxMs = asset.maxLoanDays * 24 * 60 * 60 * 1000;
+  assert(end.getTime() - start.getTime() <= maxMs, `Loan duration cannot exceed ${asset.maxLoanDays} day${asset.maxLoanDays === 1 ? "" : "s"}.`);
+}
+
+function effectiveLoanDurationMs(asset, loan) {
+  if (asset.maxLoanDays) return asset.maxLoanDays * 24 * 60 * 60 * 1000;
+  return Math.max(
+    60 * 60 * 1000,
+    new Date(loan.returnDueAt).getTime() - new Date(loan.collectionAt).getTime(),
+  );
 }
 
 function isCollectionTimeAllowed(asset, collectionAt) {
@@ -406,6 +437,7 @@ export function createAsset(state, input, now = new Date()) {
     pricePence: toPence(input.pricePence ?? input.assetPricePence ?? input.assetPrice, 0),
     lateFeePence: toPence(input.lateFeePence ?? input.lateFee, DEFAULT_LATE_FEE_PENCE),
     totalFailureDays: toPositiveInteger(input.totalFailureDays, DEFAULT_FAILURE_DAYS),
+    maxLoanDays: toOptionalPositiveInteger(input.maxLoanDays),
     availability: normalizeAvailability(input.availability),
     units,
     loanabilityHistory: loanable
@@ -441,6 +473,7 @@ export function updateAsset(state, assetId, input, now = new Date()) {
   asset.pricePence = toPence(input.pricePence ?? input.assetPricePence ?? input.assetPrice, asset.pricePence);
   asset.lateFeePence = toPence(input.lateFeePence ?? input.lateFee, asset.lateFeePence ?? DEFAULT_LATE_FEE_PENCE);
   asset.totalFailureDays = toPositiveInteger(input.totalFailureDays, asset.totalFailureDays ?? DEFAULT_FAILURE_DAYS);
+  asset.maxLoanDays = input.maxLoanDays === undefined ? asset.maxLoanDays ?? null : toOptionalPositiveInteger(input.maxLoanDays);
   asset.availability = normalizeAvailability(input.availability || asset.availability);
 
   if (input.quantity !== undefined) {
@@ -547,12 +580,16 @@ export function bookLoan(state, input, now = new Date()) {
   const returnDueAt = toDate(input.returnAt ?? input.returnDueAt, "Return date");
   assert(collectionAt.getTime() >= new Date(now).getTime(), "Collection date cannot be in the past.");
   assert(returnDueAt.getTime() > collectionAt.getTime(), "Return date must be after collection date.");
+  assertMaxLoanDuration(asset, collectionAt, returnDueAt);
   assert(isCollectionTimeAllowed(asset, collectionAt), "Collection time is outside this asset's availability windows.");
 
-  const quantity = toPositiveInteger(input.quantity, Array.isArray(input.unitIds) ? input.unitIds.length : 1);
+  const quantity = toRequiredPositiveInteger(
+    input.quantity ?? (Array.isArray(input.unitIds) ? input.unitIds.length : undefined),
+    "Loan quantity",
+  );
   const available = availableUnitsForRange(next, asset, collectionAt, returnDueAt);
   const selectedUnitIds = Array.isArray(input.unitIds) && input.unitIds.length
-    ? input.unitIds
+    ? Array.from(new Set(input.unitIds))
     : available.slice(0, quantity).map((unit) => unit.id);
   assert(selectedUnitIds.length === quantity, "Not enough units are available for the selected dates.");
 
@@ -571,6 +608,7 @@ export function bookLoan(state, input, now = new Date()) {
     userEmail: input.userEmail || null,
     status: "reserved",
     collectionAt: collectionAt.toISOString(),
+    originallyBookedCollectionAt: null,
     returnDueAt: returnDueAt.toISOString(),
     collectedAt: null,
     returnedAt: null,
@@ -592,9 +630,32 @@ export function verifyCollectionCode(state, input, now = new Date()) {
   const loan = findLoan(next, input.loanId);
   assert(loan.status === "reserved", "Only reserved loans can be collected.");
   assert(String(input.code || "").trim() === loan.collectionCode, "Collection code is incorrect.");
+  const asset = findAsset(next, loan.assetId);
   const timestamp = nowIso(now);
+  const actualCollectionAt = input.overrideCollectionAt ? toDate(input.overrideCollectionAt, "Override collection date") : new Date(now);
+  const bookedCollectionAt = new Date(loan.collectionAt);
+  const earlyCollection = actualCollectionAt.getTime() < bookedCollectionAt.getTime() - 60_000;
+  let nextReturnDueAt = new Date(loan.returnDueAt);
+
+  if (earlyCollection) {
+    assert(input.allowEarlyCollection === true, "Early collection requires admin override.");
+    nextReturnDueAt = new Date(actualCollectionAt.getTime() + effectiveLoanDurationMs(asset, loan));
+  }
+
+  for (const unitId of loan.unitIds) {
+    assert(!conflictingLoans(next, unitId, actualCollectionAt, nextReturnDueAt, loan.id).length, "This asset is booked by someone else before the requested early collection window ends.");
+  }
+
   loan.status = "collected";
-  loan.collectedAt = timestamp;
+  if (earlyCollection) {
+    loan.originallyBookedCollectionAt = loan.originallyBookedCollectionAt || loan.collectionAt;
+    loan.collectionAt = actualCollectionAt.toISOString();
+    loan.returnDueAt = nextReturnDueAt.toISOString();
+    loan.collectedEarly = true;
+  } else {
+    loan.collectedEarly = false;
+  }
+  loan.collectedAt = actualCollectionAt.toISOString();
   loan.collectionVerifiedBy = input.adminId || null;
   loan.updatedAt = timestamp;
   next.updatedAt = timestamp;
@@ -661,6 +722,7 @@ export function rescheduleLoan(state, input, now = new Date()) {
   const returnDueAt = toDate(input.returnAt ?? input.returnDueAt ?? loan.returnDueAt, "Return date");
   assert(collectionAt.getTime() >= new Date(now).getTime(), "Collection date cannot be in the past.");
   assert(returnDueAt.getTime() > collectionAt.getTime(), "Return date must be after collection date.");
+  assertMaxLoanDuration(asset, collectionAt, returnDueAt);
   assert(isCollectionTimeAllowed(asset, collectionAt), "Collection time is outside this asset's availability windows.");
 
   for (const unitId of loan.unitIds) {
@@ -684,9 +746,10 @@ export function extendLoan(state, input, now = new Date()) {
   const newReturnAt = toDate(input.returnAt ?? input.returnDueAt, "Return date");
   assert(newReturnAt.getTime() >= new Date(now).getTime(), "Return date cannot be in the past.");
   assert(newReturnAt.getTime() > new Date(loan.collectedAt || loan.collectionAt).getTime(), "Return date must be after collection.");
+  assertMaxLoanDuration(findAsset(next, loan.assetId), new Date(loan.collectedAt || loan.collectionAt), newReturnAt);
 
   for (const unitId of loan.unitIds) {
-    assert(!conflictingLoans(next, unitId, new Date(loan.collectionAt), newReturnAt, loan.id).length, "The selected return date clashes with another booking.");
+    assert(!conflictingLoans(next, unitId, new Date(loan.collectedAt || loan.collectionAt), newReturnAt, loan.id).length, "The selected return date clashes with another booking.");
   }
 
   loan.returnDueAt = newReturnAt.toISOString();
@@ -1047,6 +1110,8 @@ function decorateLoan(state, loan, now = new Date()) {
   const failureAt = asset && loan.collectedAt
     ? new Date(new Date(loan.collectedAt).getTime() + (asset.totalFailureDays || DEFAULT_FAILURE_DAYS) * 24 * 60 * 60 * 1000).toISOString()
     : null;
+  const effectiveCollectionAt = loan.collectedAt || loan.collectionAt;
+  const effectiveReturnAt = loan.returnedAt || loan.returnDueAt;
 
   return {
     ...loan,
@@ -1054,11 +1119,15 @@ function decorateLoan(state, loan, now = new Date()) {
     assetName: asset?.name || "Deleted asset",
     assetPricePence: asset?.pricePence || 0,
     lateFeePence: asset?.lateFeePence || DEFAULT_LATE_FEE_PENCE,
+    maxLoanDays: asset?.maxLoanDays || null,
     serials: units.map((unit) => unit.serial),
     units,
     displayState: classifyLoan(loan, now),
     overdue,
     failureAt,
+    effectiveCollectionAt,
+    effectiveReturnAt,
+    collectedEarly: Boolean(loan.collectedEarly),
   };
 }
 

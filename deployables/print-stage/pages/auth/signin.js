@@ -28,6 +28,9 @@ export default function SignInPage({ providers = [] }) {
         <p className="eyebrow">Print farm</p>
         <h1>Sign in</h1>
         <p>Use your makerspace account or Google SSO to access print and asset services.</p>
+        <Link href="/auth/recover" className="authRecoveryCallout">
+          Need to reset your password? Send a Resend recovery email.
+        </Link>
         <div className="authButtonStack">
           {providers.map((provider) => (
             <button
@@ -40,7 +43,7 @@ export default function SignInPage({ providers = [] }) {
           ))}
         </div>
         <div className="authLinks">
-          <Link href="/auth/recover">Forgot password?</Link>
+          <Link href="/auth/recover">Forgot password or change password?</Link>
         </div>
       </section>
     </main>

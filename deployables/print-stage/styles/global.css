@@ -297,10 +297,18 @@ select {
   box-shadow: 0 0 0 3px rgba(15, 92, 77, 0.24);
 }
 
+.calendarBooked {
+  background: repeating-linear-gradient(135deg, #ffe2a8, #ffe2a8 0.35rem, #f2a93b 0.35rem, #f2a93b 0.7rem);
+  color: #5b3400;
+  cursor: not-allowed;
+}
+
+.calendarUnavailable,
 .calendarBlocked {
   background: repeating-linear-gradient(135deg, #ece7dc, #ece7dc 0.35rem, #d7d0c3 0.35rem, #d7d0c3 0.7rem);
   color: #70675b;
   cursor: not-allowed;
+  text-decoration: line-through;
 }
 
 .calendarPast {
@@ -369,6 +377,10 @@ select {
 
 .loanGanttUpcoming {
   background: #88d498;
+}
+
+.loanGanttReturned {
+  background: #c4ced8;
 }
 
 .assetForm textarea {
@@ -472,6 +484,16 @@ select {
   flex-wrap: wrap;
   color: #4f5d68;
   text-decoration: underline;
+}
+
+.authRecoveryCallout {
+  display: block;
+  border: 1px solid rgba(23, 27, 31, 0.16);
+  background: #fff4c2;
+  color: #302815;
+  padding: 0.75rem;
+  text-decoration: none;
+  font-weight: 800;
 }
 
 .eyebrow {

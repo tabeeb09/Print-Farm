@@ -107,6 +107,11 @@ function dateOnly(value) {
   ].join("-");
 }
 
+function localDateOnlyFromInstant(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? dateOnly(value) : dateOnly(date);
+}
+
 function dateKeyTime(value) {
   const key = dateOnly(value);
   if (!key) return Number.NaN;
@@ -187,14 +192,61 @@ function dateKeyBefore(left, right) {
   return dateKeyTime(left) < dateKeyTime(right);
 }
 
+function isDateInAssetDateRanges(asset, dateKey) {
+  const ranges = Array.isArray(asset?.availability?.dateRanges) ? asset.availability.dateRanges : [];
+  return !ranges.length || ranges.some((range) => inDateSpan(dateKey, range.start, range.end));
+}
+
+function isDateInAssetWeeklyWindow(asset, dateKey) {
+  const windows = Array.isArray(asset?.availability?.weekly) ? asset.availability.weekly : [];
+  if (!windows.length) return true;
+  const day = new Date(`${dateKey}T12:00:00`).getDay();
+  return windows.some((window) => Number(window.day) === day);
+}
+
+function isDateBookableForAsset(asset, dateKey) {
+  return isDateInAssetDateRanges(asset, dateKey) && isDateInAssetWeeklyWindow(asset, dateKey);
+}
+
+function parseBookingQuantity(value) {
+  const text = String(value ?? "").trim();
+  if (!/^[1-9]\d*$/.test(text)) return Number.NaN;
+  return Number.parseInt(text, 10);
+}
+
+function bookingQuantityError(asset, form) {
+  const quantity = form?.unitIds?.length || parseBookingQuantity(form?.quantity);
+  const maxQuantity = Number(asset?.quantityNormal || 0);
+  if (maxQuantity < 1) return "No normal serials are currently available for this asset.";
+  if (!Number.isInteger(quantity) || quantity < 1) return "Enter a positive whole-number quantity.";
+  if (quantity > maxQuantity) return `Only ${maxQuantity} normal serial${maxQuantity === 1 ? "" : "s"} exist for this asset.`;
+  return "";
+}
+
+function bookingDurationError(asset, form) {
+  if (!asset?.maxLoanDays) return "";
+  const collectionAt = new Date(form?.collectionAt || "");
+  const returnAt = new Date(form?.returnAt || "");
+  if (!Number.isFinite(collectionAt.getTime()) || !Number.isFinite(returnAt.getTime())) return "";
+  const maxMs = asset.maxLoanDays * 24 * 60 * 60 * 1000;
+  if (returnAt.getTime() - collectionAt.getTime() > maxMs) {
+    return `This asset can only be loaned for ${asset.maxLoanDays} day${asset.maxLoanDays === 1 ? "" : "s"}.`;
+  }
+  return "";
+}
+
+function bookingFormError(asset, form) {
+  return bookingQuantityError(asset, form) || bookingDurationError(asset, form);
+}
+
 function datetimeWithDate(currentValue, date, fallbackTime = "09:00") {
   const time = String(currentValue || "").match(/T(\d\d:\d\d)/)?.[1] || fallbackTime;
   return `${date}T${time}`;
 }
 
 function bookingRangeText(collectionAt, returnAt) {
-  const start = dateOnly(fromDatetimeLocalValue(collectionAt) || collectionAt);
-  const end = dateOnly(fromDatetimeLocalValue(returnAt) || returnAt);
+  const start = dateOnly(collectionAt);
+  const end = dateOnly(returnAt);
   return start && end ? rangeLinesFromRanges([{ start, end }]) : "";
 }
 
@@ -203,7 +255,7 @@ function activeBlockedRangesForAsset(asset) {
   for (const unit of asset?.units || []) {
     for (const loan of unit.loanHistory || []) {
       if (["reserved", "collected"].includes(loan.status)) {
-        ranges.push({ start: dateOnly(loan.collectionAt), end: dateOnly(loan.returnDueAt) });
+        ranges.push({ start: localDateOnlyFromInstant(loan.collectionAt), end: localDateOnlyFromInstant(loan.returnDueAt) });
       }
     }
   }
@@ -241,6 +293,7 @@ function parseAssetForm(form) {
     pricePence: parsePounds(form.price, 0),
     lateFeePence: parsePounds(form.lateFee, 500),
     totalFailureDays: Number.parseInt(form.totalFailureDays, 10) || 30,
+    maxLoanDays: String(form.maxLoanDays || "").trim() ? Number.parseInt(form.maxLoanDays, 10) : null,
     availability: { weekly, dateRanges },
   };
 }
@@ -254,6 +307,7 @@ function emptyAssetForm(loanable = true) {
     price: "",
     lateFee: "5.00",
     totalFailureDays: 30,
+    maxLoanDays: "",
     weekly: "1,09:00,17:00\n2,09:00,17:00\n3,09:00,17:00\n4,09:00,17:00\n5,09:00,17:00",
     dateRanges: "",
   };
@@ -268,6 +322,7 @@ function formFromAsset(asset) {
     price: ((asset.pricePence || 0) / 100).toFixed(2),
     lateFee: ((asset.lateFeePence ?? 500) / 100).toFixed(2),
     totalFailureDays: asset.totalFailureDays || 30,
+    maxLoanDays: asset.maxLoanDays || "",
     weekly: weeklyText(asset.availability),
     dateRanges: rangeText(asset.availability),
   };
@@ -282,7 +337,7 @@ function viewForMode(mode) {
   return "loanable";
 }
 
-function Modal({ title, children, onClose }) {
+function Modal({ title, children, onClose, error = "" }) {
   return (
     <div className="assetModalBackdrop" role="presentation">
       <section className="assetModal" role="dialog" aria-modal="true" aria-label={title}>
@@ -292,6 +347,7 @@ function Modal({ title, children, onClose }) {
             Close
           </button>
         </div>
+        {error ? <p className="assetErrorInline" role="alert">{error}</p> : null}
         {children}
       </section>
     </div>
@@ -319,6 +375,7 @@ export default function AssetClient({ mode }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [modalError, setModalError] = useState("");
   const [modal, setModal] = useState(null);
   const [form, setForm] = useState({});
   const [loanTab, setLoanTab] = useState(mode === "admin-gantt" ? "timeline" : "upcoming");
@@ -347,6 +404,7 @@ export default function AssetClient({ mode }) {
   async function post(body, success) {
     setPending(true);
     setError("");
+    setModalError("");
     setMessage("");
     try {
       const response = await fetch("/api/assets", {
@@ -361,7 +419,9 @@ export default function AssetClient({ mode }) {
       setModal(null);
       return next;
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Asset action failed.");
+      const message = caught instanceof Error ? caught.message : "Asset action failed.";
+      setError(message);
+      setModalError(message);
       return null;
     } finally {
       setPending(false);
@@ -370,29 +430,36 @@ export default function AssetClient({ mode }) {
 
   function openCreate(loanable) {
     setForm(emptyAssetForm(loanable));
+    setModalError("");
     setModal({ type: "asset", title: loanable ? "Add loanable asset" : "Add non-loanable asset" });
   }
 
   function openEdit(asset) {
     setForm(formFromAsset(asset));
+    setModalError("");
     setModal({ type: "asset", title: `Edit ${asset.name}`, asset });
   }
 
   function openBook(asset) {
     const collectionAt = asset.nextAvailableAt || new Date().toISOString();
+    const defaultLoanDays = asset.maxLoanDays || 7;
     setForm({
       assetId: asset.id,
       quantity: 1,
       unitIds: [],
       collectionAt: toFutureDatetimeLocalValue(collectionAt),
-      returnAt: toDatetimeLocalValue(addDays(collectionAt, 7)),
+      returnAt: toDatetimeLocalValue(addDays(collectionAt, defaultLoanDays)),
       acceptTerms: false,
     });
+    setModalError("");
     setModal({ type: "book", title: `Book ${asset.name}`, asset });
   }
 
   function openCode(type, loan) {
-    setForm({ code: "", loanId: loan.id });
+    const collectionAt = new Date(loan.collectionAt);
+    const early = type === "collect" && collectionAt.getTime() > Date.now() + 60_000;
+    setForm({ code: "", loanId: loan.id, allowEarlyCollection: false, overrideCollectionAt: early ? new Date().toISOString() : "" });
+    setModalError("");
     setModal({ type, title: type === "collect" ? "Verify collection code" : "Verify return code", loan });
   }
 
@@ -439,11 +506,17 @@ export default function AssetClient({ mode }) {
 
   async function submitBook(event) {
     event.preventDefault();
+    const quantity = form.unitIds?.length || parseBookingQuantity(form.quantity);
+    const formError = bookingFormError(modal?.asset, form);
+    if (formError) {
+      setModalError(formError);
+      return;
+    }
     const result = await post(
       {
         action: "bookLoan",
         assetId: form.assetId,
-        quantity: form.unitIds?.length || Number.parseInt(form.quantity, 10) || 1,
+        quantity,
         unitIds: form.unitIds?.length ? form.unitIds : undefined,
         collectionAt: fromDatetimeLocalValue(form.collectionAt),
         returnAt: fromDatetimeLocalValue(form.returnAt),
@@ -458,7 +531,16 @@ export default function AssetClient({ mode }) {
 
   async function submitCollect(event) {
     event.preventDefault();
-    await post({ action: "verifyCollectionCode", loanId: form.loanId, code: form.code }, "Collection authorised.");
+    await post(
+      {
+        action: "verifyCollectionCode",
+        loanId: form.loanId,
+        code: form.code,
+        allowEarlyCollection: Boolean(form.allowEarlyCollection),
+        overrideCollectionAt: form.allowEarlyCollection ? new Date().toISOString() : undefined,
+      },
+      "Collection authorised.",
+    );
   }
 
   async function submitReturn(event) {
@@ -551,7 +633,6 @@ export default function AssetClient({ mode }) {
           onTab={setLoanTab}
           onCollect={(loan) => openCode("collect", loan)}
           onReturn={(loan) => openCode("return", loan)}
-          onExpire={() => post({ action: "expireMissedCollections" }, "Missed collections cancelled.")}
         />
       ) : null}
 
@@ -599,22 +680,31 @@ export default function AssetClient({ mode }) {
       ) : null}
 
       {modal?.type === "asset" ? (
-        <Modal title={modal.title} onClose={() => setModal(null)}>
+        <Modal title={modal.title} error={modalError} onClose={() => setModal(null)}>
           <AssetForm form={form} setForm={setForm} onSubmit={submitAsset} pending={pending} />
         </Modal>
       ) : null}
 
       {modal?.type === "book" ? (
-        <Modal title={modal.title} onClose={() => setModal(null)}>
+        <Modal title={modal.title} error={modalError} onClose={() => setModal(null)}>
           <form className="assetForm" onSubmit={submitBook}>
             <label>
               Quantity
-              <input type="number" min="1" value={form.quantity} onChange={(event) => setForm({ ...form, quantity: event.target.value })} />
+              <input
+                type="number"
+                min="1"
+                max={Number(modal.asset.quantityNormal || 0)}
+                value={form.quantity}
+                onChange={(event) => setForm({ ...form, quantity: event.target.value })}
+              />
             </label>
+            <p className="assetMuted">Maximum normal serials for this asset: {modal.asset.quantityNormal || 0}.</p>
+            {bookingFormError(modal.asset, form) ? <p className="assetErrorInline">{bookingFormError(modal.asset, form)}</p> : null}
             <DateRangeCalendar
               label="Booking range"
               value={bookingRangeText(form.collectionAt, form.returnAt)}
               blockedRanges={activeBlockedRangesForAsset(modal.asset)}
+              availabilityAsset={modal.asset}
               replaceOnSelect
               onChange={(rangeValue) => {
                 const [range] = parseRangeLines(rangeValue);
@@ -649,7 +739,7 @@ export default function AssetClient({ mode }) {
                         const current = new Set(form.unitIds || []);
                         if (event.target.checked) current.add(unit.id);
                         else current.delete(unit.id);
-                        setForm({ ...form, unitIds: Array.from(current), quantity: Math.max(1, current.size || Number.parseInt(form.quantity, 10) || 1) });
+                        setForm({ ...form, unitIds: Array.from(current), quantity: current.size || parseBookingQuantity(form.quantity) || 1 });
                       }}
                     />
                     <span>{unit.serial}</span>
@@ -663,7 +753,7 @@ export default function AssetClient({ mode }) {
                 I accept the <Link href="/assets/terms">loan terms and liability agreement</Link>.
               </span>
             </label>
-            <button type="submit" disabled={pending}>
+            <button type="submit" disabled={pending || Boolean(bookingFormError(modal.asset, form))}>
               Book asset
             </button>
           </form>
@@ -671,9 +761,26 @@ export default function AssetClient({ mode }) {
       ) : null}
 
       {modal?.type === "collect" ? (
-        <Modal title={modal.title} onClose={() => setModal(null)}>
+        <Modal title={modal.title} error={modalError} onClose={() => setModal(null)}>
           <form className="assetForm" onSubmit={submitCollect}>
             <p>Enter the borrower collection code for {modal.loan.assetName}.</p>
+            {new Date(modal.loan.collectionAt).getTime() > Date.now() + 60_000 ? (
+              <fieldset className="assetFieldset">
+                <legend>Early collection</legend>
+                <p className="assetMuted">
+                  This loan is booked for {formatDate(modal.loan.collectionAt)}. Actual collection now is {formatDate(new Date())}.
+                  If no other booking conflicts, the backend will move the loan start to now and recalculate the return date.
+                </p>
+                <label className="assetCheckbox">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(form.allowEarlyCollection)}
+                    onChange={(event) => setForm({ ...form, allowEarlyCollection: event.target.checked })}
+                  />
+                  <span>Override collection date to now</span>
+                </label>
+              </fieldset>
+            ) : null}
             <input value={form.code} onChange={(event) => setForm({ ...form, code: event.target.value })} required />
             <button type="submit" disabled={pending}>
               Authorise collection
@@ -683,7 +790,7 @@ export default function AssetClient({ mode }) {
       ) : null}
 
       {modal?.type === "return" ? (
-        <Modal title={modal.title} onClose={() => setModal(null)}>
+        <Modal title={modal.title} error={modalError} onClose={() => setModal(null)}>
           <form className="assetForm" onSubmit={submitReturn}>
             <p>Enter the borrower return code for {modal.loan.assetName}.</p>
             <input value={form.code} onChange={(event) => setForm({ ...form, code: event.target.value })} required />
@@ -711,7 +818,7 @@ export default function AssetClient({ mode }) {
       ) : null}
 
       {modal?.type === "damage" ? (
-        <Modal title={modal.title} onClose={() => setModal(null)}>
+        <Modal title={modal.title} error={modalError} onClose={() => setModal(null)}>
           <form className="assetForm" onSubmit={submitDamage}>
             <label>
               Damage description
@@ -733,7 +840,7 @@ export default function AssetClient({ mode }) {
       ) : null}
 
       {modal?.type === "repair" ? (
-        <Modal title={modal.title} onClose={() => setModal(null)}>
+        <Modal title={modal.title} error={modalError} onClose={() => setModal(null)}>
           <form className="assetForm" onSubmit={submitRepair}>
             <label>
               Fix description
@@ -771,7 +878,7 @@ export default function AssetClient({ mode }) {
       ) : null}
 
       {modal?.type === "delete" ? (
-        <Modal title={modal.title} onClose={() => setModal(null)}>
+        <Modal title={modal.title} error={modalError} onClose={() => setModal(null)}>
           <div className="assetForm">
             <p>
               Permanently remove {modal.unit ? modal.unit.serial : modal.asset.name}
@@ -797,7 +904,7 @@ export default function AssetClient({ mode }) {
       ) : null}
 
       {modal?.type === "reschedule" ? (
-        <Modal title={modal.title} onClose={() => setModal(null)}>
+        <Modal title={modal.title} error={modalError} onClose={() => setModal(null)}>
           <form className="assetForm" onSubmit={(event) => {
             event.preventDefault();
             post({
@@ -838,7 +945,7 @@ export default function AssetClient({ mode }) {
       ) : null}
 
       {modal?.type === "extend" ? (
-        <Modal title={modal.title} onClose={() => setModal(null)}>
+        <Modal title={modal.title} error={modalError} onClose={() => setModal(null)}>
           <form className="assetForm" onSubmit={(event) => {
             event.preventDefault();
             post({ action: "extendLoan", loanId: form.loanId, returnAt: fromDatetimeLocalValue(form.returnAt) }, "Return date updated.");
@@ -889,6 +996,10 @@ function AssetForm({ form, setForm, onSubmit, pending }) {
           <label>
             Total failure to return after days
             <input type="number" min="1" value={form.totalFailureDays || 30} onChange={(event) => setForm({ ...form, totalFailureDays: event.target.value })} />
+          </label>
+          <label>
+            Maximum loan duration in days, optional
+            <input type="number" min="1" value={form.maxLoanDays || ""} onChange={(event) => setForm({ ...form, maxLoanDays: event.target.value })} placeholder="Blank for no fixed maximum" />
           </label>
           <WeeklyAvailabilityEditor form={form} setForm={setForm} />
           <DateRangeCalendar
@@ -942,7 +1053,7 @@ function WeeklyAvailabilityEditor({ form, setForm }) {
   );
 }
 
-function DateRangeCalendar({ label, value, onChange, blockedRanges = [], replaceOnSelect = false, weeklyValue = "" }) {
+function DateRangeCalendar({ label, value, onChange, blockedRanges = [], replaceOnSelect = false, weeklyValue = "", availabilityAsset = null }) {
   const [month, setMonth] = useState(startOfMonth(new Date()));
   const [start, setStart] = useState(null);
   const [hover, setHover] = useState(null);
@@ -999,17 +1110,18 @@ function DateRangeCalendar({ label, value, onChange, blockedRanges = [], replace
           const blocked = blockedRanges.some((range) => inDateSpan(day, range.start, range.end));
           const past = dateKeyBefore(current, minDate);
           const weekly = weeklyDays.has(day.getDay());
+          const unavailable = availabilityAsset ? !isDateBookableForAsset(availabilityAsset, current) : false;
           return (
             <button
               key={current}
               type="button"
-              className={`calendarDay ${day.getMonth() !== month.getMonth() ? "calendarFaded" : ""} ${weekly ? "calendarWeekly" : ""} ${selected ? "calendarSelected" : ""} ${preview ? "calendarPreview" : ""} ${anchor ? "calendarAnchor" : ""} ${blocked ? "calendarBlocked" : ""} ${past ? "calendarPast" : ""}`}
+              className={`calendarDay ${day.getMonth() !== month.getMonth() ? "calendarFaded" : ""} ${weekly ? "calendarWeekly" : ""} ${selected ? "calendarSelected" : ""} ${preview ? "calendarPreview" : ""} ${anchor ? "calendarAnchor" : ""} ${blocked ? "calendarBooked" : ""} ${unavailable ? "calendarUnavailable" : ""} ${past ? "calendarPast" : ""}`}
               data-date={current}
               aria-pressed={selected || preview || anchor}
               onMouseEnter={() => setHover(current)}
               onFocus={() => setHover(current)}
-              onClick={() => !blocked && !past && commit(day)}
-              disabled={blocked || past}
+              onClick={() => !blocked && !past && !unavailable && commit(day)}
+              disabled={blocked || past || unavailable}
             >
               {day.getDate()}
             </button>
@@ -1065,6 +1177,7 @@ function AssetList({ assets, onEdit, onDelete, onLoanable, onDamage }) {
             <span>Lost: {asset.quantityLost}</span>
             <span>Price: {formatMoney(asset.pricePence)}</span>
             <span>Late fee: {formatMoney(asset.lateFeePence)}</span>
+            <span>Max loan: {asset.maxLoanDays ? `${asset.maxLoanDays} days` : "No fixed max"}</span>
           </div>
           <div className="assetButtonRow">
             <button type="button" onClick={() => onEdit(asset)}>Edit details</button>
@@ -1150,24 +1263,27 @@ function InventoryView({ assets, onDamage, onRepair, onDelete }) {
               <summary>Loanable periods</summary>
               <LoanabilityHistory history={asset.loanabilityHistory || []} />
             </details>
-            <div className="assetUnitList">
-              {(asset.units || []).map((unit) => (
-                <div key={unit.id} className="assetUnitRow">
-                  <span><input type="checkbox" readOnly /> {unit.serial}</span>
-                  <StatusBadge tone={unit.condition === "normal" ? "green" : "amber"}>{unit.condition}</StatusBadge>
-                  {unit.condition === "damaged" ? (
-                    <button type="button" onClick={() => onRepair(asset, [unit.id])}>Repaired</button>
-                  ) : (
-                    <button type="button" onClick={() => onDamage(asset, [unit.id])}>Mark damaged</button>
-                  )}
-                  <button type="button" className="assetDanger" onClick={() => onDelete(asset, unit)}>Dustbin</button>
-                  <details className="assetUnitHistory">
-                    <summary>Loan history</summary>
-                    <UnitLoanHistory history={unit.loanHistory || []} />
-                  </details>
-                </div>
-              ))}
-            </div>
+            <details>
+              <summary>Serial numbers ({asset.units?.length || 0})</summary>
+              <div className="assetUnitList">
+                {(asset.units || []).map((unit) => (
+                  <div key={unit.id} className="assetUnitRow">
+                    <span><input type="checkbox" readOnly /> {unit.serial}</span>
+                    <StatusBadge tone={unit.condition === "normal" ? "green" : "amber"}>{unit.condition}</StatusBadge>
+                    {unit.condition === "damaged" ? (
+                      <button type="button" onClick={() => onRepair(asset, [unit.id])}>Repaired</button>
+                    ) : (
+                      <button type="button" onClick={() => onDamage(asset, [unit.id])}>Mark damaged</button>
+                    )}
+                    <button type="button" className="assetDanger" onClick={() => onDelete(asset, unit)}>Dustbin</button>
+                    <details className="assetUnitHistory">
+                      <summary>Loan history</summary>
+                      <UnitLoanHistory history={unit.loanHistory || []} />
+                    </details>
+                  </div>
+                ))}
+              </div>
+            </details>
           </article>
         ))}
       </div>
@@ -1177,11 +1293,11 @@ function InventoryView({ assets, onDamage, onRepair, onDelete }) {
 }
 
 function LoanGantt({ loans = [] }) {
-  const visible = loans.filter((loan) => ["reserved", "collected"].includes(loan.status));
+  const visible = loans.filter((loan) => ["reserved", "collected", "returned"].includes(loan.status));
   if (!visible.length) return <p className="assetMuted">No active or upcoming loans to chart.</p>;
 
-  const starts = visible.map((loan) => new Date(loan.collectionAt).getTime()).filter(Number.isFinite);
-  const ends = visible.map((loan) => new Date(loan.returnDueAt).getTime()).filter(Number.isFinite);
+  const starts = visible.map((loan) => new Date(loan.effectiveCollectionAt || loan.collectionAt).getTime()).filter(Number.isFinite);
+  const ends = visible.map((loan) => new Date(loan.effectiveReturnAt || loan.returnDueAt).getTime()).filter(Number.isFinite);
   const min = Math.min(...starts, Date.now());
   const max = Math.max(...ends, min + 7 * 24 * 60 * 60 * 1000);
   const span = Math.max(1, max - min);
@@ -1197,18 +1313,21 @@ function LoanGantt({ loans = [] }) {
         {ticks.map((tick) => <span key={tick}>{tick}</span>)}
       </div>
       {visible.map((loan) => {
-        const left = Math.max(0, ((new Date(loan.collectionAt).getTime() - min) / span) * 100);
-        const width = Math.max(2, ((new Date(loan.returnDueAt).getTime() - new Date(loan.collectionAt).getTime()) / span) * 100);
+        const start = new Date(loan.effectiveCollectionAt || loan.collectionAt);
+        const end = new Date(loan.effectiveReturnAt || loan.returnDueAt);
+        const left = Math.max(0, ((start.getTime() - min) / span) * 100);
+        const width = Math.max(2, ((end.getTime() - start.getTime()) / span) * 100);
+        const tone = loan.status === "returned" ? "loanGanttReturned" : loan.status === "collected" ? "loanGanttActive" : "loanGanttUpcoming";
         return (
           <div key={loan.id} className="loanGanttRow">
             <span className="loanGanttLabel">{loan.assetName}</span>
             <div className="loanGanttTrack">
               <span
-                className={`loanGanttBar ${loan.status === "collected" ? "loanGanttActive" : "loanGanttUpcoming"}`}
+                className={`loanGanttBar ${tone}`}
                 style={{ left: `${left}%`, width: `${Math.min(width, 100 - left)}%` }}
-                title={`${loan.assetName}: ${formatDate(loan.collectionAt)} to ${formatDate(loan.returnDueAt)}`}
+                title={`${loan.assetName}: ${formatDate(start)} to ${formatDate(end)}`}
               >
-                {loan.userEmail || loan.userId || loan.status}
+                {loan.collectedEarly ? "Collected early: " : ""}{loan.userEmail || loan.userId || loan.status}
               </span>
             </div>
           </div>
@@ -1218,7 +1337,7 @@ function LoanGantt({ loans = [] }) {
   );
 }
 
-function AdminLoansView({ loans, tab, onTab, onCollect, onReturn, onExpire }) {
+function AdminLoansView({ loans, tab, onTab, onCollect, onReturn }) {
   const rows = tab === "active" ? loans.active || [] : loans.upcoming || [];
   return (
     <section className="panel assetStack">
@@ -1227,7 +1346,6 @@ function AdminLoansView({ loans, tab, onTab, onCollect, onReturn, onExpire }) {
           <h1>Asset loans</h1>
           <p>Active loans place overdue records at the top. Upcoming reservations are ordered by collection time.</p>
         </div>
-        <button type="button" onClick={onExpire}>Cancel missed collections</button>
       </div>
       <div className="assetTabs">
         <button type="button" onClick={() => onTab("upcoming")}>Upcoming collections</button>
@@ -1254,8 +1372,11 @@ function AdminLoansView({ loans, tab, onTab, onCollect, onReturn, onExpire }) {
               <td>{loan.assetName}</td>
               <td>{loan.userEmail || loan.userId}</td>
               <td>{serialText(loan)}</td>
-              <td>{formatDate(loan.collectionAt)}</td>
-              <td>{formatDate(loan.returnDueAt)}</td>
+              <td>
+                {formatDate(loan.effectiveCollectionAt || loan.collectionAt)}
+                {loan.collectedEarly ? <div><StatusBadge tone="amber">Collected early</StatusBadge></div> : null}
+              </td>
+              <td>{formatDate(loan.effectiveReturnAt || loan.returnDueAt)}</td>
               <td>{loan.overdue ? <StatusBadge tone="red">Overdue</StatusBadge> : loan.status}</td>
               <td>
                 {tab === "upcoming" ? (
