@@ -62,7 +62,16 @@ main() {
     -f docker-compose.print.same-host-rustfs.yaml \
     up -d --build
 
-  curl -fsS https://print.loftrop.com >/dev/null
+  for attempt in {1..30}; do
+    if curl -fsS https://print.loftrop.com >/dev/null; then
+      break
+    fi
+    if [[ "$attempt" -eq 30 ]]; then
+      echo "print.loftrop.com did not become healthy after deployment." >&2
+      exit 1
+    fi
+    sleep 2
+  done
   echo "LIVE_PRINT_STAGE_DEPLOY_DONE"
 }
 
