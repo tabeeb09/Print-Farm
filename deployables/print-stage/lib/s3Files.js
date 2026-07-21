@@ -37,12 +37,23 @@ import {
 const DEFAULT_PAGE_SIZE = 25;
 const DOWNLOAD_URL_TTL_SECONDS = 60;
 const UPLOAD_URL_TTL_SECONDS = 300;
-const MANIFEST_FOLDER = "private/system/files/manifests";
-const PRINT_QUEUE_FOLDER = "private/system/print-queue";
-const GCODE_FOLDER = "private/system/files/gcode";
 const DEFAULT_RUNTIME_ENV_FILE = ".env.runtime";
 const DEFAULT_WORKER_CONFIG_DIR = process.env.PRINT_WORKER_CONFIG_DIR || process.env.XDG_CONFIG_HOME || path.join(process.env.HOME || process.env.USERPROFILE || ".", ".config");
 const DEFAULT_WORKER_CONFIG_FILE = process.env.PRINT_WORKER_PRINTER_CONFIG_FILE || path.join(DEFAULT_WORKER_CONFIG_DIR, "caid-print-worker", "printers.json");
+
+function normalizeObjectKey(value) {
+  return String(value || "").replace(/^\/+|\/+$/g, "");
+}
+
+function storageKey(key) {
+  const prefix = normalizeObjectKey(env.S3_PROJECT_KEY_PREFIX);
+  const normalizedKey = normalizeObjectKey(key);
+  return prefix ? `${prefix}/${normalizedKey}` : normalizedKey;
+}
+
+const MANIFEST_FOLDER = storageKey("private/system/files/manifests");
+const PRINT_QUEUE_FOLDER = storageKey("private/system/print-queue");
+const GCODE_FOLDER = storageKey("private/system/files/gcode");
 
 function createS3Client() {
   return new S3Client({
@@ -85,7 +96,7 @@ function getFileExtension(filename) {
 }
 
 function buildObjectKey(ownerSub, fileId, filename) {
-  return `private/users/${ownerSub}/${fileId}/${sanitizeFilename(filename)}`;
+  return storageKey(`private/users/${ownerSub}/${fileId}/${sanitizeFilename(filename)}`);
 }
 
 function buildManifestKey(fileId) {

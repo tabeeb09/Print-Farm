@@ -40,8 +40,18 @@ function getUtcDay(date = new Date()) {
   return date.toISOString().slice(0, 10);
 }
 
+function normalizeObjectKey(value) {
+  return String(value || "").replace(/^\/+|\/+$/g, "");
+}
+
+function storageKey(key) {
+  const prefix = normalizeObjectKey(env.S3_PROJECT_KEY_PREFIX);
+  const normalizedKey = normalizeObjectKey(key);
+  return prefix ? `${prefix}/${normalizedKey}` : normalizedKey;
+}
+
 function getQuotaPrefix(day = getUtcDay()) {
-  return `${env.EMAIL_QUOTA_S3_PREFIX.replace(/\/+$/, "")}/${day}`;
+  return storageKey(`${env.EMAIL_QUOTA_S3_PREFIX.replace(/\/+$/, "")}/${day}`);
 }
 
 async function listKeys(prefix) {

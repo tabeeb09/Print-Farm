@@ -62,6 +62,7 @@ const envSchema = z.object({
   S3_ENDPOINT: optionalUrl,
   S3_PUBLIC_ENDPOINT: optionalUrl,
   S3_PRIVATE_BUCKET: optionalNonEmptyString,
+  S3_PROJECT_KEY_PREFIX: z.string().default(""),
   S3_REGION: z.string().default("us-east-1"),
   S3_ACCESS_KEY_ID: optionalNonEmptyString,
   S3_SECRET_ACCESS_KEY: optionalNonEmptyString,

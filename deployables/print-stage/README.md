@@ -122,6 +122,12 @@ PASSWORD_RESET_TOKEN_S3_PREFIX=private/system/password-reset-tokens
 PASSWORD_RESET_TOKEN_TTL_MINUTES=30
 ```
 
+For isolated print storage, set `S3_ENDPOINT`, `S3_PUBLIC_ENDPOINT`,
+`S3_PRIVATE_BUCKET`, and optionally `S3_PROJECT_KEY_PREFIX=print/prod` from
+the print deployment secrets. Do not hard-code the portfolio media endpoint in
+the print compose file; the print app and worker should read their own S3
+configuration from `/etc/print/deploy.env` or OpenBao.
+
 `scripts/sync-keycloak-realm-auth.mjs` applies those settings to Keycloak
 during print deploy. When the daily limit is reached, the app sends one alert
 email to at most four `SUPERADMIN_EMAILS`/`owner` users recommending either

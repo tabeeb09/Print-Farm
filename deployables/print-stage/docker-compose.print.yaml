@@ -5,8 +5,6 @@ services:
     restart: unless-stopped
     env_file:
       - /etc/print/deploy.env
-    environment:
-      S3_PUBLIC_ENDPOINT: https://media.loftrop.com
     volumes:
       - ./.local-state:/app/.local-state
     networks:

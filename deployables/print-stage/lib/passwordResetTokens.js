@@ -30,8 +30,18 @@ function createS3Client() {
   });
 }
 
+function normalizeObjectKey(value) {
+  return String(value || "").replace(/^\/+|\/+$/g, "");
+}
+
+function storageKey(key) {
+  const prefix = normalizeObjectKey(env.S3_PROJECT_KEY_PREFIX);
+  const normalizedKey = normalizeObjectKey(key);
+  return prefix ? `${prefix}/${normalizedKey}` : normalizedKey;
+}
+
 function getTokenPrefix() {
-  return env.PASSWORD_RESET_TOKEN_S3_PREFIX.replace(/\/+$/, "");
+  return storageKey(env.PASSWORD_RESET_TOKEN_S3_PREFIX.replace(/\/+$/, ""));
 }
 
 function buildTokenKey(tokenId) {

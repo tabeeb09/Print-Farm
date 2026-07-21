@@ -60,6 +60,10 @@ function main() {
     merged.STRIPE_WEBHOOK_SECRET = process.env.PRINT_STRIPE_WEBHOOK_SECRET;
   }
 
+  if (process.env.PRINT_S3_PROJECT_KEY_PREFIX) {
+    merged.S3_PROJECT_KEY_PREFIX = process.env.PRINT_S3_PROJECT_KEY_PREFIX;
+  }
+
   fs.writeFileSync(args.output, `${toEnvBlock(merged)}\n`, { encoding: "utf8", mode: 0o600 });
   console.log(`Prepared print deploy env at ${args.output}`);
 }
