@@ -273,12 +273,14 @@ select {
 }
 
 .calendarPreview {
-  background: #d9ebff;
-  border-color: #7eb2ee;
+  background: #bfe0ff;
+  border-color: #2878c9;
+  box-shadow: inset 0 0 0 2px rgba(40, 120, 201, 0.32);
 }
 
 .calendarWeekly {
-  box-shadow: inset 0 -0.28rem 0 #f4c95d;
+  background: #fff4c2;
+  box-shadow: inset 0 -0.32rem 0 #d89b00;
 }
 
 .calendarSelected {
@@ -286,6 +288,13 @@ select {
   color: #fffaf1;
   border-color: #173f35;
   box-shadow: inset 0 0 0 2px #173f35;
+}
+
+.calendarAnchor {
+  background: #0f5c4d;
+  color: #fffaf1;
+  border-color: #0f5c4d;
+  box-shadow: 0 0 0 3px rgba(15, 92, 77, 0.24);
 }
 
 .calendarBlocked {

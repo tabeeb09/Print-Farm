@@ -11,6 +11,7 @@ const adminLinks = [
   ["/admin/assets/catalogue", "Catalogue"],
   ["/admin/assets/inventory", "Inventory"],
   ["/admin/assets/loans", "Collections"],
+  ["/admin/assets/gantt", "Gantt board"],
   ["/admin/assets/lost-damaged", "Lost and damaged"],
 ];
 
@@ -77,7 +78,7 @@ function weeklyText(availability) {
 
 function rangeText(availability) {
   return (availability?.dateRanges || [])
-    .map((range) => `${range.start},${range.end}`)
+    .map((range) => `${dateOnly(range.start)},${dateOnly(range.end)}`)
     .join("\n");
 }
 
@@ -131,7 +132,7 @@ function parseRangeLines(value) {
 
 function rangeLinesFromRanges(ranges) {
   return ranges
-    .map((range) => `${range.start}T00:00:00.000Z,${range.end}T23:59:59.999Z`)
+    .map((range) => `${dateOnly(range.start)},${dateOnly(range.end)}`)
     .join("\n");
 }
 
@@ -224,8 +225,13 @@ function parseAssetForm(form) {
     .filter(Boolean)
     .map((line) => {
       const [start, end] = line.split(",").map((part) => part.trim());
-      return { start, end };
-    });
+      const startDate = dateOnly(start);
+      const endDate = dateOnly(end);
+      return startDate && endDate
+        ? { start: `${startDate}T00:00:00.000Z`, end: `${endDate}T23:59:59.999Z` }
+        : null;
+    })
+    .filter(Boolean);
 
   return {
     name: form.name,
@@ -270,7 +276,7 @@ function formFromAsset(asset) {
 function viewForMode(mode) {
   if (mode === "catalogue") return "catalogue";
   if (mode === "inventory") return "inventory";
-  if (mode === "admin-loans") return "admin-loans";
+  if (mode === "admin-loans" || mode === "admin-gantt") return "admin-loans";
   if (mode === "lost-damaged") return "lost-damaged";
   if (mode === "my-loans") return "my-loans";
   return "loanable";
@@ -315,7 +321,7 @@ export default function AssetClient({ mode }) {
   const [message, setMessage] = useState("");
   const [modal, setModal] = useState(null);
   const [form, setForm] = useState({});
-  const [loanTab, setLoanTab] = useState("upcoming");
+  const [loanTab, setLoanTab] = useState(mode === "admin-gantt" ? "timeline" : "upcoming");
   const view = viewForMode(mode);
 
   async function load() {
@@ -538,7 +544,7 @@ export default function AssetClient({ mode }) {
         <InventoryView assets={payload?.inventory || []} onDamage={openDamage} onRepair={openRepair} onDelete={openDelete} />
       ) : null}
 
-      {mode === "admin-loans" ? (
+      {mode === "admin-loans" || mode === "admin-gantt" ? (
         <AdminLoansView
           loans={payload?.loans || { active: [], upcoming: [] }}
           tab={loanTab}
@@ -941,6 +947,7 @@ function DateRangeCalendar({ label, value, onChange, blockedRanges = [], replace
   const [start, setStart] = useState(null);
   const [hover, setHover] = useState(null);
   const ranges = parseRangeLines(value);
+  const displayRanges = replaceOnSelect && start ? [] : ranges;
   const weeklyDays = new Set(parseWeeklyLines(weeklyValue).map((entry) => entry.day));
   const days = calendarDays(month);
   const minDate = todayKey();
@@ -986,8 +993,9 @@ function DateRangeCalendar({ label, value, onChange, blockedRanges = [], replace
         {["M", "T", "W", "T", "F", "S", "S"].map((day, index) => <span key={`${day}-${index}`} className="calendarDow">{day}</span>)}
         {days.map((day) => {
           const current = dateOnly(day);
-          const selected = ranges.some((range) => inDateSpan(day, range.start, range.end));
+          const selected = displayRanges.some((range) => inDateSpan(day, range.start, range.end));
           const preview = start && hover && inDateSpan(day, start, hover);
+          const anchor = start && sameDate(day, start);
           const blocked = blockedRanges.some((range) => inDateSpan(day, range.start, range.end));
           const past = dateKeyBefore(current, minDate);
           const weekly = weeklyDays.has(day.getDay());
@@ -995,7 +1003,9 @@ function DateRangeCalendar({ label, value, onChange, blockedRanges = [], replace
             <button
               key={current}
               type="button"
-              className={`calendarDay ${day.getMonth() !== month.getMonth() ? "calendarFaded" : ""} ${weekly ? "calendarWeekly" : ""} ${selected ? "calendarSelected" : ""} ${preview ? "calendarPreview" : ""} ${blocked ? "calendarBlocked" : ""} ${past ? "calendarPast" : ""}`}
+              className={`calendarDay ${day.getMonth() !== month.getMonth() ? "calendarFaded" : ""} ${weekly ? "calendarWeekly" : ""} ${selected ? "calendarSelected" : ""} ${preview ? "calendarPreview" : ""} ${anchor ? "calendarAnchor" : ""} ${blocked ? "calendarBlocked" : ""} ${past ? "calendarPast" : ""}`}
+              data-date={current}
+              aria-pressed={selected || preview || anchor}
               onMouseEnter={() => setHover(current)}
               onFocus={() => setHover(current)}
               onClick={() => !blocked && !past && commit(day)}
