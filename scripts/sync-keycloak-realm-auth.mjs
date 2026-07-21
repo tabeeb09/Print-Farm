@@ -175,7 +175,10 @@ async function syncGoogleIdentityProvider(env, origin, realm, token) {
 }
 
 function envFlag(value, defaultValue = "false") {
-  return String(value ?? defaultValue).toLowerCase() === "true" ? "true" : "false";
+  const candidate = value === undefined || value === null || String(value).trim() === ""
+    ? defaultValue
+    : value;
+  return ["1", "true", "yes", "on"].includes(String(candidate).trim().toLowerCase()) ? "true" : "false";
 }
 
 function pick(env, ...keys) {
