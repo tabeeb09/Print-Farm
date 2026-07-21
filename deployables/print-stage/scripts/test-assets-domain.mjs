@@ -529,4 +529,154 @@ maxResult = verifyCollectionCode(maxState, { loanId: "loan-max", code: "121212",
 assert.equal(maxResult.loan.returnDueAt, "2026-07-08T10:00:00.000Z");
 assert.equal(selectAdminLoans(maxResult.state, mondayMorning).active[0].collectedEarly, true);
 
+let returnState = createInitialAssetState();
+let returnResult = createAsset(
+  returnState,
+  {
+    name: "Loan Return Kit",
+    loanable: true,
+    quantity: 2,
+    lateFeePence: 500,
+    availability: {
+      weekly: [{ day: 1, start: "09:00", end: "17:00" }],
+      dateRanges: [{ start: "2026-07-01T00:00:00.000Z", end: "2026-08-01T00:00:00.000Z" }],
+    },
+  },
+  mondayMorning,
+);
+returnState = returnResult.state;
+const returnAsset = returnResult.asset;
+returnResult = bookLoan(
+  returnState,
+  {
+    id: "return-loan",
+    assetId: returnAsset.id,
+    quantity: 2,
+    collectionAt: "2026-07-06T10:00:00.000Z",
+    returnAt: "2026-07-06T11:00:00.000Z",
+    acceptTerms: true,
+    collectionCode: "565656",
+    returnCode: "787878",
+    ...actor("borrower-return"),
+  },
+  mondayMorning,
+);
+returnState = returnResult.state;
+returnResult = verifyCollectionCode(returnState, { loanId: "return-loan", code: "565656", adminId: "admin" }, mondayMorning);
+returnState = returnResult.state;
+returnResult = verifyReturnCode(
+  returnState,
+  {
+    loanId: "return-loan",
+    code: "787878",
+    returnItems: [
+      { unitId: returnResult.loan.unitIds[0], returned: true, damaged: true, damageDescription: "Cracked case." },
+      { unitId: returnResult.loan.unitIds[1], returned: true, damaged: false },
+    ],
+    returnNote: "Returned with charger and case.",
+    returnPhotos: [{ name: "return.jpg", type: "image/jpeg", size: 128, dataUrl: "data:image/jpeg;base64,abcd" }],
+    damageChargePence: 1200,
+    discretionaryChargePence: 300,
+    discretionaryChargeDescription: "Missing strap.",
+    waiveLateFee: true,
+    adminId: "admin",
+  },
+  new Date("2026-07-06T12:00:00.000Z"),
+);
+returnState = returnResult.state;
+assert.equal(returnResult.loan.returnItems[0].damaged, true);
+assert.equal(returnResult.loan.returnItems[1].damaged, false);
+assert.equal(returnResult.loan.returnNote, "Returned with charger and case.");
+assert.equal(returnResult.loan.returnPhotos.length, 1);
+assert.equal(returnResult.loan.lateFeeWaived, true);
+assert.equal(returnResult.loan.lateFeePence, 0);
+assert.equal(returnResult.loan.discretionaryChargePence, 300);
+assert.equal(selectAccountBalance(returnState, actor("borrower-return")), 1500);
+assert.ok(selectAccountTransactions(returnState, actor("borrower-return")).some((transaction) => transaction.transactionType === "asset_discretionary"));
+
+let lateState = createInitialAssetState();
+let lateResult = createAsset(
+  lateState,
+  {
+    name: "Late Fee Kit",
+    loanable: true,
+    quantity: 1,
+    lateFeePence: 500,
+    availability: {
+      weekly: [{ day: 1, start: "09:00", end: "17:00" }],
+      dateRanges: [{ start: "2026-07-01T00:00:00.000Z", end: "2026-08-01T00:00:00.000Z" }],
+    },
+  },
+  mondayMorning,
+);
+lateState = lateResult.state;
+lateResult = bookLoan(
+  lateState,
+  {
+    id: "late-loan",
+    assetId: lateResult.asset.id,
+    quantity: 1,
+    collectionAt: "2026-07-06T10:00:00.000Z",
+    returnAt: "2026-07-06T11:00:00.000Z",
+    acceptTerms: true,
+    collectionCode: "121314",
+    returnCode: "151617",
+    ...actor("borrower-late"),
+  },
+  mondayMorning,
+);
+lateState = lateResult.state;
+lateResult = verifyCollectionCode(lateState, { loanId: "late-loan", code: "121314", adminId: "admin" }, mondayMorning);
+lateState = lateResult.state;
+lateResult = verifyReturnCode(lateState, { loanId: "late-loan", code: "151617", adminId: "admin" }, new Date("2026-07-06T12:00:00.000Z"));
+assert.equal(lateResult.loan.lateFeePence, 500);
+assert.equal(selectAccountTransactions(lateResult.state, actor("borrower-late"))[0].transactionType, "late_fee");
+
+let futureState = createInitialAssetState();
+let futureResult = createAsset(
+  futureState,
+  {
+    name: "Future Booking Kit",
+    loanable: true,
+    quantity: 1,
+    availability: {
+      weekly: [{ day: 1, start: "09:00", end: "17:00" }],
+      dateRanges: [{ start: "2026-07-01T00:00:00.000Z", end: "2026-08-01T00:00:00.000Z" }],
+    },
+  },
+  mondayMorning,
+);
+futureState = futureResult.state;
+futureResult = bookLoan(
+  futureState,
+  {
+    id: "future-current",
+    assetId: futureResult.asset.id,
+    quantity: 1,
+    collectionAt: "2026-07-06T10:00:00.000Z",
+    returnAt: "2026-07-06T11:00:00.000Z",
+    acceptTerms: true,
+    collectionCode: "222333",
+    returnCode: "444555",
+    ...actor("borrower-current"),
+  },
+  mondayMorning,
+);
+futureState = futureResult.state;
+futureResult = verifyCollectionCode(futureState, { loanId: "future-current", code: "222333", adminId: "admin" }, mondayMorning);
+futureState = futureResult.state;
+futureResult = bookLoan(
+  futureState,
+  {
+    assetId: futureResult.loan.assetId,
+    quantity: 1,
+    collectionAt: "2026-07-13T10:00:00.000Z",
+    returnAt: "2026-07-13T11:00:00.000Z",
+    acceptTerms: true,
+    ...actor("borrower-future"),
+  },
+  mondayMorning,
+);
+assert.equal(futureResult.loan.status, "reserved");
+
 console.log("asset domain tests passed");

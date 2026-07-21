@@ -2,7 +2,7 @@ import { getStateFilePath, readJsonFile, writeJsonFile } from "./jsonStore.js";
 
 const AUDIT_PATH = getStateFilePath("AUDIT_LOG_PATH", "audit-log.json");
 const MAX_EVENTS = 5000;
-const SECRET_KEY_PATTERN = /(password|secret|token|accessCode|access_code|key|credential)/i;
+const SECRET_KEY_PATTERN = /(password|secret|token|accessCode|access_code|key|credential|photo|image|dataUrl|data_url|attachment)/i;
 
 function safeActor(actor) {
   return {

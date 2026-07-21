@@ -46,6 +46,7 @@ function transactionTypeLabel(type) {
     recovered_damage: "Recovered damage",
     damage_refund: "Damage refund",
     late_fee: "Late fee",
+    asset_discretionary: "Discretionary asset charge",
     manual_refund: "Manual refund",
     manual_surcharge: "Manual surcharge",
     print_payment: "3D print payment",
@@ -91,6 +92,8 @@ const dayOptions = [
   [6, "Sat"],
   [0, "Sun"],
 ];
+const MAX_RETURN_PHOTOS = 6;
+const MAX_RETURN_PHOTO_DATA_URL_BYTES = 2_500_000;
 
 function dateOnly(value) {
   if (!value) return "";
@@ -214,12 +217,59 @@ function parseBookingQuantity(value) {
   return Number.parseInt(text, 10);
 }
 
+function bookingWindow(form) {
+  const start = new Date(form?.collectionAt || "");
+  const end = new Date(form?.returnAt || "");
+  if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end.getTime() <= start.getTime()) {
+    return null;
+  }
+  return { start, end };
+}
+
+function loanOverlapsWindow(loan, window) {
+  if (!window || !["reserved", "collected"].includes(loan?.status)) return false;
+  const start = new Date(loan.collectionAt);
+  const end = new Date(loan.returnDueAt);
+  if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime())) return false;
+  return window.start.getTime() < end.getTime() && window.end.getTime() > start.getTime();
+}
+
+function availableUnitsForBooking(asset, form) {
+  const window = bookingWindow(form);
+  return (asset?.units || []).filter((unit) =>
+    unit.condition === "normal" &&
+    !unit.deletedAt &&
+    !(unit.loanHistory || []).some((loan) => loanOverlapsWindow(loan, window)),
+  );
+}
+
+function bookingDateError(asset, form) {
+  const collectionAt = new Date(form?.collectionAt || "");
+  const returnAt = new Date(form?.returnAt || "");
+  if (!Number.isFinite(collectionAt.getTime()) || !Number.isFinite(returnAt.getTime())) {
+    return "Choose valid collection and return dates.";
+  }
+  if (collectionAt.getTime() < Date.now() - 60_000) {
+    return "Collection date cannot be in the past.";
+  }
+  if (returnAt.getTime() <= collectionAt.getTime()) {
+    return "Return date must be after collection date.";
+  }
+  if (asset && !isDateBookableForAsset(asset, dateOnly(form.collectionAt))) {
+    return "Collection date is outside this asset's availability windows.";
+  }
+  if (asset && !isDateInAssetDateRanges(asset, dateOnly(form.returnAt))) {
+    return "Return date is outside this asset's available date ranges.";
+  }
+  return "";
+}
+
 function bookingQuantityError(asset, form) {
   const quantity = form?.unitIds?.length || parseBookingQuantity(form?.quantity);
-  const maxQuantity = Number(asset?.quantityNormal || 0);
-  if (maxQuantity < 1) return "No normal serials are currently available for this asset.";
+  const maxQuantity = availableUnitsForBooking(asset, form).length;
+  if (maxQuantity < 1) return "No serials are available for the selected dates.";
   if (!Number.isInteger(quantity) || quantity < 1) return "Enter a positive whole-number quantity.";
-  if (quantity > maxQuantity) return `Only ${maxQuantity} normal serial${maxQuantity === 1 ? "" : "s"} exist for this asset.`;
+  if (quantity > maxQuantity) return `Only ${maxQuantity} serial${maxQuantity === 1 ? "" : "s"} are available for the selected dates.`;
   return "";
 }
 
@@ -236,7 +286,85 @@ function bookingDurationError(asset, form) {
 }
 
 function bookingFormError(asset, form) {
-  return bookingQuantityError(asset, form) || bookingDurationError(asset, form);
+  return bookingDateError(asset, form) || bookingQuantityError(asset, form) || bookingDurationError(asset, form);
+}
+
+function returnItemsFromLoan(loan) {
+  const unitsById = new Map((loan?.units || []).map((unit) => [unit.id, unit]));
+  const unitIds = Array.isArray(loan?.unitIds) && loan.unitIds.length
+    ? loan.unitIds
+    : (loan?.units || []).map((unit) => unit.id);
+
+  return unitIds.map((unitId, index) => ({
+    unitId,
+    serial: unitsById.get(unitId)?.serial || loan?.serials?.[index] || unitId,
+    returned: true,
+    damaged: false,
+    damageDescription: "",
+  }));
+}
+
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error || new Error("Unable to read image file."));
+    reader.readAsDataURL(file);
+  });
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error || new Error("Unable to read compressed image."));
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function compressReturnPhoto(file) {
+  if (!file.type.startsWith("image/")) {
+    throw new Error(`${file.name} is not an image.`);
+  }
+
+  const original = await fileToDataUrl(file);
+  if (original.length <= MAX_RETURN_PHOTO_DATA_URL_BYTES) {
+    return { name: file.name, type: file.type, size: file.size, dataUrl: original };
+  }
+
+  if (typeof createImageBitmap !== "function") {
+    throw new Error(`${file.name} is too large. Use an image smaller than 2.5 MB.`);
+  }
+
+  const bitmap = await createImageBitmap(file);
+  const maxSide = 1600;
+  const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+  canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error(`${file.name} could not be compressed.`);
+  context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.82));
+  if (!blob) throw new Error(`${file.name} could not be compressed.`);
+  const dataUrl = await blobToDataUrl(blob);
+  if (dataUrl.length > MAX_RETURN_PHOTO_DATA_URL_BYTES) {
+    throw new Error(`${file.name} is still too large after compression.`);
+  }
+  return { name: file.name.replace(/\.[^.]+$/, ".jpg"), type: "image/jpeg", size: blob.size, dataUrl };
+}
+
+function sanitizeBookingForm(asset, nextForm) {
+  const availableIds = new Set(availableUnitsForBooking(asset, nextForm).map((unit) => unit.id));
+  const unitIds = (nextForm.unitIds || []).filter((unitId) => availableIds.has(unitId));
+  const maxQuantity = availableIds.size;
+  const requested = unitIds.length || parseBookingQuantity(nextForm.quantity) || 1;
+
+  return {
+    ...nextForm,
+    unitIds,
+    quantity: maxQuantity > 0 ? Math.min(Math.max(1, requested), maxQuantity) : 0,
+  };
 }
 
 function datetimeWithDate(currentValue, date, fallbackTime = "09:00") {
@@ -443,14 +571,15 @@ export default function AssetClient({ mode }) {
   function openBook(asset) {
     const collectionAt = asset.nextAvailableAt || new Date().toISOString();
     const defaultLoanDays = asset.maxLoanDays || 7;
-    setForm({
+    const nextForm = {
       assetId: asset.id,
       quantity: 1,
       unitIds: [],
       collectionAt: toFutureDatetimeLocalValue(collectionAt),
       returnAt: toDatetimeLocalValue(addDays(collectionAt, defaultLoanDays)),
       acceptTerms: false,
-    });
+    };
+    setForm(sanitizeBookingForm(asset, nextForm));
     setModalError("");
     setModal({ type: "book", title: `Book ${asset.name}`, asset });
   }
@@ -458,7 +587,19 @@ export default function AssetClient({ mode }) {
   function openCode(type, loan) {
     const collectionAt = new Date(loan.collectionAt);
     const early = type === "collect" && collectionAt.getTime() > Date.now() + 60_000;
-    setForm({ code: "", loanId: loan.id, allowEarlyCollection: false, overrideCollectionAt: early ? new Date().toISOString() : "" });
+    setForm({
+      code: "",
+      loanId: loan.id,
+      allowEarlyCollection: false,
+      overrideCollectionAt: early ? new Date().toISOString() : "",
+      returnItems: type === "return" ? returnItemsFromLoan(loan) : [],
+      returnNote: "",
+      returnPhotos: [],
+      damageCharge: "",
+      discretionaryCharge: "",
+      discretionaryChargeDescription: "",
+      waiveLateFee: false,
+    });
     setModalError("");
     setModal({ type, title: type === "collect" ? "Verify collection code" : "Verify return code", loan });
   }
@@ -492,6 +633,12 @@ export default function AssetClient({ mode }) {
       asset,
       unit,
     });
+  }
+
+  function openLoanDetails(loan) {
+    setForm({});
+    setModalError("");
+    setModal({ type: "loanDetails", title: `Loan details: ${loan.assetName}`, loan });
   }
 
   async function submitAsset(event) {
@@ -550,13 +697,37 @@ export default function AssetClient({ mode }) {
         action: "verifyReturnCode",
         loanId: form.loanId,
         code: form.code,
-        damaged: Boolean(form.damaged),
-        damagedUnitIds: form.damaged ? modal.loan.unitIds : [],
+        returnItems: form.returnItems || [],
+        returnNote: form.returnNote,
+        returnPhotos: form.returnPhotos || [],
+        damagedUnitIds: (form.returnItems || []).filter((item) => item.damaged).map((item) => item.unitId),
         damageDescription: form.damageDescription,
         damageChargePence: parsePounds(form.damageCharge, 0),
+        discretionaryChargePence: parsePounds(form.discretionaryCharge, 0),
+        discretionaryChargeDescription: form.discretionaryChargeDescription,
+        waiveLateFee: Boolean(form.waiveLateFee),
       },
       "Return recorded.",
     );
+  }
+
+  async function addReturnPhotos(fileList) {
+    const files = Array.from(fileList || []);
+    if (!files.length) return;
+    setModalError("");
+    try {
+      const remainingSlots = Math.max(0, MAX_RETURN_PHOTOS - (form.returnPhotos || []).length);
+      if (remainingSlots < 1) {
+        throw new Error(`Only ${MAX_RETURN_PHOTOS} return photos can be uploaded.`);
+      }
+      const photos = [];
+      for (const file of files.slice(0, remainingSlots)) {
+        photos.push(await compressReturnPhoto(file));
+      }
+      setForm({ ...form, returnPhotos: [...(form.returnPhotos || []), ...photos] });
+    } catch (caught) {
+      setModalError(caught instanceof Error ? caught.message : "Unable to attach return photos.");
+    }
   }
 
   async function submitDamage(event) {
@@ -600,6 +771,14 @@ export default function AssetClient({ mode }) {
     }
     return groups;
   }, [payload]);
+  const bookingAvailableUnits = modal?.type === "book" ? availableUnitsForBooking(modal.asset, form) : [];
+  const bookingAvailableUnitIds = new Set(bookingAvailableUnits.map((unit) => unit.id));
+  const currentBookingDateError = modal?.type === "book" ? bookingDateError(modal.asset, form) : "";
+  const currentBookingError = modal?.type === "book" ? bookingFormError(modal.asset, form) : "";
+  const returnItems = modal?.type === "return" ? (form.returnItems || []) : [];
+  const returnReadyError = modal?.type === "return" && returnItems.some((item) => !item.returned)
+    ? "All loaned serials must be marked returned before the loan can be closed."
+    : "";
 
   return (
     <div className="assetPage">
@@ -633,6 +812,7 @@ export default function AssetClient({ mode }) {
           onTab={setLoanTab}
           onCollect={(loan) => openCode("collect", loan)}
           onReturn={(loan) => openCode("return", loan)}
+          onDetails={openLoanDetails}
         />
       ) : null}
 
@@ -685,21 +865,33 @@ export default function AssetClient({ mode }) {
         </Modal>
       ) : null}
 
+      {modal?.type === "loanDetails" ? (
+        <Modal title={modal.title} error={modalError} onClose={() => setModal(null)}>
+          <LoanDetails loan={modal.loan} />
+        </Modal>
+      ) : null}
+
       {modal?.type === "book" ? (
         <Modal title={modal.title} error={modalError} onClose={() => setModal(null)}>
           <form className="assetForm" onSubmit={submitBook}>
             <label>
               Quantity
-              <input
-                type="number"
-                min="1"
-                max={Number(modal.asset.quantityNormal || 0)}
-                value={form.quantity}
-                onChange={(event) => setForm({ ...form, quantity: event.target.value })}
-              />
+              <select
+                value={String(form.quantity || 0)}
+                disabled={!bookingAvailableUnits.length || Boolean(currentBookingDateError)}
+                onChange={(event) => setForm(sanitizeBookingForm(modal.asset, { ...form, quantity: event.target.value, unitIds: [] }))}
+              >
+                {bookingAvailableUnits.length ? Array.from({ length: bookingAvailableUnits.length }, (_, index) => (
+                  <option key={index + 1} value={index + 1}>{index + 1}</option>
+                )) : (
+                  <option value="0">None available</option>
+                )}
+              </select>
             </label>
-            <p className="assetMuted">Maximum normal serials for this asset: {modal.asset.quantityNormal || 0}.</p>
-            {bookingFormError(modal.asset, form) ? <p className="assetErrorInline">{bookingFormError(modal.asset, form)}</p> : null}
+            <p className="assetMuted">
+              Available for selected dates: {bookingAvailableUnits.length} / {modal.asset.quantityNormal || 0} normal serials.
+            </p>
+            {currentBookingError ? <p className="assetErrorInline">{currentBookingError}</p> : null}
             <DateRangeCalendar
               label="Booking range"
               value={bookingRangeText(form.collectionAt, form.returnAt)}
@@ -709,40 +901,56 @@ export default function AssetClient({ mode }) {
               onChange={(rangeValue) => {
                 const [range] = parseRangeLines(rangeValue);
                 if (range) {
-                  setForm({
+                  setForm(sanitizeBookingForm(modal.asset, {
                     ...form,
                     collectionAt: datetimeWithDate(form.collectionAt, range.start, "09:00"),
                     returnAt: datetimeWithDate(form.returnAt, range.end, "17:00"),
-                  });
+                  }));
                 }
               }}
             />
             <label>
               Collection date and time
-              <input type="datetime-local" value={form.collectionAt} onChange={(event) => setForm({ ...form, collectionAt: event.target.value })} required />
+              <input
+                type="datetime-local"
+                value={form.collectionAt}
+                onChange={(event) => setForm(sanitizeBookingForm(modal.asset, { ...form, collectionAt: event.target.value }))}
+                required
+              />
             </label>
             <label>
               Return date and time
-              <input type="datetime-local" value={form.returnAt} onChange={(event) => setForm({ ...form, returnAt: event.target.value })} required />
+              <input
+                type="datetime-local"
+                value={form.returnAt}
+                onChange={(event) => setForm(sanitizeBookingForm(modal.asset, { ...form, returnAt: event.target.value }))}
+                required
+              />
             </label>
             <fieldset className="assetFieldset">
               <legend>Serial numbers, optional</legend>
-              <p className="assetMuted">Leave blank to let the backend pick the first non-conflicting serials.</p>
+              <p className="assetMuted">Unavailable serials are locked for the selected dates. Leave blank to let the backend pick the first free serials.</p>
               {(modal.asset.units || []).filter((unit) => unit.condition === "normal" && !unit.deletedAt).map((unit) => {
                 const checked = (form.unitIds || []).includes(unit.id);
+                const available = !currentBookingDateError && bookingAvailableUnitIds.has(unit.id);
                 return (
                   <label key={unit.id} className="assetCheckbox">
                     <input
                       type="checkbox"
                       checked={checked}
+                      disabled={!available}
                       onChange={(event) => {
                         const current = new Set(form.unitIds || []);
                         if (event.target.checked) current.add(unit.id);
                         else current.delete(unit.id);
-                        setForm({ ...form, unitIds: Array.from(current), quantity: current.size || parseBookingQuantity(form.quantity) || 1 });
+                        setForm(sanitizeBookingForm(modal.asset, {
+                          ...form,
+                          unitIds: Array.from(current),
+                          quantity: current.size || parseBookingQuantity(form.quantity) || 1,
+                        }));
                       }}
                     />
-                    <span>{unit.serial}</span>
+                    <span>{unit.serial}{available ? "" : " (booked for selected dates)"}</span>
                   </label>
                 );
               })}
@@ -753,7 +961,7 @@ export default function AssetClient({ mode }) {
                 I accept the <Link href="/assets/terms">loan terms and liability agreement</Link>.
               </span>
             </label>
-            <button type="submit" disabled={pending || Boolean(bookingFormError(modal.asset, form))}>
+            <button type="submit" disabled={pending || Boolean(currentBookingError)}>
               Book asset
             </button>
           </form>
@@ -794,23 +1002,97 @@ export default function AssetClient({ mode }) {
           <form className="assetForm" onSubmit={submitReturn}>
             <p>Enter the borrower return code for {modal.loan.assetName}.</p>
             <input value={form.code} onChange={(event) => setForm({ ...form, code: event.target.value })} required />
-            <label className="assetCheckbox">
-              <input type="checkbox" checked={Boolean(form.damaged)} onChange={(event) => setForm({ ...form, damaged: event.target.checked })} />
-              <span>Returned damaged</span>
+            <fieldset className="assetFieldset">
+              <legend>Returned serials</legend>
+              <div className="returnSerialGrid">
+                {returnItems.map((item, index) => (
+                  <div key={item.unitId} className="returnSerialRow">
+                    <strong>{item.serial}</strong>
+                    <label className="assetCheckbox">
+                      <input
+                        type="checkbox"
+                        checked={item.returned !== false}
+                        onChange={(event) => {
+                          const next = returnItems.map((entry, itemIndex) =>
+                            itemIndex === index ? { ...entry, returned: event.target.checked } : entry,
+                          );
+                          setForm({ ...form, returnItems: next });
+                        }}
+                      />
+                      <span>Returned</span>
+                    </label>
+                    <label className="assetCheckbox">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(item.damaged)}
+                        onChange={(event) => {
+                          const next = returnItems.map((entry, itemIndex) =>
+                            itemIndex === index ? { ...entry, damaged: event.target.checked } : entry,
+                          );
+                          setForm({ ...form, returnItems: next });
+                        }}
+                      />
+                      <span>Damaged</span>
+                    </label>
+                    {item.damaged ? (
+                      <textarea
+                        value={item.damageDescription || ""}
+                        onChange={(event) => {
+                          const next = returnItems.map((entry, itemIndex) =>
+                            itemIndex === index ? { ...entry, damageDescription: event.target.value } : entry,
+                          );
+                          setForm({ ...form, returnItems: next });
+                        }}
+                        placeholder="Damage note for this serial"
+                      />
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </fieldset>
+            {returnReadyError ? <p className="assetErrorInline">{returnReadyError}</p> : null}
+            <label>
+              Return note
+              <textarea value={form.returnNote || ""} onChange={(event) => setForm({ ...form, returnNote: event.target.value })} placeholder="Condition, accessories returned, handover notes..." />
             </label>
-            {form.damaged ? (
-              <>
-                <label>
-                  Damage description
-                  <textarea value={form.damageDescription || ""} onChange={(event) => setForm({ ...form, damageDescription: event.target.value })} />
-                </label>
-                <label>
-                  Damage charge, GBP
-                  <input value={form.damageCharge || ""} onChange={(event) => setForm({ ...form, damageCharge: event.target.value })} placeholder="0.00" />
-                </label>
-              </>
+            <label>
+              Damage charge, GBP. Leave blank or zero for no damage charge.
+              <input value={form.damageCharge || ""} onChange={(event) => setForm({ ...form, damageCharge: event.target.value })} placeholder="0.00" />
+            </label>
+            <label>
+              Discretionary charge, GBP
+              <input value={form.discretionaryCharge || ""} onChange={(event) => setForm({ ...form, discretionaryCharge: event.target.value })} placeholder="0.00" />
+            </label>
+            <label>
+              Discretionary charge description
+              <textarea value={form.discretionaryChargeDescription || ""} onChange={(event) => setForm({ ...form, discretionaryChargeDescription: event.target.value })} placeholder="Missing accessories, cleaning charge, consumables, etc." />
+            </label>
+            <label className="assetCheckbox">
+              <input type="checkbox" checked={Boolean(form.waiveLateFee)} onChange={(event) => setForm({ ...form, waiveLateFee: event.target.checked })} />
+              <span>Waive late fee for this return</span>
+            </label>
+            <label>
+              Return photos
+              <input type="file" accept="image/*" multiple onChange={(event) => addReturnPhotos(event.target.files)} />
+            </label>
+            {form.returnPhotos?.length ? (
+              <div className="returnPhotoGrid">
+                {form.returnPhotos.map((photo, index) => (
+                  <figure key={`${photo.name}-${index}`} className="returnPhotoThumb">
+                    <img src={photo.dataUrl} alt={photo.name || `Return photo ${index + 1}`} />
+                    <figcaption>{photo.name}</figcaption>
+                    <button
+                      type="button"
+                      className="assetDanger"
+                      onClick={() => setForm({ ...form, returnPhotos: form.returnPhotos.filter((_, photoIndex) => photoIndex !== index) })}
+                    >
+                      Remove
+                    </button>
+                  </figure>
+                ))}
+              </div>
             ) : null}
-            <button type="submit" disabled={pending}>
+            <button type="submit" disabled={pending || Boolean(returnReadyError)}>
               Record return
             </button>
           </form>
@@ -1292,7 +1574,75 @@ function InventoryView({ assets, onDamage, onRepair, onDelete }) {
   );
 }
 
-function LoanGantt({ loans = [] }) {
+function loanReturnRows(loan) {
+  const unitsById = new Map((loan?.units || []).map((unit) => [unit.id, unit]));
+  const items = Array.isArray(loan?.returnItems) && loan.returnItems.length
+    ? loan.returnItems
+    : (loan?.unitIds || []).map((unitId) => ({ unitId, returned: loan.status === "returned", damaged: false }));
+
+  return items.map((item, index) => ({
+    ...item,
+    serial: unitsById.get(item.unitId)?.serial || loan?.serials?.[index] || item.unitId,
+  }));
+}
+
+function LoanDetails({ loan }) {
+  const returnRows = loanReturnRows(loan);
+  return (
+    <div className="assetStack">
+      <div className="assetStats">
+        <span>Status: {loan.status}</span>
+        <span>Borrower: {loan.userEmail || loan.userId || "-"}</span>
+        <span>Collection: {formatDate(loan.effectiveCollectionAt || loan.collectionAt)}</span>
+        <span>Return: {formatDate(loan.effectiveReturnAt || loan.returnDueAt)}</span>
+        <span>Collection code: {loan.collectionCode || "-"}</span>
+        <span>Return code: {loan.returnCode || "-"}</span>
+      </div>
+      {loan.collectedEarly ? <StatusBadge tone="amber">Collected early</StatusBadge> : null}
+      {loan.overdue ? <StatusBadge tone="red">Overdue</StatusBadge> : null}
+      <table className="assetTable">
+        <thead>
+          <tr>
+            <th>Serial</th>
+            <th>Returned</th>
+            <th>Damaged</th>
+            <th>Damage note</th>
+          </tr>
+        </thead>
+        <tbody>
+          {returnRows.map((item) => (
+            <tr key={item.unitId}>
+              <td>{item.serial}</td>
+              <td>{item.returned === false ? "No" : "Yes"}</td>
+              <td>{item.damaged ? "Yes" : "No"}</td>
+              <td>{item.damageDescription || "-"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className="assetStats">
+        <span>Late fee: {formatMoney(loan.lateFeePence || 0)}</span>
+        <span>Late fee waived: {loan.lateFeeWaived ? "Yes" : "No"}</span>
+        <span>Damage charge: {formatMoney(loan.damageChargePence || 0)}</span>
+        <span>Discretionary charge: {formatMoney(loan.discretionaryChargePence || 0)}</span>
+      </div>
+      {loan.discretionaryChargeDescription ? <p>{loan.discretionaryChargeDescription}</p> : null}
+      {loan.returnNote ? <p>Return note: {loan.returnNote}</p> : null}
+      {loan.returnPhotos?.length ? (
+        <div className="returnPhotoGrid">
+          {loan.returnPhotos.map((photo, index) => (
+            <figure key={photo.id || `${photo.name}-${index}`} className="returnPhotoThumb">
+              <img src={photo.dataUrl} alt={photo.name || `Return photo ${index + 1}`} />
+              <figcaption>{photo.name || `Return photo ${index + 1}`}</figcaption>
+            </figure>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function LoanGantt({ loans = [], onSelect }) {
   const visible = loans.filter((loan) => ["reserved", "collected", "returned"].includes(loan.status));
   if (!visible.length) return <p className="assetMuted">No active or upcoming loans to chart.</p>;
 
@@ -1322,13 +1672,15 @@ function LoanGantt({ loans = [] }) {
           <div key={loan.id} className="loanGanttRow">
             <span className="loanGanttLabel">{loan.assetName}</span>
             <div className="loanGanttTrack">
-              <span
+              <button
+                type="button"
                 className={`loanGanttBar ${tone}`}
                 style={{ left: `${left}%`, width: `${Math.min(width, 100 - left)}%` }}
                 title={`${loan.assetName}: ${formatDate(start)} to ${formatDate(end)}`}
+                onClick={() => onSelect?.(loan)}
               >
                 {loan.collectedEarly ? "Collected early: " : ""}{loan.userEmail || loan.userId || loan.status}
-              </span>
+              </button>
             </div>
           </div>
         );
@@ -1337,7 +1689,7 @@ function LoanGantt({ loans = [] }) {
   );
 }
 
-function AdminLoansView({ loans, tab, onTab, onCollect, onReturn }) {
+function AdminLoansView({ loans, tab, onTab, onCollect, onReturn, onDetails }) {
   const rows = tab === "active" ? loans.active || [] : loans.upcoming || [];
   return (
     <section className="panel assetStack">
@@ -1352,7 +1704,7 @@ function AdminLoansView({ loans, tab, onTab, onCollect, onReturn }) {
         <button type="button" onClick={() => onTab("active")}>Out of premises</button>
         <button type="button" onClick={() => onTab("timeline")}>Gantt board</button>
       </div>
-      {tab === "timeline" ? <LoanGantt loans={loans.all || [...(loans.upcoming || []), ...(loans.active || [])]} /> : null}
+      {tab === "timeline" ? <LoanGantt loans={loans.all || [...(loans.upcoming || []), ...(loans.active || [])]} onSelect={onDetails} /> : null}
       {tab !== "timeline" ? (
       <table className="assetTable">
         <thead>
@@ -1379,6 +1731,7 @@ function AdminLoansView({ loans, tab, onTab, onCollect, onReturn }) {
               <td>{formatDate(loan.effectiveReturnAt || loan.returnDueAt)}</td>
               <td>{loan.overdue ? <StatusBadge tone="red">Overdue</StatusBadge> : loan.status}</td>
               <td>
+                <button type="button" onClick={() => onDetails?.(loan)}>Details</button>
                 {tab === "upcoming" ? (
                   <button type="button" onClick={() => onCollect(loan)}>Enter collection key</button>
                 ) : (

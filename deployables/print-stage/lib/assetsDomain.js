@@ -2,6 +2,8 @@ import crypto from "node:crypto";
 
 const DEFAULT_LATE_FEE_PENCE = 500;
 const DEFAULT_FAILURE_DAYS = 30;
+const MAX_RETURN_PHOTOS = 6;
+const MAX_RETURN_PHOTO_DATA_URL_BYTES = 2_500_000;
 const DEFAULT_WEEKLY_WINDOWS = [
   { day: 1, start: "09:00", end: "17:00" },
   { day: 2, start: "09:00", end: "17:00" },
@@ -68,6 +70,11 @@ function toRequiredPositiveInteger(value, label) {
   assert(/^[1-9]\d*$/.test(text), `${label} must be a positive whole number.`);
   const parsed = Number.parseInt(text, 10);
   return parsed;
+}
+
+function textOrNull(value, maxLength = 2000) {
+  const text = String(value || "").trim();
+  return text ? text.slice(0, maxLength) : null;
 }
 
 function slug(value) {
@@ -553,7 +560,6 @@ export function deleteUnit(state, assetId, unitId, now = new Date()) {
 
 function availableUnitsForRange(state, asset, start, end, exceptLoanId = null) {
   return normalLoanableUnits(asset).filter((unit) =>
-    !isUnitOutOfPremises(state, unit.id) &&
     !conflictingLoans(state, unit.id, start, end, exceptLoanId).length,
   );
 }
@@ -662,6 +668,43 @@ export function verifyCollectionCode(state, input, now = new Date()) {
   return { state: next, loan };
 }
 
+function normalizeReturnItems(inputItems, loan, legacyDamagedUnitIds, legacyDamaged) {
+  const submitted = Array.isArray(inputItems)
+    ? new Map(inputItems.map((item) => [item?.unitId, item]).filter(([unitId]) => unitId))
+    : new Map();
+
+  return loan.unitIds.map((unitId) => {
+    const item = submitted.get(unitId) || {};
+    const damaged = item.damaged === true || legacyDamaged === true || legacyDamagedUnitIds.has(unitId);
+    return {
+      unitId,
+      returned: item.returned !== false,
+      damaged,
+      damageDescription: textOrNull(item.damageDescription, 1000),
+    };
+  });
+}
+
+function normalizeReturnPhotos(inputPhotos) {
+  const photos = Array.isArray(inputPhotos) ? inputPhotos.slice(0, MAX_RETURN_PHOTOS) : [];
+  return photos.map((photo) => {
+    const name = textOrNull(photo?.name, 200) || "return-photo.jpg";
+    const type = textOrNull(photo?.type, 100) || "image/jpeg";
+    const dataUrl = String(photo?.dataUrl || "");
+    assert(type.startsWith("image/"), "Return photos must be images.");
+    assert(dataUrl.startsWith("data:image/"), "Return photos must be image data URLs.");
+    assert(dataUrl.length <= MAX_RETURN_PHOTO_DATA_URL_BYTES, "Return photos must be 2.5 MB or smaller after compression.");
+    return {
+      id: photo?.id || id("return_photo"),
+      name,
+      type,
+      size: Math.max(0, Math.round(Number(photo?.size || 0))),
+      dataUrl,
+      createdAt: nowIso(),
+    };
+  });
+}
+
 export function verifyReturnCode(state, input, now = new Date()) {
   const next = migrateAssetState(state);
   const loan = findLoan(next, input.loanId);
@@ -669,16 +712,27 @@ export function verifyReturnCode(state, input, now = new Date()) {
   assert(String(input.code || "").trim() === loan.returnCode, "Return code is incorrect.");
   const asset = findAsset(next, loan.assetId);
   const timestamp = nowIso(now);
-  const damagedUnitIds = new Set(input.damagedUnitIds || []);
+  const legacyDamagedUnitIds = new Set(input.damagedUnitIds || []);
+  const returnItems = normalizeReturnItems(input.returnItems, loan, legacyDamagedUnitIds, input.damaged === true);
+  assert(returnItems.every((item) => item.returned), "All loaned serials must be returned before closing the loan.");
+  const damagedUnitIds = new Set(returnItems.filter((item) => item.damaged).map((item) => item.unitId));
   const chargePence = Math.max(0, Math.round(input.damageChargePence || 0));
+  const discretionaryChargePence = toPence(input.discretionaryChargePence ?? input.discretionaryCharge, 0);
+  const discretionaryChargeDescription = textOrNull(input.discretionaryChargeDescription, 500);
+  const overdue = new Date(loan.returnDueAt).getTime() < new Date(now).getTime();
+  const lateFeeWaived = Boolean(input.waiveLateFee);
+  const lateFeePence = overdue && !lateFeeWaived ? (asset.lateFeePence || DEFAULT_LATE_FEE_PENCE) * loan.unitIds.length : 0;
+  const returnPhotos = normalizeReturnPhotos(input.returnPhotos);
+  const damageByUnitId = new Map(returnItems.map((item) => [item.unitId, item]));
 
   for (const unitId of loan.unitIds) {
     const unit = findUnit(asset, unitId);
-    if (damagedUnitIds.has(unitId) || input.damaged === true) {
+    if (damagedUnitIds.has(unitId)) {
+      const returnItem = damageByUnitId.get(unitId) || {};
       unit.condition = "damaged";
       recordUnitHistory(unit, {
         kind: "damage",
-        damageDescription: input.damageDescription || "Marked damaged on return.",
+        damageDescription: returnItem.damageDescription || input.damageDescription || "Marked damaged on return.",
         chargePence,
         chargedUserId: chargePence ? loan.userId : null,
         chargedUserEmail: chargePence ? loan.userEmail : null,
@@ -702,10 +756,47 @@ export function verifyReturnCode(state, input, now = new Date()) {
     });
   }
 
+  if (lateFeePence) {
+    addDebt(next, {
+      userId: loan.userId,
+      userEmail: loan.userEmail,
+      amountPence: lateFeePence,
+      reason: "Late fee",
+      description: `Late return fee for ${asset.name}`,
+      transactionType: "late_fee",
+      assetId: asset.id,
+      unitIds: loan.unitIds,
+      loanId: loan.id,
+      createdAt: timestamp,
+    });
+  }
+
+  if (discretionaryChargePence) {
+    addDebt(next, {
+      userId: loan.userId,
+      userEmail: loan.userEmail,
+      amountPence: discretionaryChargePence,
+      reason: "Discretionary return charge",
+      description: discretionaryChargeDescription || `Discretionary return charge for ${asset.name}`,
+      transactionType: "asset_discretionary",
+      assetId: asset.id,
+      unitIds: loan.unitIds,
+      loanId: loan.id,
+      createdAt: timestamp,
+    });
+  }
+
   loan.status = "returned";
   loan.returnedAt = timestamp;
   loan.returnVerifiedBy = input.adminId || null;
+  loan.returnNote = textOrNull(input.returnNote, 2000);
+  loan.returnItems = returnItems;
+  loan.returnPhotos = returnPhotos;
+  loan.lateFeeWaived = lateFeeWaived;
+  loan.lateFeePence = lateFeePence;
   loan.damageChargePence = chargePence;
+  loan.discretionaryChargePence = discretionaryChargePence;
+  loan.discretionaryChargeDescription = discretionaryChargeDescription;
   loan.updatedAt = timestamp;
   next.updatedAt = timestamp;
   return { state: next, loan };
@@ -1186,6 +1277,7 @@ function describeTransaction(state, transaction) {
     recovered_damage: `Recovered asset damage charge for ${assetName}`,
     damage_refund: `Damage repair refund for ${assetName}`,
     late_fee: `Late fee for ${assetName}`,
+    asset_discretionary: `Discretionary return charge for ${assetName}`,
     manual_refund: "Manual refund",
     manual_surcharge: "Manual surcharge",
     print_payment: `3D print payment: ${printName}`,

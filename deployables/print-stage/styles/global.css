@@ -364,23 +364,64 @@ select {
   display: flex;
   align-items: center;
   overflow: hidden;
+  border: 0;
   border-radius: 999px;
   padding: 0 0.65rem;
   color: #171b1f;
   font-size: 0.78rem;
+  font-weight: 800;
   white-space: nowrap;
+  cursor: pointer;
+  text-align: left;
 }
 
-.loanGanttActive {
+.loanGanttBar.loanGanttActive {
   background: #ffc857;
 }
 
-.loanGanttUpcoming {
+.loanGanttBar.loanGanttUpcoming {
   background: #88d498;
 }
 
-.loanGanttReturned {
+.loanGanttBar.loanGanttReturned {
   background: #c4ced8;
+}
+
+.returnSerialGrid {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.returnSerialRow {
+  display: grid;
+  grid-template-columns: minmax(8rem, 1fr) auto auto;
+  gap: 0.6rem;
+  align-items: start;
+  border-top: 1px solid rgba(23, 27, 31, 0.1);
+  padding-top: 0.65rem;
+}
+
+.returnSerialRow textarea {
+  grid-column: 1 / -1;
+}
+
+.returnPhotoGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+  gap: 0.75rem;
+}
+
+.returnPhotoThumb {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+}
+
+.returnPhotoThumb img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border: 1px solid rgba(23, 27, 31, 0.14);
 }
 
 .assetForm textarea {
