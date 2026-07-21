@@ -14,14 +14,19 @@ import {
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
-import { recordPrintPaymentTransaction } from "./assetsDomain.js";
+import {
+  recordPrintFilamentAdjustmentTransaction,
+  recordPrintPaymentTransaction,
+} from "./assetsDomain.js";
 import { updateAssetState } from "./assetsStore.js";
+import { listDiscounts, selectBestDiscountForGroups } from "./discountStore.js";
 import { env, parseCsv } from "./env.js";
 import { recordFilamentUsageForPrint } from "./filamentLedger.js";
+import { getPersonByEmail } from "./keycloakAdmin.js";
 import { extractOrca3mfMetadataFromBuffer } from "./orca3mf";
 import { inspect3mfPackageFromBuffer } from "./orca3mfPackage";
 import { sliceModelTo3mf } from "./orcaSlicer";
-import { computePrintPriceQuote } from "./printPricing.js";
+import { computePrintPriceForBreakdown, computePrintPriceQuote } from "./printPricing.js";
 import {
   FILAMENT_EXTRACT_VALUE,
   getPrintEligibility,
@@ -142,16 +147,49 @@ function hasQueueArtifact(manifest) {
 }
 
 function decorateManifest(manifest) {
+  const quoteDiscount = manifest.paymentQuoteAtCheckout?.discount || manifest.paymentDiscount || null;
   return {
     ...manifest,
     paymentStatus: manifest.paymentStatus ?? "unpaid",
-    paymentQuote: computePrintPriceQuote(manifest),
+    paymentQuote: computePrintPriceQuote(manifest, quoteDiscount),
+    paymentQuoteAtCheckout: manifest.paymentQuoteAtCheckout ?? null,
+    paymentDiscount: manifest.paymentDiscount ?? null,
     paymentSessionId: manifest.paymentSessionId ?? null,
     paymentIntentId: manifest.paymentIntentId ?? null,
     paymentAmountTotalMinor: manifest.paymentAmountTotalMinor ?? null,
     paymentCurrency: manifest.paymentCurrency ?? null,
     paidAt: manifest.paidAt ?? null,
   };
+}
+
+export async function getPrintDiscountForActor(actor) {
+  if (!actor?.email) {
+    return null;
+  }
+
+  try {
+    const discountState = await listDiscounts();
+    const activeDiscounts = (discountState.discounts || []).filter((discount) => discount?.active !== false);
+    if (!activeDiscounts.length) {
+      return null;
+    }
+    const person = await getPersonByEmail(actor.email);
+    return selectBestDiscountForGroups(activeDiscounts, person.groups || []);
+  } catch {
+    return null;
+  }
+}
+
+function applyPrintDiscount(files, discount) {
+  if (!discount) {
+    return files;
+  }
+
+  return files.map((file) => ({
+    ...file,
+    paymentDiscount: file.paymentDiscount || discount,
+    paymentQuote: computePrintPriceQuote(file, file.paymentDiscount || discount),
+  }));
 }
 
 function assertAllowedFile(request) {
@@ -304,11 +342,20 @@ async function hydrateManifest(manifest) {
     gcodeObjectKey: manifest.gcodeObjectKey ?? null,
     gcodeFilename: manifest.gcodeFilename ?? null,
     paymentStatus: manifest.paymentStatus ?? "unpaid",
+    paymentQuoteAtCheckout: manifest.paymentQuoteAtCheckout ?? null,
+    paymentDiscount: manifest.paymentDiscount ?? null,
     paymentSessionId: manifest.paymentSessionId ?? null,
     paymentIntentId: manifest.paymentIntentId ?? null,
     paymentAmountTotalMinor: manifest.paymentAmountTotalMinor ?? null,
     paymentCurrency: manifest.paymentCurrency ?? null,
     paidAt: manifest.paidAt ?? null,
+    printCompletedAt: manifest.printCompletedAt ?? null,
+    actualFilamentGrams: manifest.actualFilamentGrams ?? null,
+    actualFilamentBreakdown: Array.isArray(manifest.actualFilamentBreakdown)
+      ? manifest.actualFilamentBreakdown
+      : [],
+    printCompletionAdjustmentMinor: manifest.printCompletionAdjustmentMinor ?? null,
+    printCompletionAdjustmentTransactionId: manifest.printCompletionAdjustmentTransactionId ?? null,
   };
 
   if (
@@ -656,7 +703,7 @@ export async function listFiles(actor, options = {}) {
   const limit = Math.min(Math.max(options.limit ?? DEFAULT_PAGE_SIZE, 1), 100);
   const offset = decodeCursor(options.cursor);
   const { manifests, totalKeys } = await listManifestFiles(ownerSub, limit, offset);
-  const files = await Promise.all(manifests.map(hydrateManifest));
+  const files = applyPrintDiscount(await Promise.all(manifests.map(hydrateManifest)), await getPrintDiscountForActor(actor));
   const usedBytes = await computeUsedBytes(ownerSub);
   const uploadLimitBytes = ownerSub === actor.sub ? actor.uploadLimitBytes : null;
 
@@ -818,7 +865,7 @@ export async function getFileForActor(actor, fileId) {
   return hydrateManifest(manifest);
 }
 
-export async function markPaymentSessionPending(actor, fileId, paymentSession) {
+export async function markPaymentSessionPending(actor, fileId, paymentSession, quote = null) {
   const manifest = await readManifest(fileId);
 
   if (!manifest) {
@@ -836,6 +883,8 @@ export async function markPaymentSessionPending(actor, fileId, paymentSession) {
     paymentIntentId: typeof paymentSession.payment_intent === "string" ? paymentSession.payment_intent : null,
     paymentAmountTotalMinor: paymentSession.amount_total ?? null,
     paymentCurrency: paymentSession.currency ?? null,
+    paymentQuoteAtCheckout: quote ?? manifest.paymentQuoteAtCheckout ?? null,
+    paymentDiscount: quote?.discount ?? manifest.paymentDiscount ?? null,
     paidAt: null,
     updatedAt: new Date().toISOString(),
   };
@@ -981,6 +1030,135 @@ export async function cancelPrint(actor, fileId) {
 
   await writeManifest(updated);
   return hydrateManifest(updated);
+}
+
+function getExpectedFilamentGrams(manifest, quote = null) {
+  if (quote?.totalGrams && Number.isFinite(Number(quote.totalGrams))) {
+    return Number(quote.totalGrams);
+  }
+  if (typeof manifest?.extractedGrams === "number" && Number.isFinite(manifest.extractedGrams)) {
+    return manifest.extractedGrams;
+  }
+  if (Array.isArray(manifest?.extractedFilamentBreakdown)) {
+    const total = manifest.extractedFilamentBreakdown.reduce((sum, item) => sum + (Number(item.grams) || 0), 0);
+    return total > 0 ? total : null;
+  }
+  return null;
+}
+
+function buildActualFilamentBreakdown(manifest, actualGrams) {
+  const expectedBreakdown = Array.isArray(manifest?.extractedFilamentBreakdown) && manifest.extractedFilamentBreakdown.length
+    ? manifest.extractedFilamentBreakdown
+    : [{
+        filamentType: manifest?.extractedFilamentType || manifest?.filamentSelection || "Unknown",
+        grams: getExpectedFilamentGrams(manifest) || actualGrams,
+      }];
+  const expectedTotal = expectedBreakdown.reduce((sum, item) => sum + (Number(item.grams) || 0), 0);
+
+  if (!expectedTotal || expectedTotal <= 0) {
+    return [{
+      filamentType: manifest?.extractedFilamentType || manifest?.filamentSelection || "Unknown",
+      grams: actualGrams,
+    }];
+  }
+
+  let allocated = 0;
+  return expectedBreakdown.map((item, index) => {
+    const grams = index === expectedBreakdown.length - 1
+      ? Math.max(0, actualGrams - allocated)
+      : Math.max(0, (actualGrams * (Number(item.grams) || 0)) / expectedTotal);
+    allocated += grams;
+    return {
+      filamentType: item.filamentType || manifest?.extractedFilamentType || manifest?.filamentSelection || "Unknown",
+      grams,
+    };
+  }).filter((item) => item.grams > 0);
+}
+
+export async function completePrintedFile(fileId, updates = {}) {
+  const manifest = await readManifest(fileId);
+
+  if (!manifest) {
+    throw new Error("File not found.");
+  }
+
+  const printState = getPrintState(manifest);
+  if (printState !== "queued" && printState !== "printing") {
+    throw new Error("File is not queued or printing.");
+  }
+
+  const expectedQuote = manifest.paymentQuoteAtCheckout ||
+    computePrintPriceQuote(manifest, manifest.paymentDiscount || null);
+  const expectedGrams = getExpectedFilamentGrams(manifest, expectedQuote);
+  const actualGrams = Number(updates.actualGrams ?? expectedGrams);
+
+  if (!Number.isFinite(actualGrams) || actualGrams <= 0) {
+    throw new Error("Actual filament grams must be greater than zero.");
+  }
+
+  const actualBreakdown = buildActualFilamentBreakdown(manifest, actualGrams);
+  const actualQuote = computePrintPriceForBreakdown(actualBreakdown, expectedQuote?.discount || manifest.paymentDiscount || null);
+  const expectedMinor = Number.isFinite(Number(manifest.paymentAmountTotalMinor))
+    ? Number(manifest.paymentAmountTotalMinor)
+    : Number(expectedQuote?.totalMinor || 0);
+  const actualMinor = Number(actualQuote?.totalMinor || 0);
+  const deltaMinor = actualQuote ? actualMinor - expectedMinor : 0;
+
+  let adjustmentTransaction = null;
+  if (deltaMinor !== 0) {
+    const adjustment = await updateAssetState((state) =>
+      recordPrintFilamentAdjustmentTransaction(state, {
+        fileId: manifest.id,
+        userId: manifest.ownerSub,
+        userEmail: manifest.ownerEmail,
+        amountPence: deltaMinor,
+        printName: manifest.originalFilename,
+        createdByAdminId: updates.completedById || null,
+        createdByAdminEmail: updates.completedByEmail || null,
+        description: `${deltaMinor > 0 ? "Extra" : "Reduced"} filament usage for ${manifest.originalFilename}: expected ${(expectedGrams || 0).toFixed(2)} g, actual ${actualGrams.toFixed(2)} g`,
+      }),
+    );
+    adjustmentTransaction = adjustment.transaction || null;
+  }
+
+  await deleteQueueCopyIfPresent(manifest);
+
+  const updated = {
+    ...manifest,
+    printStatus: "completed",
+    printCompletedAt: new Date().toISOString(),
+    actualFilamentGrams: actualGrams,
+    actualFilamentBreakdown: actualBreakdown,
+    printCompletionSource: updates.source || "manual",
+    printCompletionAdjustmentMinor: deltaMinor,
+    printCompletionAdjustmentTransactionId: adjustmentTransaction?.id || null,
+    printQueueObjectKey: null,
+    updatedAt: new Date().toISOString(),
+  };
+
+  await writeManifest(updated);
+  await recordFilamentUsageForPrint(updated, updates.source || "manual", { breakdown: actualBreakdown });
+
+  return {
+    file: await hydrateManifest(updated),
+    expectedGrams,
+    actualGrams,
+    expectedMinor,
+    actualMinor,
+    deltaMinor,
+    adjustmentTransaction,
+  };
+}
+
+export async function markPrintSuccessful(actor, fileId, updates = {}) {
+  if (!canManagePrintQueue(actor)) {
+    throw new Error("Forbidden");
+  }
+  return completePrintedFile(fileId, {
+    ...updates,
+    completedById: actor?.sub || null,
+    completedByEmail: actor?.email || null,
+  });
 }
 
 export async function listPrintQueue(actor) {

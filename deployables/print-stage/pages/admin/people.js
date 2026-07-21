@@ -366,6 +366,9 @@ export default function PeopleAdminPage({ manageableRoles, initialRoleOptions })
             <button type="button" onClick={() => openGroupModal()} style={{ marginLeft: "0.75rem" }}>
               Create people group
             </button>
+            <button type="button" onClick={() => router.push("/admin/discounts")} style={{ marginLeft: "0.75rem" }}>
+              Group print discounts
+            </button>
           </div>
         </section>
 

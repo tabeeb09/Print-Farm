@@ -27,27 +27,31 @@ function roundMinorAmount(value) {
   return Math.max(0, Math.round(value));
 }
 
+function normalizeDiscount(discount) {
+  if (!discount || typeof discount !== "object") {
+    return null;
+  }
+
+  const percentOff = Math.max(0, Math.min(100, Number(discount.percentOff) || 0));
+  if (percentOff <= 0) {
+    return null;
+  }
+
+  return {
+    id: discount.id || null,
+    groupId: discount.groupId || null,
+    groupName: discount.groupName || null,
+    description: discount.description || "",
+    percentOff,
+  };
+}
+
 export function getFilamentRate(filamentType) {
   const normalized = normalizeFilamentType(filamentType);
   return normalized ? { filamentType: normalized, ...FILAMENT_RATE_TABLE[normalized] } : null;
 }
 
-export function computePrintPriceQuote(file) {
-  const breakdown = Array.isArray(file?.extractedFilamentBreakdown)
-    ? file.extractedFilamentBreakdown
-    : [];
-  const fallbackType = normalizeFilamentType(file?.extractedFilamentType);
-  const fallbackGrams =
-    typeof file?.extractedGrams === "number" && Number.isFinite(file.extractedGrams)
-      ? file.extractedGrams
-      : null;
-
-  const effectiveBreakdown = breakdown.length
-    ? breakdown
-    : fallbackType && fallbackGrams !== null && fallbackGrams > 0
-      ? [{ filamentType: fallbackType, grams: fallbackGrams }]
-      : [];
-
+export function computePrintPriceForBreakdown(effectiveBreakdown, discount = null) {
   if (!effectiveBreakdown.length) {
     return null;
   }
@@ -81,12 +85,53 @@ export function computePrintPriceQuote(file) {
   const currency = normalizedBreakdown[0].currency;
   const subtotalMinor = normalizedBreakdown.reduce((total, entry) => total + entry.amountMinor, 0);
   const totalGrams = normalizedBreakdown.reduce((total, entry) => total + entry.grams, 0);
+  const normalizedDiscount = normalizeDiscount(discount);
+  const rawDiscountMinor = normalizedDiscount
+    ? roundMinorAmount((subtotalMinor * normalizedDiscount.percentOff) / 100)
+    : 0;
+  const discountMinor = Math.min(subtotalMinor, rawDiscountMinor);
+  let allocatedDiscountMinor = 0;
+  const lineItems = normalizedBreakdown.map((entry, index) => {
+    const entryDiscountMinor = discountMinor > 0
+      ? index === normalizedBreakdown.length - 1
+        ? discountMinor - allocatedDiscountMinor
+        : Math.min(entry.amountMinor, roundMinorAmount((discountMinor * entry.amountMinor) / subtotalMinor))
+      : 0;
+    allocatedDiscountMinor += entryDiscountMinor;
+    return {
+      ...entry,
+      discountMinor: entryDiscountMinor,
+      chargeAmountMinor: Math.max(0, entry.amountMinor - entryDiscountMinor),
+    };
+  });
+  const totalMinor = lineItems.reduce((total, entry) => total + entry.chargeAmountMinor, 0);
 
   return {
     currency,
-    lineItems: normalizedBreakdown,
+    lineItems,
     subtotalMinor,
-    totalMinor: subtotalMinor,
+    discountMinor,
+    discount: discountMinor > 0 ? { ...normalizedDiscount, amountMinor: discountMinor } : null,
+    totalMinor,
     totalGrams,
   };
+}
+
+export function computePrintPriceQuote(file, discount = null) {
+  const breakdown = Array.isArray(file?.extractedFilamentBreakdown)
+    ? file.extractedFilamentBreakdown
+    : [];
+  const fallbackType = normalizeFilamentType(file?.extractedFilamentType);
+  const fallbackGrams =
+    typeof file?.extractedGrams === "number" && Number.isFinite(file.extractedGrams)
+      ? file.extractedGrams
+      : null;
+
+  const effectiveBreakdown = breakdown.length
+    ? breakdown
+    : fallbackType && fallbackGrams !== null && fallbackGrams > 0
+      ? [{ filamentType: fallbackType, grams: fallbackGrams }]
+      : [];
+
+  return computePrintPriceForBreakdown(effectiveBreakdown, discount);
 }

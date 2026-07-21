@@ -38,6 +38,15 @@ export default function Home() {
             visible from a single panel.
           </p>
         </a>
+
+        <a href="/admin/audit" className={styles.card}>
+          <p className={styles.eyebrow}>Audit</p>
+          <h3>Review action logs</h3>
+          <p>
+            Admins can inspect recent protected actions across queue operations, filament stock,
+            discounts, people permissions, and asset loans.
+          </p>
+        </a>
       </section>
     </SiteShell>
   );

@@ -101,6 +101,12 @@ function PaymentModal({ file, onClose, onContinue, loading }) {
             <span>Total grams</span>
             <strong>{quote.totalGrams.toFixed(2)} g</strong>
           </div>
+          {quote.discount ? (
+            <div style={{ display: "flex", justifyContent: "space-between", color: "#2d6a4f" }}>
+              <span>{quote.discount.groupName || "Group"} discount ({quote.discount.percentOff}%)</span>
+              <strong>-{formatCurrency(quote.discount.amountMinor, quote.currency)}</strong>
+            </div>
+          ) : null}
           <div style={{ display: "flex", justifyContent: "space-between" }}>
             <span>Total</span>
             <strong>{formatCurrency(quote.totalMinor, quote.currency)}</strong>
@@ -546,6 +552,11 @@ export default function FileManager() {
                         ) : null}
                         {quote ? (
                           <small style={{ color: "#555" }}>Price: {formatCurrency(quote.totalMinor, quote.currency)}</small>
+                        ) : null}
+                        {quote?.discount ? (
+                          <small style={{ color: "#2d6a4f" }}>
+                            {quote.discount.percentOff}% group discount applied
+                          </small>
                         ) : null}
                         {file.paymentStatus === "paid" ? (
                           <small style={{ color: "#2d6a4f" }}>Payment received</small>

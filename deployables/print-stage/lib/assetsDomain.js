@@ -1071,6 +1071,40 @@ export function recordPrintPaymentTransaction(state, input, now = new Date()) {
   return { state: next, transaction };
 }
 
+export function recordPrintFilamentAdjustmentTransaction(state, input, now = new Date()) {
+  const next = migrateAssetState(state);
+  const userId = input.userId || input.ownerSub || null;
+  const userEmail = String(input.userEmail || "").trim() || null;
+  assert(userId || userEmail, "A print adjustment owner is required.");
+
+  const amountPence = Math.round(Number(input.amountPence || input.deltaMinor || 0));
+  if (!Number.isFinite(amountPence) || amountPence === 0) {
+    return { state: next, transaction: null };
+  }
+
+  const printName = String(input.printName || input.filename || input.originalFilename || input.fileId || "3D print").trim();
+  const fileId = String(input.fileId || "").trim();
+  const timestamp = nowIso(now);
+  const isRefund = amountPence < 0;
+  const transaction = addDebt(next, {
+    id: fileId ? `print_filament_adjustment_${fileId}` : undefined,
+    userId,
+    userEmail,
+    amountPence,
+    reason: isRefund ? "3D print filament refund" : "3D print filament surcharge",
+    description: input.description || `${isRefund ? "Filament refund" : "Filament surcharge"} for ${printName}`,
+    transactionType: isRefund ? "print_filament_refund" : "print_filament_surcharge",
+    fileId,
+    printName,
+    createdByAdminId: input.createdByAdminId || null,
+    createdByAdminEmail: input.createdByAdminEmail || null,
+    createdAt: timestamp,
+  });
+
+  next.updatedAt = timestamp;
+  return { state: next, transaction };
+}
+
 function nextAvailability(asset, state, now = new Date()) {
   const start = new Date(now);
   for (let dayOffset = 0; dayOffset < 90; dayOffset += 1) {
@@ -1282,6 +1316,8 @@ function describeTransaction(state, transaction) {
     manual_surcharge: "Manual surcharge",
     print_payment: `3D print payment: ${printName}`,
     print_refund: `3D print refund: ${printName}`,
+    print_filament_surcharge: `3D print filament surcharge: ${printName}`,
+    print_filament_refund: `3D print filament refund: ${printName}`,
   };
 
   return descriptions[transaction.transactionType] || transaction.reason || "Account transaction";

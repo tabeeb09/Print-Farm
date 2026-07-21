@@ -2,8 +2,14 @@ import { getServerSession } from "next-auth/next";
 
 import { authOptions } from "../../../../lib/authOptions";
 import { env } from "../../../../lib/env";
+import { recordAuditEvent } from "../../../../lib/auditLog";
 import { toFileActor } from "../../../../lib/auth";
-import { getFileForActor, markPaymentSessionPending } from "../../../../lib/s3Files";
+import {
+  getFileForActor,
+  getPrintDiscountForActor,
+  markPaymentSessionPending,
+} from "../../../../lib/s3Files";
+import { computePrintPriceQuote } from "../../../../lib/printPricing";
 import { getStripe, isStripeConfigured } from "../../../../lib/stripeServer.js";
 
 function getBaseUrl() {
@@ -33,8 +39,15 @@ export default async function handler(req, res) {
       return res.status(200).json({ alreadyPaid: true, file });
     }
 
-    if (!file.paymentQuote?.lineItems?.length) {
+    const discount = await getPrintDiscountForActor(actor);
+    const paymentQuote = computePrintPriceQuote(file, discount);
+
+    if (!paymentQuote?.lineItems?.length) {
       throw new Error("A payment quote is not available for this file yet.");
+    }
+
+    if (paymentQuote.totalMinor <= 0) {
+      throw new Error("Zero-cost print checkout is not supported yet. Ask an admin to apply a manual credit instead.");
     }
 
     const baseUrl = getBaseUrl();
@@ -57,11 +70,13 @@ export default async function handler(req, res) {
           originalFilename: file.originalFilename,
         },
       },
-      line_items: file.paymentQuote.lineItems.map((lineItem) => ({
+      line_items: paymentQuote.lineItems
+        .filter((lineItem) => (lineItem.chargeAmountMinor ?? lineItem.amountMinor) > 0)
+        .map((lineItem) => ({
         quantity: 1,
         price_data: {
           currency: lineItem.currency,
-          unit_amount: lineItem.amountMinor,
+          unit_amount: lineItem.chargeAmountMinor ?? lineItem.amountMinor,
           product_data: {
             name: `${lineItem.label} filament`,
             description: `${lineItem.grams.toFixed(2)} g @ ${(lineItem.unitAmountMinorPerGram / 100).toFixed(2)} ${lineItem.currency.toUpperCase()}/g`,
@@ -70,7 +85,18 @@ export default async function handler(req, res) {
       })),
     });
 
-    await markPaymentSessionPending(actor, file.id, checkoutSession);
+    await markPaymentSessionPending(actor, file.id, checkoutSession, paymentQuote);
+    await recordAuditEvent(actor, {
+      action: "print.checkout.start",
+      targetType: "printFile",
+      targetId: file.id,
+      metadata: {
+        originalFilename: file.originalFilename,
+        totalMinor: paymentQuote.totalMinor,
+        discount: paymentQuote.discount,
+        sessionId: checkoutSession.id,
+      },
+    });
 
     return res.status(200).json({
       checkoutUrl: checkoutSession.url,

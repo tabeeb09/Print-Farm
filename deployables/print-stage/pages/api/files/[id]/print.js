@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth/next";
 
 import { authOptions } from "../../../../lib/authOptions";
+import { recordAuditEvent } from "../../../../lib/auditLog";
 import { cancelPrint, requestPrint } from "../../../../lib/s3Files";
 import { toFileActor } from "../../../../lib/auth";
 
@@ -21,6 +22,15 @@ export default async function handler(req, res) {
       req.method === "POST"
         ? await requestPrint(actor, req.query.id)
         : await cancelPrint(actor, req.query.id);
+    await recordAuditEvent(actor, {
+      action: req.method === "POST" ? "print.request" : "print.cancel",
+      targetType: "printFile",
+      targetId: result.id,
+      metadata: {
+        originalFilename: result.originalFilename,
+        printStatus: result.printStatus,
+      },
+    });
     return res.status(200).json({ file: result });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Print queue update failed.";

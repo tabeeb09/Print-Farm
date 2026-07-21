@@ -1,5 +1,6 @@
 ﻿import Head from "next/head";
 import { getServerSession } from "next-auth/next";
+import { useState } from "react";
 
 import SiteShell from "../components/SiteShell";
 import { authOptions } from "../lib/authOptions";
@@ -33,7 +34,33 @@ function formatDate(value) {
   }).format(new Date(value));
 }
 
+function formatCurrency(minor, currency) {
+  if (typeof minor !== "number" || Number.isNaN(minor)) {
+    return "—";
+  }
+
+  return new Intl.NumberFormat("en-GB", {
+    style: "currency",
+    currency: (currency || "gbp").toUpperCase(),
+  }).format(minor / 100);
+}
+
+function expectedGramsForFile(file) {
+  if (typeof file.paymentQuote?.totalGrams === "number") return file.paymentQuote.totalGrams;
+  if (typeof file.extractedGrams === "number") return file.extractedGrams;
+  if (Array.isArray(file.extractedFilamentBreakdown)) {
+    const total = file.extractedFilamentBreakdown.reduce((sum, entry) => sum + (Number(entry.grams) || 0), 0);
+    return total > 0 ? total : null;
+  }
+  return null;
+}
+
 export default function PrintQueuePage({ files }) {
+  const [completionTarget, setCompletionTarget] = useState(null);
+  const [actualGrams, setActualGrams] = useState("");
+  const [completionPending, setCompletionPending] = useState(false);
+  const [completionError, setCompletionError] = useState("");
+
   async function markNextAsPrinting() {
     const response = await fetch("/api/print-queue", { method: "POST" });
     const payload = await response.json();
@@ -48,6 +75,41 @@ export default function PrintQueuePage({ files }) {
 
   function downloadQueueArtifact(fileId) {
     window.location.assign(`/api/print-queue/${encodeURIComponent(fileId)}/download`);
+  }
+
+  function openCompletionModal(file) {
+    const expectedGrams = expectedGramsForFile(file);
+    setCompletionTarget(file);
+    setActualGrams(expectedGrams !== null ? expectedGrams.toFixed(2) : "");
+    setCompletionError("");
+  }
+
+  async function completePrint(event) {
+    event.preventDefault();
+    if (!completionTarget) return;
+
+    setCompletionPending(true);
+    setCompletionError("");
+
+    try {
+      const response = await fetch(`/api/print-queue/${encodeURIComponent(completionTarget.id)}/complete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ actualGrams }),
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload.error || "Failed to complete print.");
+      }
+
+      setCompletionTarget(null);
+      window.location.reload();
+    } catch (error) {
+      setCompletionError(error instanceof Error ? error.message : "Failed to complete print.");
+    } finally {
+      setCompletionPending(false);
+    }
   }
 
   return (
@@ -81,7 +143,7 @@ export default function PrintQueuePage({ files }) {
                 <th style={{ textAlign: "left", padding: "0.5rem 0" }}>Size</th>
                 <th style={{ textAlign: "left", padding: "0.5rem 0" }}>Mass</th>
                 <th style={{ textAlign: "left", padding: "0.5rem 0" }}>Print state</th>
-                <th style={{ textAlign: "left", padding: "0.5rem 0" }}>Download</th>
+                <th style={{ textAlign: "left", padding: "0.5rem 0" }}>Actions</th>
                 <th style={{ textAlign: "left", padding: "0.5rem 0" }}>Requested</th>
                 <th style={{ textAlign: "left", padding: "0.5rem 0" }}>Started</th>
               </tr>
@@ -105,9 +167,12 @@ export default function PrintQueuePage({ files }) {
                     <td style={{ padding: "0.65rem 0", textTransform: "capitalize" }}>
                       {file.printStatus}
                     </td>
-                    <td style={{ padding: "0.65rem 0" }}>
+                    <td style={{ padding: "0.65rem 0", display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
                       <button type="button" onClick={() => downloadQueueArtifact(file.id)}>
                         Download Gcode.3MF
+                      </button>
+                      <button type="button" onClick={() => openCompletionModal(file)}>
+                        Manual print successful
                       </button>
                     </td>
                     <td style={{ padding: "0.65rem 0" }}>{formatDate(file.printRequestedAt)}</td>
@@ -125,6 +190,55 @@ export default function PrintQueuePage({ files }) {
           </table>
         </section>
       </div>
+
+      {completionTarget ? (
+        <div className="assetModalBackdrop">
+          <section className="assetModal" role="dialog" aria-modal="true" aria-label="Complete print">
+            <div className="assetModalHeader">
+              <div>
+                <h2 style={{ margin: 0 }}>Manual print successful</h2>
+                <p className="assetMuted" style={{ marginBottom: 0 }}>{completionTarget.originalFilename}</p>
+              </div>
+              <button type="button" onClick={() => setCompletionTarget(null)} disabled={completionPending}>
+                Close
+              </button>
+            </div>
+            <form className="assetForm" onSubmit={completePrint}>
+              <p className="assetMuted">
+                Calculated usage defaults to{" "}
+                <strong>{expectedGramsForFile(completionTarget)?.toFixed(2) || "unknown"} g</strong>.
+                If final usage differs, the user balance receives a surcharge or refund credit.
+              </p>
+              <label>
+                Final filament grams used
+                <input
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  value={actualGrams}
+                  onChange={(event) => setActualGrams(event.target.value)}
+                  required
+                />
+              </label>
+              {completionTarget.paymentQuote ? (
+                <p className="assetMuted">
+                  Paid quote: {formatCurrency(completionTarget.paymentQuote.totalMinor, completionTarget.paymentQuote.currency)}
+                  {completionTarget.paymentQuote.discount ? ` after ${completionTarget.paymentQuote.discount.percentOff}% group discount` : ""}
+                </p>
+              ) : null}
+              {completionError ? <p style={{ color: "#a40000", margin: 0 }}>{completionError}</p> : null}
+              <div style={{ display: "flex", gap: "0.75rem", justifyContent: "flex-end" }}>
+                <button type="button" onClick={() => setCompletionTarget(null)} disabled={completionPending}>
+                  Cancel
+                </button>
+                <button type="submit" disabled={completionPending}>
+                  {completionPending ? "Completing..." : "Accept completion"}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      ) : null}
     </SiteShell>
   );
 }

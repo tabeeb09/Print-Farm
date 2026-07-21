@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth/next";
 import { z } from "zod";
 
 import { authOptions } from "../../../lib/authOptions";
+import { recordAuditEvent } from "../../../lib/auditLog";
 import { toFileActor } from "../../../lib/auth";
 import { createUploadUrl } from "../../../lib/s3Files";
 
@@ -28,6 +29,16 @@ export default async function handler(req, res) {
   try {
     const body = requestSchema.parse(req.body);
     const result = await createUploadUrl(actor, body);
+    await recordAuditEvent(actor, {
+      action: "print.uploadUrl.create",
+      targetType: "printFile",
+      targetId: result.file?.id,
+      metadata: {
+        filename: body.filename,
+        sizeBytes: body.sizeBytes,
+        filamentSelection: body.filamentSelection,
+      },
+    });
     return res.status(200).json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to create upload URL.";

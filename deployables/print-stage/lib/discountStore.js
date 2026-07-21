@@ -19,6 +19,25 @@ export async function listDiscounts() {
   return readJsonFile(DISCOUNT_PATH, { discounts: [] });
 }
 
+export function selectBestDiscountForGroups(discounts, groups = []) {
+  const groupIds = new Set((groups || []).map((group) => String(group?.id || "").trim()).filter(Boolean));
+  const groupNames = new Set(
+    (groups || [])
+      .flatMap((group) => [group?.name, group?.path])
+      .map((value) => String(value || "").replace(/^\//, "").trim().toLowerCase())
+      .filter(Boolean),
+  );
+
+  return (discounts || [])
+    .filter((discount) => discount?.active !== false)
+    .filter((discount) => {
+      const groupId = String(discount.groupId || "").trim();
+      const groupName = String(discount.groupName || "").replace(/^\//, "").trim().toLowerCase();
+      return (groupId && groupIds.has(groupId)) || (groupName && groupNames.has(groupName));
+    })
+    .sort((left, right) => Number(right.percentOff || 0) - Number(left.percentOff || 0))[0] || null;
+}
+
 export async function saveDiscount(input) {
   const state = await listDiscounts();
   const nextDiscount = normalizeDiscount(input);

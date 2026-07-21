@@ -20,7 +20,7 @@ export default async function handler(req, res) {
   try {
     if (req.method === "GET") {
       const [discountState, groupState] = await Promise.all([listDiscounts(), listPeopleGroupsForActor(actor)]);
-      return res.status(200).json({ ...discountState, groups: groupState.groups || [] });
+      return res.status(200).json({ ...discountState, groups: Array.isArray(groupState) ? groupState : groupState.groups || [] });
     }
     if (req.method === "POST") {
       const result = await saveDiscount(req.body || {});
