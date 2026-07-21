@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_ROOT="${REPO_ROOT:-/srv/website/app}"
+PRINT_REPO_URL="${PRINT_REPO_URL:-https://github.com/tabeeb09/Print-Farm.git}"
+PRINT_REPO_REF="${PRINT_REPO_REF:-main}"
+REPO_ROOT="${REPO_ROOT:-/srv/print/repo}"
 PRINT_DEPLOY_PATH="${PRINT_DEPLOY_PATH:-/srv/print/app}"
 PRINT_STATE_DIR="${PRINT_STATE_DIR:-/etc/print}"
 CAID_INIT_FILE="${CAID_INIT_FILE:-/etc/caid/openbao-init.json}"
@@ -38,11 +40,25 @@ unseal_openbao_if_needed() {
 main() {
   require_root
 
+  if [[ ! -d "$REPO_ROOT/.git" ]]; then
+    mkdir -p "$(dirname "$REPO_ROOT")"
+    git clone --branch "$PRINT_REPO_REF" "$PRINT_REPO_URL" "$REPO_ROOT"
+  fi
+
   cd "$REPO_ROOT"
   git config --global --add safe.directory "$REPO_ROOT"
+
+  local origin_url
+  origin_url="$(git remote get-url origin || true)"
+  if [[ "$origin_url" != "$PRINT_REPO_URL" && "$origin_url" != "${PRINT_REPO_URL%.git}" ]]; then
+    echo "Refusing to deploy print stage from $REPO_ROOT because origin is $origin_url, expected $PRINT_REPO_URL." >&2
+    echo "Set REPO_ROOT to a dedicated Print-Farm checkout such as /srv/print/repo." >&2
+    exit 1
+  fi
+
   git fetch --all --prune
-  git checkout main
-  git pull --ff-only origin main
+  git checkout "$PRINT_REPO_REF"
+  git pull --ff-only origin "$PRINT_REPO_REF"
 
   unseal_openbao_if_needed
 

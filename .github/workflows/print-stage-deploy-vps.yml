@@ -19,7 +19,7 @@ jobs:
   deploy:
     runs-on: ${{ fromJSON(vars.DEPLOY_RUNNER_LABELS || '["self-hosted","linux","website-deploy","private-network"]') }}
     env:
-      DEPLOY_PATH: /srv/website/app
+      DEPLOY_PATH: /srv/print/repo
       DEPLOY_MODE: ${{ vars.DEPLOY_MODE || 'local' }}
       DEPLOY_PORT: ${{ vars.DEPLOY_PORT || '22' }}
       SSH_OPTS: -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=2
@@ -59,6 +59,10 @@ jobs:
         env:
           REPO_REF: ${{ steps.ref.outputs.ref }}
         run: |
+          if ! test -d "${DEPLOY_PATH}/.git"; then
+            sudo mkdir -p "$(dirname "${DEPLOY_PATH}")"
+            sudo git clone --branch "${REPO_REF}" "https://github.com/${GITHUB_REPOSITORY}.git" "${DEPLOY_PATH}"
+          fi
           cd "${DEPLOY_PATH}"
           sudo git config --global --add safe.directory "${DEPLOY_PATH}"
           sudo git fetch --all --tags --prune
@@ -79,4 +83,4 @@ jobs:
         run: |
           test -n "$DEPLOY_HOST" || { echo "Missing secret DEPLOY_HOST"; exit 1; }
           test -n "$DEPLOY_USER" || { echo "Missing secret DEPLOY_USER"; exit 1; }
-          ssh ${SSH_OPTS} -p "${DEPLOY_PORT}" "${DEPLOY_USER}@${DEPLOY_HOST}" "cd '${DEPLOY_PATH}' && sudo git config --global --add safe.directory '${DEPLOY_PATH}' && sudo git fetch --all --tags --prune && sudo git checkout '${REPO_REF}' && if sudo git show-ref --verify --quiet 'refs/remotes/origin/${REPO_REF}'; then sudo git reset --hard 'origin/${REPO_REF}'; else sudo git reset --hard '${REPO_REF}'; fi && sudo REPO_ROOT='${DEPLOY_PATH}' bash scripts/live-print-stage-deploy.sh"
+          ssh ${SSH_OPTS} -p "${DEPLOY_PORT}" "${DEPLOY_USER}@${DEPLOY_HOST}" "if ! test -d '${DEPLOY_PATH}/.git'; then sudo mkdir -p \"\$(dirname '${DEPLOY_PATH}')\" && sudo git clone --branch '${REPO_REF}' 'https://github.com/${GITHUB_REPOSITORY}.git' '${DEPLOY_PATH}'; fi && cd '${DEPLOY_PATH}' && sudo git config --global --add safe.directory '${DEPLOY_PATH}' && sudo git fetch --all --tags --prune && sudo git checkout '${REPO_REF}' && if sudo git show-ref --verify --quiet 'refs/remotes/origin/${REPO_REF}'; then sudo git reset --hard 'origin/${REPO_REF}'; else sudo git reset --hard '${REPO_REF}'; fi && sudo REPO_ROOT='${DEPLOY_PATH}' bash scripts/live-print-stage-deploy.sh"
