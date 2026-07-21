@@ -1,0 +1,21 @@
+name: Cancel Stale Repair Run
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/cancel-stale-repair-run.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: repair-vps-ssh
+  cancel-in-progress: true
+
+jobs:
+  cancel-stale:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Superseding stale repair-vps-ssh workflow run."
