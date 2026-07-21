@@ -11,18 +11,19 @@ export default function SiteShell({ children, title = "3D Printer" }) {
   const { data: session } = useSession();
   const [collapsed, setCollapsed] = useState(false);
   const roles = session?.user?.roles ?? [];
+  const isSuperadmin = Boolean(session?.user?.isSuperadmin);
   const isQueueAdmin =
-    session?.user?.email?.toLowerCase?.() === "tabeebrahman.logistics@gmail.com" ||
+    isSuperadmin ||
     ["owner", "technician", "print_admin"].some((role) => roles.includes(role));
   const isOpenBaoAdmin =
-    session?.user?.email?.toLowerCase?.() === "tabeebrahman.logistics@gmail.com" ||
+    isSuperadmin ||
     ["owner", "openbao_admin", "infra_admin"].some((role) => roles.includes(role));
   const isHrAdmin =
-    session?.user?.email?.toLowerCase?.() === "tabeebrahman.logistics@gmail.com" ||
+    isSuperadmin ||
     ["owner", "identity_hr_manager"].some((role) => roles.includes(role)) ||
     roles.some((role) => role.endsWith("_grant") || role.endsWith("_grant_super"));
   const isAssetAdmin =
-    session?.user?.email?.toLowerCase?.() === "tabeebrahman.logistics@gmail.com" ||
+    isSuperadmin ||
     ["owner", "asset_admin"].some((role) => roles.includes(role));
   const isAnyAdmin = isQueueAdmin || isOpenBaoAdmin || isHrAdmin || isAssetAdmin;
   const visibleMenuItems = menuItems.filter((item) => {

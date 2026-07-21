@@ -1,7 +1,10 @@
 import KeycloakProvider from "next-auth/providers/keycloak";
 import { decodeJwt } from "jose";
 
-import { env } from "./env";
+import { env, parseCsv } from "./env";
+import { getPersonByEmail } from "./keycloakAdmin";
+
+const ROLE_REFRESH_INTERVAL_MS = 60 * 1000;
 
 function readPath(source, dottedPath) {
   return dottedPath.split(".").reduce((value, key) => {
@@ -117,7 +120,29 @@ export const authOptions = {
 
       token.email = email;
       const tokenRoles = Array.from(new Set(extractRoles(mergedSource)));
-      token.roles = token.roles?.length ? token.roles : tokenRoles;
+      let resolvedRoles = tokenRoles.length
+        ? tokenRoles
+        : Array.isArray(token.roles)
+          ? token.roles
+          : [];
+
+      if (email && (!token.rolesRefreshedAt || Date.now() - token.rolesRefreshedAt > ROLE_REFRESH_INTERVAL_MS)) {
+        try {
+          const person = await getPersonByEmail(email);
+          resolvedRoles = Array.isArray(person.roles) ? person.roles : resolvedRoles;
+          token.rolesRefreshedAt = Date.now();
+        } catch (error) {
+          console.warn(`Unable to refresh Keycloak roles for ${email}: ${error?.message || error}`);
+          token.rolesRefreshedAt = Date.now();
+        }
+      }
+
+      token.roles = Array.from(new Set(resolvedRoles)).sort();
+      token.isSuperadmin = email
+        ? parseCsv(env.SUPERADMIN_EMAILS)
+            .map((value) => value.toLowerCase())
+            .includes(email.toLowerCase())
+        : false;
       token.keycloakSub =
         token.provider === "keycloak" && typeof mergedSource.sub === "string" && mergedSource.sub
           ? mergedSource.sub
@@ -136,6 +161,7 @@ export const authOptions = {
         keycloakSub: token.keycloakSub ?? null,
         roles: token.roles ?? [],
         uploadLimitBytes: token.uploadLimitBytes ?? null,
+        isSuperadmin: Boolean(token.isSuperadmin),
       };
       session.keycloakLogoutUrl =
         token.provider === "keycloak" && token.idToken && env.KEYCLOAK_ISSUER
