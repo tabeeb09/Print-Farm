@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { signOut, useSession } from "next-auth/react";
 import { useRouter } from "next/router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { menuItems } from "../lib/layoutData";
 import styles from "../styles/Home.module.css";
@@ -10,6 +10,7 @@ export default function SiteShell({ children, title = "3D Printer" }) {
   const router = useRouter();
   const { data: session } = useSession();
   const [collapsed, setCollapsed] = useState(false);
+  const [hasDelegatedPeopleAdmin, setHasDelegatedPeopleAdmin] = useState(false);
   const roles = session?.user?.roles ?? [];
   const isSuperadmin = Boolean(session?.user?.isSuperadmin);
   const isQueueAdmin =
@@ -22,6 +23,7 @@ export default function SiteShell({ children, title = "3D Printer" }) {
     isSuperadmin ||
     ["owner", "identity_hr_manager"].some((role) => roles.includes(role)) ||
     roles.some((role) => role.endsWith("_grant") || role.endsWith("_grant_super"));
+  const canOpenPeopleAdmin = isHrAdmin || hasDelegatedPeopleAdmin;
   const isAssetAdmin =
     isSuperadmin ||
     ["owner", "asset_admin"].some((role) => roles.includes(role));
@@ -29,11 +31,44 @@ export default function SiteShell({ children, title = "3D Printer" }) {
   const visibleMenuItems = menuItems.filter((item) => {
     if (item.adminAnyOnly) return isAnyAdmin;
     if (item.openBaoAdminOnly) return isOpenBaoAdmin;
+    if (item.peopleAdminOnly) return canOpenPeopleAdmin;
     if (item.hrAdminOnly) return isHrAdmin;
     if (item.assetAdminOnly) return isAssetAdmin;
     if (item.adminOnly) return isQueueAdmin;
     return true;
   });
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function checkDelegatedPeopleAdmin() {
+      if (!session || isHrAdmin) {
+        setHasDelegatedPeopleAdmin(false);
+        return;
+      }
+
+      try {
+        const response = await fetch("/api/admin/people/groups");
+        if (!response.ok) {
+          if (!cancelled) setHasDelegatedPeopleAdmin(false);
+          return;
+        }
+
+        const payload = await response.json();
+        if (!cancelled) {
+          setHasDelegatedPeopleAdmin(Array.isArray(payload.groups) && payload.groups.length > 0);
+        }
+      } catch {
+        if (!cancelled) setHasDelegatedPeopleAdmin(false);
+      }
+    }
+
+    checkDelegatedPeopleAdmin();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isHrAdmin, session?.user?.email]);
 
   async function handleSignOut() {
     const logoutUrl = session?.keycloakLogoutUrl;
