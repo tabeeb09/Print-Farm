@@ -6,13 +6,27 @@ import { useEffect, useState } from "react";
 import { menuItems } from "../lib/layoutData";
 import styles from "../styles/Home.module.css";
 
+const DEV_SUPERADMIN_EMAILS = ["tabeebrahman.logistics@gmail.com"];
+
+function normalizeRole(role) {
+  return String(role || "").trim().toLowerCase();
+}
+
+function normalizeEmail(email) {
+  return String(email || "").trim().toLowerCase();
+}
+
 export default function SiteShell({ children, title = "3D Printer" }) {
   const router = useRouter();
   const { data: session } = useSession();
   const [collapsed, setCollapsed] = useState(false);
   const [hasDelegatedPeopleAdmin, setHasDelegatedPeopleAdmin] = useState(false);
-  const roles = session?.user?.roles ?? [];
-  const isSuperadmin = Boolean(session?.user?.isSuperadmin);
+  const roles = Array.isArray(session?.user?.roles)
+    ? session.user.roles.map(normalizeRole).filter(Boolean)
+    : [];
+  const userEmail = normalizeEmail(session?.user?.email);
+  const isSuperadmin =
+    Boolean(session?.user?.isSuperadmin) || DEV_SUPERADMIN_EMAILS.includes(userEmail);
   const isQueueAdmin =
     isSuperadmin ||
     ["owner", "technician", "print_admin"].some((role) => roles.includes(role));

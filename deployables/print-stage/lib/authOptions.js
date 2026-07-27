@@ -6,6 +6,14 @@ import { getPersonByEmail } from "./keycloakAdmin";
 
 const ROLE_REFRESH_INTERVAL_MS = 60 * 1000;
 
+function normalizeEmail(email) {
+  return String(email || "").trim().toLowerCase();
+}
+
+function normalizeRole(role) {
+  return String(role || "").trim().toLowerCase();
+}
+
 function readPath(source, dottedPath) {
   return dottedPath.split(".").reduce((value, key) => {
     if (!value || typeof value !== "object") {
@@ -137,11 +145,11 @@ export const authOptions = {
         }
       }
 
-      token.roles = Array.from(new Set(resolvedRoles)).sort();
+      token.roles = Array.from(new Set(resolvedRoles.map(normalizeRole).filter(Boolean))).sort();
       token.isSuperadmin = email
         ? parseCsv(env.SUPERADMIN_EMAILS)
-            .map((value) => value.toLowerCase())
-            .includes(email.toLowerCase())
+            .map(normalizeEmail)
+            .includes(normalizeEmail(email))
         : false;
       token.keycloakSub =
         token.provider === "keycloak" && typeof mergedSource.sub === "string" && mergedSource.sub

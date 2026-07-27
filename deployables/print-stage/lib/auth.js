@@ -4,6 +4,14 @@ import { getSession } from "next-auth/react";
 import { authOptions } from "./authOptions";
 import { env, parseCsv } from "./env";
 
+function normalizeEmail(email) {
+  return String(email || "").trim().toLowerCase();
+}
+
+function normalizeRole(role) {
+  return String(role || "").trim().toLowerCase();
+}
+
 export async function requireSessionServer(context) {
   const session = await getServerSession(context.req, context.res, authOptions);
 
@@ -23,15 +31,17 @@ export function toFileActor(session) {
     return null;
   }
 
-  const roles = session.user.roles ?? [];
+  const roles = Array.isArray(session.user.roles)
+    ? session.user.roles.map(normalizeRole).filter(Boolean)
+    : [];
   const adminRoles = parseCsv(env.KEYCLOAK_FILE_ADMIN_ROLES);
   const queueAdminRoles = parseCsv(env.KEYCLOAK_QUEUE_ADMIN_ROLES);
   const openBaoAdminRoles = parseCsv(env.KEYCLOAK_OPENBAO_ADMIN_ROLES);
   const hrAdminRoles = parseCsv(env.KEYCLOAK_HR_ADMIN_ROLES);
   const assetAdminRoles = parseCsv(env.KEYCLOAK_ASSET_ADMIN_ROLES);
-  const superadminEmails = parseCsv(env.SUPERADMIN_EMAILS).map((email) => email.toLowerCase());
+  const superadminEmails = parseCsv(env.SUPERADMIN_EMAILS).map(normalizeEmail);
   const email = session.user.email ?? null;
-  const isSuperadmin = email ? superadminEmails.includes(email.toLowerCase()) : false;
+  const isSuperadmin = email ? superadminEmails.includes(normalizeEmail(email)) : false;
 
   return {
     sub: session.user.keycloakSub ?? session.user.id,
