@@ -1,6 +1,14 @@
 name: Print Stage Deploy To VPS
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/print-stage-deploy-vps.yml"
+      - "deployables/print-stage/**"
+      - "scripts/bootstrap-print-vps.sh"
+      - "scripts/live-print-stage-deploy.sh"
   workflow_dispatch:
     inputs:
       ref:
@@ -30,7 +38,12 @@ jobs:
       - name: Resolve deployment ref
         id: ref
         shell: bash
-        run: echo "ref=${{ github.event.inputs.ref || 'main' }}" >> "$GITHUB_OUTPUT"
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "ref=${{ github.event.inputs.ref || 'main' }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Configure SSH key
         if: env.DEPLOY_MODE == 'ssh'
