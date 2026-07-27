@@ -16,6 +16,8 @@
   position: fixed;
   inset: 0 auto 0 0;
   width: 18rem;
+  height: 100vh;
+  max-height: 100vh;
   border-right: 1px solid rgba(23, 27, 31, 0.14);
   background: rgba(255, 250, 241, 0.94);
   backdrop-filter: blur(12px);
@@ -29,6 +31,7 @@
 }
 
 .sidebarTop {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -103,7 +106,13 @@
 }
 
 .navSection {
-  padding: 1rem 0.75rem;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 1rem 0.75rem 1.5rem;
+  scrollbar-gutter: stable;
 }
 
 .navTitle,
@@ -132,6 +141,9 @@
 }
 
 .collapsedRail {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
   padding-top: 0.75rem;
   display: flex;
   justify-content: center;
