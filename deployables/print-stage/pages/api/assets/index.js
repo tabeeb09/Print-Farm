@@ -6,6 +6,9 @@ import { recordAuditEvent } from "../../../lib/auditLog";
 import {
   bookLoan,
   createAsset,
+  createInventoryGroup,
+  createInventoryUnit,
+  createUnitConversion,
   deleteAsset,
   deleteUnit,
   expireMissedCollections,
@@ -20,6 +23,8 @@ import {
   selectAdminLoans,
   selectCatalogue,
   selectInventory,
+  selectInventoryTree,
+  selectInventoryUnits,
   selectLoanableListings,
   selectLostDamaged,
   selectUserLoans,
@@ -49,6 +54,23 @@ function requireAssetAdmin(actor) {
   }
 }
 
+function requireInventoryUnitAdmin(actor) {
+  if (!actor?.isInventoryUnitAdmin) {
+    const error = new Error("Inventory unit admin role required.");
+    error.status = 403;
+    throw error;
+  }
+}
+
+function usesNewStockUnit(state, input = {}) {
+  if (!Object.prototype.hasOwnProperty.call(input, "unitLabel")) {
+    return false;
+  }
+  const label = String(input.unitLabel || "").trim().toLowerCase();
+  if (!label) return false;
+  return !(state.stockUnits || []).some((unit) => !unit.deletedAt && String(unit.name || "").trim().toLowerCase() === label);
+}
+
 function publicActor(actor) {
   return {
     userId: actor.sub,
@@ -59,16 +81,44 @@ function publicActor(actor) {
 function getViewPayload(state, actor, view) {
   const borrower = publicActor(actor);
 
-  if (["catalogue", "inventory", "admin-loans", "lost-damaged", "admin"].includes(view)) {
+  if (["catalogue", "inventory", "inventory-tree", "units", "admin-loans", "lost-damaged", "admin"].includes(view)) {
     requireAssetAdmin(actor);
   }
 
   if (view === "catalogue") {
-    return { catalogue: selectCatalogue(state), actor: { isAssetAdmin: actor.isAssetAdmin } };
+    return {
+      catalogue: selectCatalogue(state),
+      ...selectInventoryUnits(state),
+      actor: {
+        isAssetAdmin: actor.isAssetAdmin,
+        isInventoryUnitAdmin: actor.isInventoryUnitAdmin,
+      },
+    };
   }
 
   if (view === "inventory") {
     return { inventory: selectInventory(state), actor: { isAssetAdmin: actor.isAssetAdmin } };
+  }
+
+  if (view === "inventory-tree") {
+    return {
+      tree: selectInventoryTree(state, { groupId: actor.requestedGroupId }),
+      ...selectInventoryUnits(state),
+      actor: {
+        isAssetAdmin: actor.isAssetAdmin,
+        isInventoryUnitAdmin: actor.isInventoryUnitAdmin,
+      },
+    };
+  }
+
+  if (view === "units") {
+    return {
+      ...selectInventoryUnits(state),
+      actor: {
+        isAssetAdmin: actor.isAssetAdmin,
+        isInventoryUnitAdmin: actor.isInventoryUnitAdmin,
+      },
+    };
   }
 
   if (view === "admin-loans") {
@@ -123,12 +173,31 @@ async function runAction(actor, body) {
   return updateAssetState((state) => {
     if (action === "createAsset") {
       requireAssetAdmin(actor);
-      return createAsset(state, payload.asset || payload);
+      const assetInput = payload.asset || payload;
+      if (usesNewStockUnit(state, assetInput)) requireInventoryUnitAdmin(actor);
+      return createAsset(state, assetInput);
+    }
+
+    if (action === "createInventoryGroup") {
+      requireAssetAdmin(actor);
+      return createInventoryGroup(state, payload.group || payload);
+    }
+
+    if (action === "createInventoryUnit") {
+      requireInventoryUnitAdmin(actor);
+      return createInventoryUnit(state, payload.unit || payload);
+    }
+
+    if (action === "createUnitConversion") {
+      requireInventoryUnitAdmin(actor);
+      return createUnitConversion(state, payload.conversion || payload);
     }
 
     if (action === "updateAsset") {
       requireAssetAdmin(actor);
-      return updateAsset(state, payload.assetId, payload.asset || payload);
+      const assetInput = payload.asset || payload;
+      if (usesNewStockUnit(state, assetInput)) requireInventoryUnitAdmin(actor);
+      return updateAsset(state, payload.assetId, assetInput);
     }
 
     if (action === "setAssetLoanable") {
@@ -219,7 +288,7 @@ export default async function handler(req, res) {
     if (req.method === "GET") {
       const view = String(req.query.view || "loanable");
       const state = await readAssetState();
-      return res.status(200).json(getViewPayload(state, actor, view));
+      return res.status(200).json(getViewPayload(state, { ...actor, requestedGroupId: req.query.groupId || null }, view));
     }
 
     if (req.method === "POST") {
@@ -234,7 +303,7 @@ export default async function handler(req, res) {
       return res.status(200).json({
         ok: true,
         ...result,
-        snapshot: getViewPayload(result.state, actor, view),
+        snapshot: getViewPayload(result.state, { ...actor, requestedGroupId: req.body?.groupId || req.body?.asset?.groupId || null }, view),
       });
     }
 

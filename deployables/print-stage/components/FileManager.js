@@ -76,6 +76,9 @@ function PaymentModal({ file, onClose, onContinue, loading }) {
         <div>
           <h3 style={{ margin: 0 }}>Pay before queueing print</h3>
           <p style={{ margin: "0.5rem 0 0", color: "#555" }}>{file.originalFilename}</p>
+          {quote.pricingDescription ? (
+            <p style={{ margin: "0.35rem 0 0", color: "#555" }}>{quote.pricingDescription}</p>
+          ) : null}
         </div>
 
         <div style={{ display: "grid", gap: "0.5rem" }}>
@@ -551,7 +554,10 @@ export default function FileManager() {
                           <small style={{ color: "#555" }}>Filament mass: {file.extractedGrams.toFixed(2)} g</small>
                         ) : null}
                         {quote ? (
-                          <small style={{ color: "#555" }}>Price: {formatCurrency(quote.totalMinor, quote.currency)}</small>
+                          <small style={{ color: "#555" }}>
+                            Price: {formatCurrency(quote.totalMinor, quote.currency)}
+                            {quote.pricingDescription ? ` (${quote.pricingDescription})` : ""}
+                          </small>
                         ) : null}
                         {quote?.discount ? (
                           <small style={{ color: "#2d6a4f" }}>

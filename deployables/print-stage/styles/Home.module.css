@@ -140,6 +140,39 @@
   background: #fffdf8;
 }
 
+.navTreeWrap {
+  display: grid;
+  gap: 0.15rem;
+  margin: -0.2rem 0 0.65rem 0.65rem;
+  padding: 0 0 0.2rem 0.55rem;
+  border-left: 1px solid rgba(23, 27, 31, 0.14);
+}
+
+.navTree {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.navTreeRoot,
+.navTreeLink {
+  display: block;
+  padding: 0.35rem 0.45rem 0.35rem calc(0.45rem + (var(--tree-depth, 0) * 0.65rem));
+  color: #3f4a52;
+  font-size: 0.82rem;
+  text-decoration: none;
+  border: 1px solid transparent;
+}
+
+.navTreeRoot {
+  font-weight: 800;
+}
+
+.navTreeLinkActive {
+  border-color: rgba(23, 27, 31, 0.12);
+  background: #fffdf8;
+  color: #171b1f;
+}
+
 .collapsedRail {
   flex: 1 1 auto;
   min-height: 0;

@@ -104,6 +104,11 @@ export default function PrintQueuePage({ files }) {
       }
 
       setCompletionTarget(null);
+      if (payload.collectionLoan?.collectionCode) {
+        window.alert(
+          `Print completed and collection scheduled.\nCollection code: ${payload.collectionLoan.collectionCode}`,
+        );
+      }
       window.location.reload();
     } catch (error) {
       setCompletionError(error instanceof Error ? error.message : "Failed to complete print.");
@@ -208,6 +213,7 @@ export default function PrintQueuePage({ files }) {
                 Calculated usage defaults to{" "}
                 <strong>{expectedGramsForFile(completionTarget)?.toFixed(2) || "unknown"} g</strong>.
                 If final usage differs, the user balance receives a surcharge or refund credit.
+                Leaving this blank uses the calculated default.
               </p>
               <label>
                 Final filament grams used
@@ -217,12 +223,12 @@ export default function PrintQueuePage({ files }) {
                   step="0.01"
                   value={actualGrams}
                   onChange={(event) => setActualGrams(event.target.value)}
-                  required
                 />
               </label>
               {completionTarget.paymentQuote ? (
                 <p className="assetMuted">
                   Paid quote: {formatCurrency(completionTarget.paymentQuote.totalMinor, completionTarget.paymentQuote.currency)}
+                  {completionTarget.paymentQuote.pricingDescription ? ` (${completionTarget.paymentQuote.pricingDescription})` : ""}
                   {completionTarget.paymentQuote.discount ? ` after ${completionTarget.paymentQuote.discount.percentOff}% group discount` : ""}
                 </p>
               ) : null}

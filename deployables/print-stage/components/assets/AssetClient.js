@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { useRouter } from "next/router";
 import { useEffect, useMemo, useState } from "react";
 
 import {
@@ -10,6 +11,7 @@ import {
 const adminLinks = [
   ["/admin/assets/catalogue", "Catalogue"],
   ["/admin/assets/inventory", "Inventory"],
+  ["/admin/assets/units", "Units"],
   ["/admin/assets/loans", "Collections"],
   ["/admin/assets/gantt", "Gantt board"],
   ["/admin/assets/lost-damaged", "Lost and damaged"],
@@ -51,6 +53,8 @@ function transactionTypeLabel(type) {
     manual_surcharge: "Manual surcharge",
     print_payment: "3D print payment",
     print_refund: "3D print refund",
+    print_filament_surcharge: "3D print filament surcharge",
+    print_filament_refund: "3D print filament refund",
   };
   return labels[type] || "Transaction";
 }
@@ -417,7 +421,12 @@ function parseAssetForm(form) {
     name: form.name,
     description: form.description,
     loanable: form.loanable,
-    quantity: Number.parseInt(form.quantity, 10) || 1,
+    groupId: form.groupId || null,
+    imageUrl: form.imageUrl || "",
+    unitLabel: form.unitLabel || "items",
+    continuous: Boolean(form.continuous),
+    quantity: form.continuous ? 0 : Number.parseInt(form.quantity, 10) || 1,
+    quantityValue: form.continuous ? Number.parseFloat(String(form.quantity || "0")) || 0 : Number.parseInt(form.quantity, 10) || 1,
     pricePence: parsePounds(form.price, 0),
     lateFeePence: parsePounds(form.lateFee, 500),
     totalFailureDays: Number.parseInt(form.totalFailureDays, 10) || 30,
@@ -426,10 +435,14 @@ function parseAssetForm(form) {
   };
 }
 
-function emptyAssetForm(loanable = true) {
+function emptyAssetForm(loanable = true, groupId = null) {
   return {
     name: "",
     description: "",
+    groupId,
+    imageUrl: "",
+    unitLabel: "items",
+    continuous: false,
     loanable,
     quantity: 1,
     price: "",
@@ -445,8 +458,12 @@ function formFromAsset(asset) {
   return {
     name: asset.name || "",
     description: asset.description || "",
+    groupId: asset.groupId || null,
+    imageUrl: asset.imageUrl || "",
+    unitLabel: asset.unitLabel || "items",
+    continuous: Boolean(asset.continuous),
     loanable: Boolean(asset.loanable),
-    quantity: asset.quantityTotal || asset.units?.length || 1,
+    quantity: asset.continuous ? Number(asset.quantityValue ?? asset.quantityTotal ?? 0) : asset.quantityTotal || asset.units?.length || 1,
     price: ((asset.pricePence || 0) / 100).toFixed(2),
     lateFee: ((asset.lateFeePence ?? 500) / 100).toFixed(2),
     totalFailureDays: asset.totalFailureDays || 30,
@@ -458,7 +475,8 @@ function formFromAsset(asset) {
 
 function viewForMode(mode) {
   if (mode === "catalogue") return "catalogue";
-  if (mode === "inventory") return "inventory";
+  if (mode === "inventory") return "inventory-tree";
+  if (mode === "units") return "units";
   if (mode === "admin-loans" || mode === "admin-gantt") return "admin-loans";
   if (mode === "lost-damaged") return "lost-damaged";
   if (mode === "my-loans") return "my-loans";
@@ -499,6 +517,7 @@ function StatusBadge({ tone = "neutral", children }) {
 }
 
 export default function AssetClient({ mode }) {
+  const router = useRouter();
   const [payload, setPayload] = useState(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
@@ -508,12 +527,19 @@ export default function AssetClient({ mode }) {
   const [form, setForm] = useState({});
   const [loanTab, setLoanTab] = useState(mode === "admin-gantt" ? "timeline" : "upcoming");
   const view = viewForMode(mode);
+  const currentGroupId = mode === "inventory"
+    ? String(router.query.groupId || "").trim() || null
+    : null;
 
   async function load() {
     setPending(true);
     setError("");
     try {
-      const response = await fetch(`/api/assets?view=${encodeURIComponent(view)}`);
+      const params = new URLSearchParams({ view });
+      if (view === "inventory-tree" && currentGroupId) {
+        params.set("groupId", currentGroupId);
+      }
+      const response = await fetch(`/api/assets?${params.toString()}`);
       const next = await response.json();
       if (!response.ok) throw new Error(next.error || "Unable to load assets.");
       setPayload(next);
@@ -525,9 +551,10 @@ export default function AssetClient({ mode }) {
   }
 
   useEffect(() => {
+    if (!router.isReady) return;
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view]);
+  }, [view, currentGroupId, router.isReady]);
 
   async function post(body, success) {
     setPending(true);
@@ -535,10 +562,14 @@ export default function AssetClient({ mode }) {
     setModalError("");
     setMessage("");
     try {
+      const requestBody = { ...body, view };
+      if (view === "inventory-tree" && requestBody.groupId === undefined && requestBody.asset?.groupId === undefined) {
+        requestBody.groupId = currentGroupId || null;
+      }
       const response = await fetch("/api/assets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...body, view }),
+        body: JSON.stringify(requestBody),
       });
       const next = await response.json();
       if (!response.ok) throw new Error(next.error || "Asset action failed.");
@@ -557,7 +588,7 @@ export default function AssetClient({ mode }) {
   }
 
   function openCreate(loanable) {
-    setForm(emptyAssetForm(loanable));
+    setForm(emptyAssetForm(loanable, currentGroupId));
     setModalError("");
     setModal({ type: "asset", title: loanable ? "Add loanable asset" : "Add non-loanable asset" });
   }
@@ -635,6 +666,23 @@ export default function AssetClient({ mode }) {
     });
   }
 
+  function openCreateGroup() {
+    setForm({ name: "", description: "", imageUrl: "", parentId: currentGroupId || null });
+    setModalError("");
+    setModal({ type: "group", title: "Create inventory group" });
+  }
+
+  function navigateInventoryGroup(groupId = null) {
+    router.push(
+      {
+        pathname: "/admin/assets/inventory",
+        query: groupId ? { groupId } : {},
+      },
+      undefined,
+      { shallow: true },
+    );
+  }
+
   function openLoanDetails(loan) {
     setForm({});
     setModalError("");
@@ -649,6 +697,31 @@ export default function AssetClient({ mode }) {
       return;
     }
     await post({ action: "createAsset", asset }, "Asset created.");
+  }
+
+  async function submitGroup(event) {
+    event.preventDefault();
+    await post(
+      {
+        action: "createInventoryGroup",
+        group: {
+          name: form.name,
+          description: form.description,
+          imageUrl: form.imageUrl,
+          parentId: form.parentId || currentGroupId || null,
+        },
+        groupId: form.parentId || currentGroupId || null,
+      },
+      "Inventory group created.",
+    );
+  }
+
+  async function createUnit(unit) {
+    return post({ action: "createInventoryUnit", unit }, "Unit created.");
+  }
+
+  async function createConversion(conversion) {
+    return post({ action: "createUnitConversion", conversion }, "Conversion created.");
   }
 
   async function submitBook(event) {
@@ -782,7 +855,7 @@ export default function AssetClient({ mode }) {
 
   return (
     <div className="assetPage">
-      {mode.startsWith("admin") || ["catalogue", "inventory", "lost-damaged"].includes(mode) ? <AdminNav /> : null}
+      {mode.startsWith("admin") || ["catalogue", "inventory", "units", "lost-damaged"].includes(mode) ? <AdminNav /> : null}
 
       {error ? <section className="panel assetError">{error}</section> : null}
       {message ? <section className="panel assetMessage">{message}</section> : null}
@@ -802,7 +875,27 @@ export default function AssetClient({ mode }) {
       ) : null}
 
       {mode === "inventory" ? (
-        <InventoryView assets={payload?.inventory || []} onDamage={openDamage} onRepair={openRepair} onDelete={openDelete} />
+        <InventoryView
+          tree={payload?.tree || null}
+          onCreate={openCreate}
+          onCreateGroup={openCreateGroup}
+          onNavigateGroup={navigateInventoryGroup}
+          onEdit={openEdit}
+          onDamage={openDamage}
+          onRepair={openRepair}
+          onDelete={openDelete}
+        />
+      ) : null}
+
+      {mode === "units" ? (
+        <UnitsView
+          units={payload?.units || []}
+          conversions={payload?.conversions || []}
+          canManage={Boolean(payload?.actor?.isInventoryUnitAdmin || payload?.actor?.isAssetAdmin)}
+          pending={pending}
+          onCreateUnit={createUnit}
+          onCreateConversion={createConversion}
+        />
       ) : null}
 
       {mode === "admin-loans" || mode === "admin-gantt" ? (
@@ -861,7 +954,33 @@ export default function AssetClient({ mode }) {
 
       {modal?.type === "asset" ? (
         <Modal title={modal.title} error={modalError} onClose={() => setModal(null)}>
-          <AssetForm form={form} setForm={setForm} onSubmit={submitAsset} pending={pending} />
+          <AssetForm
+            form={form}
+            setForm={setForm}
+            onSubmit={submitAsset}
+            pending={pending}
+            units={payload?.units || []}
+          />
+        </Modal>
+      ) : null}
+
+      {modal?.type === "group" ? (
+        <Modal title={modal.title} error={modalError} onClose={() => setModal(null)}>
+          <form className="assetForm" onSubmit={submitGroup}>
+            <label>
+              Group name
+              <input value={form.name || ""} onChange={(event) => setForm({ ...form, name: event.target.value })} required />
+            </label>
+            <label>
+              Hero image URL, optional
+              <input value={form.imageUrl || ""} onChange={(event) => setForm({ ...form, imageUrl: event.target.value })} placeholder="https://..." />
+            </label>
+            <label>
+              Description
+              <textarea value={form.description || ""} onChange={(event) => setForm({ ...form, description: event.target.value })} />
+            </label>
+            <button type="submit" disabled={pending}>Create group</button>
+          </form>
         </Modal>
       ) : null}
 
@@ -1246,7 +1365,7 @@ export default function AssetClient({ mode }) {
   );
 }
 
-function AssetForm({ form, setForm, onSubmit, pending }) {
+function AssetForm({ form, setForm, onSubmit, pending, units = [] }) {
   return (
     <form className="assetForm" onSubmit={onSubmit}>
       <label>
@@ -1254,16 +1373,61 @@ function AssetForm({ form, setForm, onSubmit, pending }) {
         <input value={form.name || ""} onChange={(event) => setForm({ ...form, name: event.target.value })} required />
       </label>
       <label>
+        Hero image URL, optional
+        <input value={form.imageUrl || ""} onChange={(event) => setForm({ ...form, imageUrl: event.target.value })} placeholder="https://..." />
+      </label>
+      <label>
         Description
         <textarea value={form.description || ""} onChange={(event) => setForm({ ...form, description: event.target.value })} />
       </label>
       <label className="assetCheckbox">
-        <input type="checkbox" checked={Boolean(form.loanable)} onChange={(event) => setForm({ ...form, loanable: event.target.checked })} />
+        <input
+          type="checkbox"
+          checked={Boolean(form.loanable)}
+          onChange={(event) => setForm({ ...form, loanable: event.target.checked })}
+          disabled={Boolean(form.continuous)}
+        />
         <span>Available to loan</span>
+      </label>
+      <label className="assetCheckbox">
+        <input
+          type="checkbox"
+          checked={Boolean(form.continuous)}
+          onChange={(event) =>
+            setForm({
+              ...form,
+              continuous: event.target.checked,
+              loanable: event.target.checked ? false : form.loanable,
+              unitLabel: event.target.checked && (!form.unitLabel || form.unitLabel === "items") ? "grams" : form.unitLabel,
+            })
+          }
+        />
+        <span>Continuous quantity, such as filament or other consumables</span>
       </label>
       <label>
         Quantity available
-        <input type="number" min="1" value={form.quantity || 1} onChange={(event) => setForm({ ...form, quantity: event.target.value })} required />
+        <input
+          type="number"
+          min={form.continuous ? "0" : "1"}
+          step={form.continuous ? "0.01" : "1"}
+          value={form.quantity ?? (form.continuous ? 0 : 1)}
+          onChange={(event) => setForm({ ...form, quantity: event.target.value })}
+          required
+        />
+      </label>
+      <label>
+        Unit label
+        <input
+          list="asset-stock-units"
+          value={form.unitLabel || "items"}
+          onChange={(event) => setForm({ ...form, unitLabel: event.target.value })}
+          placeholder="items, grams, litres..."
+        />
+        <datalist id="asset-stock-units">
+          {units.map((unit) => (
+            <option key={unit.id} value={unit.name} />
+          ))}
+        </datalist>
       </label>
       {form.loanable ? (
         <>
@@ -1521,55 +1685,200 @@ function UnitLoanHistory({ history = [] }) {
   );
 }
 
-function InventoryView({ assets, onDamage, onRepair, onDelete }) {
+function groupPathLabel(tree) {
+  const crumbs = Array.isArray(tree?.breadcrumbs) ? tree.breadcrumbs : [];
+  return ["Inventory", ...crumbs.map((group) => group.name)].join(" / ");
+}
+
+function InventoryView({ tree, onCreate, onCreateGroup, onNavigateGroup, onEdit, onDamage, onRepair, onDelete }) {
+  const assets = Array.isArray(tree?.inventory) ? tree.inventory : [];
+  const childGroups = Array.isArray(tree?.childGroups) ? tree.childGroups : [];
+  const breadcrumbs = Array.isArray(tree?.breadcrumbs) ? tree.breadcrumbs : [];
+
   return (
     <section className="panel assetStack">
-      <h1>Inventory</h1>
-      <p>Only units physically at the makerspace are listed here. Collected loans are removed until returned.</p>
-      <div className="assetCards">
+      <div className="assetHeaderRow">
+        <div>
+          <h1>{groupPathLabel(tree)}</h1>
+          <p>Folders organise physical makerspace stock. Customer prints live here temporarily until collection is fulfilled.</p>
+        </div>
+        <div className="assetButtonRow">
+          <button type="button" onClick={() => onCreate(false)}>Add inventory item</button>
+          <button type="button" onClick={() => onCreate(true)}>Add loanable item</button>
+          <button type="button" onClick={onCreateGroup}>Create group</button>
+          <a href="/api/assets/export?format=json">Export JSON</a>
+          <a href="/api/assets/export?format=xml">Export XML</a>
+        </div>
+      </div>
+      <div className="inventoryBreadcrumbs">
+        <button type="button" onClick={() => onNavigateGroup(null)}>Inventory root</button>
+        {breadcrumbs.map((group) => (
+          <button type="button" key={group.id} onClick={() => onNavigateGroup(group.id)}>
+            {group.name}
+          </button>
+        ))}
+      </div>
+      <div className="inventoryHeroGrid">
+        {childGroups.map((group) => (
+          <article key={group.id} className="inventoryHeroCard inventoryFolderCard" onClick={() => onNavigateGroup(group.id)}>
+            {group.imageUrl ? <img src={group.imageUrl} alt="" className="inventoryHeroImage" /> : <div className="inventoryHeroPlaceholder">Folder</div>}
+            <div className="inventoryHeroBody">
+              <span className="assetBadge assetBadge-neutral">Group</span>
+              <h2>{group.name}</h2>
+              <p>{group.description || "No description yet."}</p>
+            </div>
+          </article>
+        ))}
         {assets.map((asset) => (
-          <article key={asset.id} className="assetCard">
-            <div className="assetHeaderRow">
-              <div>
-                <h2>{asset.name}</h2>
-                <p>{asset.description || "No description."}</p>
+          <article key={asset.id} className="inventoryHeroCard">
+            {asset.imageUrl ? <img src={asset.imageUrl} alt="" className="inventoryHeroImage" /> : <div className="inventoryHeroPlaceholder">Item</div>}
+            <div className="inventoryHeroBody">
+              <div className="assetHeaderRow">
+                <div>
+                  <h2>{asset.name}</h2>
+                  <p>{asset.description || "No description."}</p>
+                </div>
+                <StatusBadge tone={asset.loanable ? "green" : "neutral"}>{asset.loanable ? "Loanable" : "Non-loanable"}</StatusBadge>
               </div>
-              <StatusBadge tone={asset.loanable ? "green" : "neutral"}>{asset.loanable ? "Loanable" : "Non-loanable"}</StatusBadge>
-            </div>
-            <div className="assetStats">
-              <span>Physically present: {asset.quantityPhysicallyPresent}</span>
-              <span>Damaged: {asset.quantityDamaged}</span>
-              <span>Out of premises: {asset.quantityOutOfPremises}</span>
-            </div>
-            <details>
-              <summary>Loanable periods</summary>
-              <LoanabilityHistory history={asset.loanabilityHistory || []} />
-            </details>
-            <details>
-              <summary>Serial numbers ({asset.units?.length || 0})</summary>
-              <div className="assetUnitList">
-                {(asset.units || []).map((unit) => (
-                  <div key={unit.id} className="assetUnitRow">
-                    <span><input type="checkbox" readOnly /> {unit.serial}</span>
-                    <StatusBadge tone={unit.condition === "normal" ? "green" : "amber"}>{unit.condition}</StatusBadge>
-                    {unit.condition === "damaged" ? (
-                      <button type="button" onClick={() => onRepair(asset, [unit.id])}>Repaired</button>
-                    ) : (
-                      <button type="button" onClick={() => onDamage(asset, [unit.id])}>Mark damaged</button>
-                    )}
-                    <button type="button" className="assetDanger" onClick={() => onDelete(asset, unit)}>Dustbin</button>
-                    <details className="assetUnitHistory">
-                      <summary>Loan history</summary>
-                      <UnitLoanHistory history={unit.loanHistory || []} />
-                    </details>
+              <div className="assetStats">
+                <span>
+                  Physically present: {asset.continuous
+                    ? `${Number(asset.quantityPhysicallyPresent || 0).toFixed(2)} ${asset.unitLabel || "units"}`
+                    : asset.quantityPhysicallyPresent}
+                </span>
+                <span>Damaged: {asset.quantityDamaged}</span>
+                <span>Out of premises: {asset.quantityOutOfPremises}</span>
+                <span>Type: {asset.continuous ? "Continuous" : "Serialised"}</span>
+              </div>
+              <div className="assetButtonRow">
+                <button type="button" onClick={() => onEdit(asset)}>Edit details</button>
+                <button type="button" className="assetDanger" onClick={() => onDelete(asset)}>Delete item</button>
+              </div>
+              <details>
+                <summary>Loanable periods</summary>
+                <LoanabilityHistory history={asset.loanabilityHistory || []} />
+              </details>
+              {asset.continuous ? null : (
+                <details>
+                  <summary>Serial numbers ({asset.units?.length || 0})</summary>
+                  <div className="assetUnitList">
+                    {(asset.units || []).map((unit) => (
+                      <div key={unit.id} className="assetUnitRow">
+                        <span><input type="checkbox" readOnly /> {unit.serial}</span>
+                        <StatusBadge tone={unit.condition === "normal" ? "green" : "amber"}>{unit.condition}</StatusBadge>
+                        {unit.condition === "damaged" ? (
+                          <button type="button" onClick={() => onRepair(asset, [unit.id])}>Repaired</button>
+                        ) : (
+                          <button type="button" onClick={() => onDamage(asset, [unit.id])}>Mark damaged</button>
+                        )}
+                        <button type="button" className="assetDanger" onClick={() => onDelete(asset, unit)}>Dustbin</button>
+                        <details className="assetUnitHistory">
+                          <summary>Loan history</summary>
+                          <UnitLoanHistory history={unit.loanHistory || []} />
+                        </details>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </details>
+                </details>
+              )}
+            </div>
           </article>
         ))}
       </div>
-      {!assets.length ? <p className="assetMuted">No assets are currently physically present.</p> : null}
+      {!assets.length && !childGroups.length ? <p className="assetMuted">This folder is empty.</p> : null}
+    </section>
+  );
+}
+
+function UnitsView({ units, conversions, canManage, pending, onCreateUnit, onCreateConversion }) {
+  const [unitName, setUnitName] = useState("");
+  const [conversion, setConversion] = useState({ fromUnitId: "", toUnitId: "", factor: "" });
+
+  async function submitUnit(event) {
+    event.preventDefault();
+    const result = await onCreateUnit({ name: unitName });
+    if (result) setUnitName("");
+  }
+
+  async function submitConversion(event) {
+    event.preventDefault();
+    const result = await onCreateConversion(conversion);
+    if (result) setConversion({ fromUnitId: "", toUnitId: "", factor: "" });
+  }
+
+  return (
+    <section className="panel assetStack">
+      <div className="assetHeaderRow">
+        <div>
+          <h1>Inventory units</h1>
+          <p>Reusable units and conversion factors keep stock macros interoperable instead of relying on one-off text entry.</p>
+        </div>
+        <div className="assetButtonRow">
+          <a href="/api/assets/export?format=json">Export JSON</a>
+          <a href="/api/assets/export?format=xml">Export XML</a>
+        </div>
+      </div>
+      {canManage ? (
+        <div className="assetCards">
+          <form className="assetCard assetForm" onSubmit={submitUnit}>
+            <h2>Add unit</h2>
+            <label>
+              Unit name
+              <input value={unitName} onChange={(event) => setUnitName(event.target.value)} placeholder="grams" required />
+            </label>
+            <button type="submit" disabled={pending}>Add unit</button>
+          </form>
+          <form className="assetCard assetForm" onSubmit={submitConversion}>
+            <h2>Add conversion</h2>
+            <label>
+              From
+              <select value={conversion.fromUnitId} onChange={(event) => setConversion({ ...conversion, fromUnitId: event.target.value })} required>
+                <option value="">Select unit</option>
+                {units.map((unit) => <option key={unit.id} value={unit.id}>{unit.name}</option>)}
+              </select>
+            </label>
+            <label>
+              To
+              <select value={conversion.toUnitId} onChange={(event) => setConversion({ ...conversion, toUnitId: event.target.value })} required>
+                <option value="">Select unit</option>
+                {units.map((unit) => <option key={unit.id} value={unit.id}>{unit.name}</option>)}
+              </select>
+            </label>
+            <label>
+              Factor
+              <input type="number" min="0.000001" step="0.000001" value={conversion.factor} onChange={(event) => setConversion({ ...conversion, factor: event.target.value })} required />
+            </label>
+            <button type="submit" disabled={pending || units.length < 2}>Add conversion</button>
+          </form>
+        </div>
+      ) : (
+        <p className="assetMuted">You can view units, but creating units or conversions requires the inventory unit admin role.</p>
+      )}
+      <div className="assetCards">
+        {units.map((unit) => {
+          const unitConversions = conversions.filter((entry) => entry.fromUnitId === unit.id || entry.toUnitId === unit.id);
+          return (
+            <article key={unit.id} className="assetCard">
+              <h2>{unit.name}</h2>
+              <details>
+                <summary>Conversions ({unitConversions.length})</summary>
+                {unitConversions.length ? (
+                  <ul className="assetHistoryList">
+                    {unitConversions.map((entry) => (
+                      <li key={entry.id}>
+                        1 {entry.fromUnitName} = {entry.factor} {entry.toUnitName}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="assetMuted">No conversions recorded.</p>
+                )}
+              </details>
+            </article>
+          );
+        })}
+      </div>
+      {!units.length ? <p className="assetMuted">No custom units yet.</p> : null}
     </section>
   );
 }

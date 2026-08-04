@@ -35,6 +35,9 @@ export default async function handler(req, res) {
         actualGrams: result.actualGrams,
         deltaMinor: result.deltaMinor,
         adjustmentTransactionId: result.adjustmentTransaction?.id || null,
+        customerPrintAssetId: result.collectionAsset?.id || null,
+        customerPrintLoanId: result.collectionLoan?.id || null,
+        filamentInventoryAdjustments: result.inventoryAdjustments || [],
       },
     });
     return res.status(200).json(result);

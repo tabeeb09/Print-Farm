@@ -24,7 +24,19 @@ function normalizeBreakdown(manifest, overrideBreakdown = null) {
 function normalizeState(state) {
   return {
     entries: Array.isArray(state?.entries) ? state.entries : [],
-    filaments: Array.isArray(state?.filaments) ? state.filaments : [],
+    filaments: Array.isArray(state?.filaments) && state.filaments.length
+      ? state.filaments
+      : [{
+          id: "dummy-pla-spool",
+          name: "Dummy PLA spool",
+          filamentType: "PLA",
+          color: "Natural",
+          vendor: "Bootstrap",
+          startingGrams: 1000,
+          notes: "Seed stock for initial print-farm testing. Replace with real spool records.",
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        }],
   };
 }
 
@@ -69,19 +81,25 @@ function totalsByType(entries) {
 
 function decorateFilaments(filaments, totals) {
   const remainingUsageByType = { ...totals };
+  const remainingSpoolCountByType = filaments.reduce((counts, filament) => {
+    const key = filament.filamentType || "Unknown";
+    counts[key] = (counts[key] || 0) + 1;
+    return counts;
+  }, {});
+
   return filaments.map((filament) => {
-    const consumedFromThisSpool = Math.min(
-      Number(filament.startingGrams) || 0,
-      remainingUsageByType[filament.filamentType] || 0,
-    );
-    remainingUsageByType[filament.filamentType] = Math.max(
-      0,
-      (remainingUsageByType[filament.filamentType] || 0) - consumedFromThisSpool,
-    );
+    const type = filament.filamentType || "Unknown";
+    const remainingUsage = remainingUsageByType[type] || 0;
+    const isLastSpoolOfType = remainingSpoolCountByType[type] <= 1;
+    const consumedFromThisSpool = isLastSpoolOfType
+      ? remainingUsage
+      : Math.min(Number(filament.startingGrams) || 0, remainingUsage);
+    remainingSpoolCountByType[type] = Math.max(0, (remainingSpoolCountByType[type] || 0) - 1);
+    remainingUsageByType[type] = remainingUsage - consumedFromThisSpool;
     return {
       ...filament,
       usedGrams: consumedFromThisSpool,
-      remainingGrams: Math.max(0, (Number(filament.startingGrams) || 0) - consumedFromThisSpool),
+      remainingGrams: (Number(filament.startingGrams) || 0) - consumedFromThisSpool,
     };
   });
 }

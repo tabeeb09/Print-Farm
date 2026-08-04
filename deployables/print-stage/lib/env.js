@@ -24,11 +24,13 @@ const envSchema = z.object({
   KEYCLOAK_OPENBAO_ADMIN_ROLES: z.string().default("owner,openbao_admin,infra_admin"),
   KEYCLOAK_HR_ADMIN_ROLES: z.string().default("owner,identity_hr_manager"),
   KEYCLOAK_ASSET_ADMIN_ROLES: z.string().default("owner,asset_admin"),
+  KEYCLOAK_INVENTORY_VIEW_ROLES: z.string().default("owner,asset_admin,inventory_view"),
+  KEYCLOAK_INVENTORY_UNIT_ADMIN_ROLES: z.string().default("owner,asset_admin,inventory_unit_admin"),
   KEYCLOAK_HR_SCOPE_ATTRIBUTE: z.string().default("managed_by"),
   KEYCLOAK_GROUP_ADMIN_ATTRIBUTE: z.string().default("group_admins"),
   KEYCLOAK_MANAGEABLE_ROLES: z
     .string()
-    .default("viewer,editor,media_admin,technician,print_admin,config_admin,openbao_admin,infra_admin,identity_hr_manager,asset_admin"),
+    .default("viewer,editor,media_admin,technician,print_admin,config_admin,openbao_admin,infra_admin,identity_hr_manager,asset_admin,inventory_view,inventory_unit_admin"),
   KEYCLOAK_ROLE_CLAIM_PATH: z.string().default("resource_access.website.roles"),
   KEYCLOAK_FILE_UPLOAD_LIMIT_CLAIMS: z
     .string()

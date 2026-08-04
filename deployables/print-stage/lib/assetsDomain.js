@@ -2,6 +2,10 @@ import crypto from "node:crypto";
 
 const DEFAULT_LATE_FEE_PENCE = 500;
 const DEFAULT_FAILURE_DAYS = 30;
+const CUSTOMER_PRINTS_GROUP_ID = "group_customer_prints";
+const CONSUMABLES_GROUP_ID = "group_consumables";
+const FILAMENT_GROUP_ID = "group_filament";
+const DUMMY_PLA_ASSET_ID = "asset_dummy_pla";
 const MAX_RETURN_PHOTOS = 6;
 const MAX_RETURN_PHOTO_DATA_URL_BYTES = 2_500_000;
 const DEFAULT_WEEKLY_WINDOWS = [
@@ -22,6 +26,14 @@ function nowIso(now = new Date()) {
 
 function id(prefix) {
   return `${prefix}_${crypto.randomUUID()}`;
+}
+
+function stableId(prefix, value) {
+  const safe = String(value || crypto.randomUUID())
+    .replace(/[^a-z0-9_-]+/gi, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 96);
+  return `${prefix}_${safe || crypto.randomUUID()}`;
 }
 
 function assert(condition, message) {
@@ -65,6 +77,13 @@ function toOptionalPositiveInteger(value) {
   return parsed;
 }
 
+function toNonNegativeNumber(value, fallback = 0) {
+  if (value === undefined || value === null || value === "") return fallback;
+  const parsed = Number.parseFloat(String(value).trim());
+  assert(Number.isFinite(parsed) && parsed >= 0, "Quantity must be a non-negative number.");
+  return parsed;
+}
+
 function toRequiredPositiveInteger(value, label) {
   const text = String(value ?? "").trim();
   assert(/^[1-9]\d*$/.test(text), `${label} must be a positive whole number.`);
@@ -75,6 +94,16 @@ function toRequiredPositiveInteger(value, label) {
 function textOrNull(value, maxLength = 2000) {
   const text = String(value || "").trim();
   return text ? text.slice(0, maxLength) : null;
+}
+
+function normalizeUnitLabel(value, fallback = "items") {
+  const text = String(value || fallback).trim();
+  return (text || fallback).slice(0, 80);
+}
+
+function normalizeAssetGroupId(value) {
+  const text = String(value || "").trim();
+  return text || null;
 }
 
 function slug(value) {
@@ -109,6 +138,9 @@ export function createInitialAssetState() {
     assets: [],
     loans: [],
     debts: [],
+    inventoryGroups: [],
+    stockUnits: [],
+    unitConversions: [],
     updatedAt: null,
   };
 }
@@ -118,14 +150,33 @@ export function migrateAssetState(input) {
   state.version = 1;
   state.assets = Array.isArray(state.assets) ? state.assets : [];
   state.loans = Array.isArray(state.loans) ? state.loans : [];
+  state.inventoryGroups = Array.isArray(state.inventoryGroups)
+    ? state.inventoryGroups.map((group) => normalizeGroup(group)).filter(Boolean)
+    : [];
+  state.stockUnits = Array.isArray(state.stockUnits)
+    ? state.stockUnits.map((unit) => normalizeStockUnit(unit)).filter(Boolean)
+    : [];
+  state.unitConversions = Array.isArray(state.unitConversions)
+    ? state.unitConversions.map((conversion) => normalizeUnitConversion(conversion)).filter(Boolean)
+    : [];
   state.debts = Array.isArray(state.debts)
     ? state.debts.map((transaction) => normalizeTransaction(transaction)).filter(Boolean)
     : [];
+
+  ensureDefaultInventoryStructure(state);
 
   for (const asset of state.assets) {
     asset.units = Array.isArray(asset.units) ? asset.units : [];
     asset.loanabilityHistory = normalizeLoanabilityHistory(asset);
     asset.maxLoanDays = toOptionalPositiveInteger(asset.maxLoanDays);
+    asset.groupId = normalizeAssetGroupId(asset.groupId);
+    asset.unitLabel = normalizeUnitLabel(asset.unitLabel);
+    asset.continuous = Boolean(asset.continuous);
+    asset.quantityValue = asset.continuous
+      ? Number(asset.quantityValue ?? asset.quantityTotal ?? asset.quantity ?? 0) || 0
+      : activeUnits(asset).length;
+    asset.imageUrl = String(asset.imageUrl || "").trim();
+    asset.sourceType = String(asset.sourceType || "").trim() || null;
 
     for (const unit of asset.units) {
       unit.damageHistory = Array.isArray(unit.damageHistory) ? unit.damageHistory : [];
@@ -269,6 +320,7 @@ function isCollectionTimeAllowed(asset, collectionAt) {
 
 function collectionMissed(loan, now) {
   return loan.status === "reserved" &&
+    !loan.openEndedCollection &&
     new Date(loan.collectionAt).getTime() + 24 * 60 * 60 * 1000 < new Date(now).getTime();
 }
 
@@ -302,6 +354,192 @@ function addDebt(state, entry) {
   };
   state.debts.push(debt);
   return debt;
+}
+
+function activeGroups(state) {
+  return (state.inventoryGroups || []).filter((group) => !group.deletedAt);
+}
+
+function findGroup(state, groupId) {
+  if (!groupId) return null;
+  const group = activeGroups(state).find((entry) => entry.id === groupId);
+  assert(group, "Inventory group not found.");
+  return group;
+}
+
+function assertGroupTreeIsValid(state, groupId, parentId) {
+  if (!parentId) return;
+  findGroup(state, parentId);
+  let cursor = parentId;
+  const seen = new Set([groupId]);
+  while (cursor) {
+    assert(!seen.has(cursor), "Inventory groups cannot contain cycles.");
+    seen.add(cursor);
+    cursor = activeGroups(state).find((group) => group.id === cursor)?.parentId || null;
+  }
+}
+
+function subtractFilamentFromInventory(state, breakdown) {
+  const entries = Array.isArray(breakdown) ? breakdown : [];
+  const adjustments = [];
+
+  for (const entry of entries) {
+    const grams = Number(entry?.grams || 0);
+    if (!Number.isFinite(grams) || grams <= 0) continue;
+    const filamentType = String(entry?.filamentType || "PLA").trim().toLowerCase();
+    const candidates = state.assets.filter((asset) =>
+      !asset.deletedAt &&
+      asset.continuous &&
+      asset.groupId === FILAMENT_GROUP_ID &&
+      normalizeUnitLabel(asset.unitLabel).toLowerCase() === "grams",
+    );
+    const asset =
+      candidates.find((candidate) => candidate.name.toLowerCase().includes(filamentType)) ||
+      candidates.find((candidate) => candidate.id === DUMMY_PLA_ASSET_ID) ||
+      candidates[0];
+
+    if (!asset) continue;
+    const before = Number(asset.quantityValue || 0);
+    asset.quantityValue = before - grams;
+    asset.updatedAt = nowIso();
+    adjustments.push({
+      assetId: asset.id,
+      assetName: asset.name,
+      filamentType: entry?.filamentType || "Unknown",
+      grams,
+      before,
+      after: asset.quantityValue,
+    });
+  }
+
+  return adjustments;
+}
+
+function normalizeGroup(group) {
+  if (!group || typeof group !== "object") return null;
+  const name = String(group.name || "").trim();
+  if (!name) return null;
+  return {
+    id: group.id || id("group"),
+    name,
+    parentId: group.parentId || null,
+    description: String(group.description || "").trim(),
+    imageUrl: String(group.imageUrl || "").trim(),
+    createdAt: group.createdAt || nowIso(),
+    updatedAt: group.updatedAt || group.createdAt || nowIso(),
+    deletedAt: group.deletedAt || null,
+  };
+}
+
+function ensureGroup(state, group) {
+  state.inventoryGroups = Array.isArray(state.inventoryGroups) ? state.inventoryGroups : [];
+  const existing = state.inventoryGroups.find((entry) => entry.id === group.id);
+  if (existing) {
+    Object.assign(existing, { ...group, ...existing, deletedAt: existing.deletedAt || null });
+    return existing;
+  }
+  const normalized = normalizeGroup(group);
+  if (normalized) {
+    state.inventoryGroups.push(normalized);
+  }
+  return normalized;
+}
+
+function ensureDefaultInventoryStructure(state) {
+  ensureStockUnit(state, "items");
+  ensureStockUnit(state, "grams");
+
+  ensureGroup(state, {
+    id: CUSTOMER_PRINTS_GROUP_ID,
+    name: "Customer prints",
+    parentId: null,
+    description: "Temporary completed print jobs waiting for customer collection.",
+  });
+  ensureGroup(state, {
+    id: CONSUMABLES_GROUP_ID,
+    name: "Consumables",
+    parentId: null,
+    description: "Continuous-use stock such as filament, fixings, adhesives, and other consumables.",
+  });
+  ensureGroup(state, {
+    id: FILAMENT_GROUP_ID,
+    name: "Filament",
+    parentId: CONSUMABLES_GROUP_ID,
+    description: "3D printing filament stock tracked in grams.",
+  });
+
+  if (!state.assets.some((asset) => asset.id === DUMMY_PLA_ASSET_ID && !asset.deletedAt)) {
+    const timestamp = nowIso();
+    state.assets.push({
+      id: DUMMY_PLA_ASSET_ID,
+      name: "Dummy PLA filament",
+      description: "Bootstrap PLA stock for testing inventory and print-completion consumption.",
+      loanable: false,
+      groupId: FILAMENT_GROUP_ID,
+      unitLabel: "grams",
+      continuous: true,
+      quantityValue: 1000,
+      pricePence: 0,
+      lateFeePence: DEFAULT_LATE_FEE_PENCE,
+      totalFailureDays: DEFAULT_FAILURE_DAYS,
+      maxLoanDays: null,
+      availability: normalizeAvailability(),
+      units: [],
+      loanabilityHistory: [],
+      sourceType: "consumable",
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      deletedAt: null,
+    });
+  }
+}
+
+function normalizeStockUnit(unit) {
+  if (!unit || typeof unit !== "object") return null;
+  const name = normalizeUnitLabel(unit.name || unit.label, "");
+  if (!name) return null;
+  return {
+    id: unit.id || id("stock_unit"),
+    name,
+    createdAt: unit.createdAt || nowIso(),
+    updatedAt: unit.updatedAt || unit.createdAt || nowIso(),
+    deletedAt: unit.deletedAt || null,
+  };
+}
+
+function normalizeUnitConversion(conversion) {
+  if (!conversion || typeof conversion !== "object") return null;
+  const fromUnitId = String(conversion.fromUnitId || "").trim();
+  const toUnitId = String(conversion.toUnitId || "").trim();
+  const factor = Number.parseFloat(String(conversion.factor ?? ""));
+  if (!fromUnitId || !toUnitId || fromUnitId === toUnitId || !Number.isFinite(factor) || factor <= 0) return null;
+  return {
+    id: conversion.id || id("unit_conversion"),
+    fromUnitId,
+    toUnitId,
+    factor,
+    createdAt: conversion.createdAt || nowIso(),
+    updatedAt: conversion.updatedAt || conversion.createdAt || nowIso(),
+    deletedAt: conversion.deletedAt || null,
+  };
+}
+
+function ensureStockUnit(state, value, now = new Date()) {
+  state.stockUnits = Array.isArray(state.stockUnits) ? state.stockUnits : [];
+  const name = normalizeUnitLabel(value, "");
+  if (!name) return null;
+  const existing = state.stockUnits.find((unit) => !unit.deletedAt && unit.name.toLowerCase() === name.toLowerCase());
+  if (existing) return existing;
+  const timestamp = nowIso(now);
+  const unit = {
+    id: stableId("stock_unit", name.toLowerCase()),
+    name,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    deletedAt: null,
+  };
+  state.stockUnits.push(unit);
+  return unit;
 }
 
 function normalizeTransaction(entry) {
@@ -425,9 +663,15 @@ export function createAsset(state, input, now = new Date()) {
   const name = String(input.name || "").trim();
   assert(name, "Asset name is required.");
 
-  const quantity = toPositiveInteger(input.quantity, 1);
+  const continuous = Boolean(input.continuous);
+  const quantityValue = continuous ? toNonNegativeNumber(input.quantity ?? input.quantityValue, 0) : toPositiveInteger(input.quantity, 1);
+  const quantity = continuous ? 0 : quantityValue;
+  const groupId = normalizeAssetGroupId(input.groupId);
+  if (groupId) findGroup(next, groupId);
   const timestamp = nowIso(now);
-  const loanable = Boolean(input.loanable);
+  const loanable = Boolean(input.loanable) && !continuous;
+  const unitLabel = normalizeUnitLabel(input.unitLabel);
+  ensureStockUnit(next, unitLabel, now);
   const units = makeSerials(name, quantity).map((serial) => ({
     id: id("unit"),
     serial,
@@ -441,6 +685,13 @@ export function createAsset(state, input, now = new Date()) {
     name,
     description: String(input.description || "").trim(),
     loanable,
+    groupId,
+    imageUrl: String(input.imageUrl || "").trim(),
+    unitLabel,
+    continuous,
+    quantityValue,
+    sourceType: String(input.sourceType || "").trim() || null,
+    printFileId: input.printFileId || null,
     pricePence: toPence(input.pricePence ?? input.assetPricePence ?? input.assetPrice, 0),
     lateFeePence: toPence(input.lateFeePence ?? input.lateFee, DEFAULT_LATE_FEE_PENCE),
     totalFailureDays: toPositiveInteger(input.totalFailureDays, DEFAULT_FAILURE_DAYS),
@@ -473,17 +724,31 @@ export function updateAsset(state, assetId, input, now = new Date()) {
   const timestamp = nowIso(now);
   const name = String(input.name ?? asset.name).trim();
   assert(name, "Asset name is required.");
+  const groupId = input.groupId === undefined ? asset.groupId || null : normalizeAssetGroupId(input.groupId);
+  if (groupId) findGroup(next, groupId);
+  const nextContinuous = Boolean(input.continuous ?? asset.continuous);
 
   asset.name = name;
   asset.description = String(input.description ?? asset.description ?? "").trim();
-  setLoanability(asset, Boolean(input.loanable ?? asset.loanable), timestamp);
+  setLoanability(asset, nextContinuous ? false : Boolean(input.loanable ?? asset.loanable), timestamp);
+  asset.groupId = groupId;
+  asset.imageUrl = String(input.imageUrl ?? asset.imageUrl ?? "").trim();
+  asset.unitLabel = normalizeUnitLabel(input.unitLabel ?? asset.unitLabel);
+  ensureStockUnit(next, asset.unitLabel, now);
+  asset.continuous = nextContinuous;
   asset.pricePence = toPence(input.pricePence ?? input.assetPricePence ?? input.assetPrice, asset.pricePence);
   asset.lateFeePence = toPence(input.lateFeePence ?? input.lateFee, asset.lateFeePence ?? DEFAULT_LATE_FEE_PENCE);
   asset.totalFailureDays = toPositiveInteger(input.totalFailureDays, asset.totalFailureDays ?? DEFAULT_FAILURE_DAYS);
   asset.maxLoanDays = input.maxLoanDays === undefined ? asset.maxLoanDays ?? null : toOptionalPositiveInteger(input.maxLoanDays);
   asset.availability = normalizeAvailability(input.availability || asset.availability);
 
-  if (input.quantity !== undefined) {
+  if (asset.continuous) {
+    asset.quantityValue = toNonNegativeNumber(input.quantity ?? input.quantityValue, asset.quantityValue || 0);
+    for (const unit of activeUnits(asset)) {
+      unit.condition = "deleted";
+      unit.deletedAt = timestamp;
+    }
+  } else if (input.quantity !== undefined) {
     const desiredQuantity = toPositiveInteger(input.quantity, activeUnits(asset).length || 1);
     const currentUnits = activeUnits(asset);
     if (desiredQuantity > currentUnits.length) {
@@ -508,6 +773,7 @@ export function updateAsset(state, assetId, input, now = new Date()) {
         unit.deletedAt = timestamp;
       }
     }
+    asset.quantityValue = activeUnits(asset).length;
   }
 
   asset.updatedAt = timestamp;
@@ -576,6 +842,7 @@ export function bookLoan(state, input, now = new Date()) {
   let next = expireMissedCollections(state, now);
   const asset = findAsset(next, input.assetId);
   assert(asset.loanable, "This asset is not loanable.");
+  assert(!asset.continuous, "Continuous consumables cannot be booked as loans.");
   assert(input.acceptTerms === true, "The loan terms must be accepted before booking.");
 
   const actor = { userId: input.userId, userEmail: input.userEmail };
@@ -664,6 +931,22 @@ export function verifyCollectionCode(state, input, now = new Date()) {
   loan.collectedAt = actualCollectionAt.toISOString();
   loan.collectionVerifiedBy = input.adminId || null;
   loan.updatedAt = timestamp;
+
+  if (asset.sourceType === "customer_print" || loan.collectionOnly) {
+    loan.status = "returned";
+    loan.returnedAt = actualCollectionAt.toISOString();
+    loan.fulfilledAt = timestamp;
+    loan.returnDueAt = actualCollectionAt.toISOString();
+    loan.returnVerifiedBy = input.adminId || null;
+    asset.deletedAt = timestamp;
+    asset.updatedAt = timestamp;
+    for (const unitId of loan.unitIds) {
+      const unit = findUnit(asset, unitId);
+      unit.condition = "deleted";
+      unit.deletedAt = timestamp;
+    }
+  }
+
   next.updatedAt = timestamp;
   return { state: next, loan };
 }
@@ -1009,6 +1292,161 @@ export function repairUnits(state, input, now = new Date()) {
   return { state: next, asset };
 }
 
+export function createInventoryGroup(state, input, now = new Date()) {
+  const next = migrateAssetState(state);
+  const name = String(input.name || "").trim();
+  assert(name, "Group name is required.");
+  const parentId = normalizeAssetGroupId(input.parentId);
+  assertGroupTreeIsValid(next, input.id || null, parentId);
+  const timestamp = nowIso(now);
+  const group = {
+    id: input.id || id("group"),
+    name,
+    parentId,
+    description: String(input.description || "").trim(),
+    imageUrl: String(input.imageUrl || "").trim(),
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    deletedAt: null,
+  };
+  next.inventoryGroups.push(group);
+  next.updatedAt = timestamp;
+  return { state: next, group };
+}
+
+export function createInventoryUnit(state, input, now = new Date()) {
+  const next = migrateAssetState(state);
+  const name = normalizeUnitLabel(input.name || input.label, "");
+  assert(name, "Unit name is required.");
+  const existing = next.stockUnits.find((unit) => !unit.deletedAt && unit.name.toLowerCase() === name.toLowerCase());
+  assert(!existing, "That unit already exists.");
+  const timestamp = nowIso(now);
+  const unit = {
+    id: input.id || id("stock_unit"),
+    name,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    deletedAt: null,
+  };
+  next.stockUnits.push(unit);
+  next.updatedAt = timestamp;
+  return { state: next, unit };
+}
+
+export function createUnitConversion(state, input, now = new Date()) {
+  const next = migrateAssetState(state);
+  const fromUnitId = String(input.fromUnitId || "").trim();
+  const toUnitId = String(input.toUnitId || "").trim();
+  const factor = Number.parseFloat(String(input.factor ?? ""));
+  assert(fromUnitId && toUnitId, "Choose two units for the conversion.");
+  assert(fromUnitId !== toUnitId, "A conversion must use two different units.");
+  assert(Number.isFinite(factor) && factor > 0, "Conversion factor must be greater than zero.");
+  assert(next.stockUnits.some((unit) => unit.id === fromUnitId && !unit.deletedAt), "From unit not found.");
+  assert(next.stockUnits.some((unit) => unit.id === toUnitId && !unit.deletedAt), "To unit not found.");
+  const exists = next.unitConversions.some((conversion) =>
+    !conversion.deletedAt &&
+    conversion.fromUnitId === fromUnitId &&
+    conversion.toUnitId === toUnitId
+  );
+  assert(!exists, "That conversion already exists.");
+  const timestamp = nowIso(now);
+  const conversion = {
+    id: input.id || id("unit_conversion"),
+    fromUnitId,
+    toUnitId,
+    factor,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    deletedAt: null,
+  };
+  next.unitConversions.push(conversion);
+  next.updatedAt = timestamp;
+  return { state: next, conversion };
+}
+
+export function createCustomerPrintCollection(state, input, now = new Date()) {
+  const next = migrateAssetState(state);
+  const fileId = String(input.fileId || "").trim();
+  assert(fileId, "Print file id is required.");
+
+  const existingAsset = next.assets.find((asset) =>
+    !asset.deletedAt &&
+    asset.sourceType === "customer_print" &&
+    asset.printFileId === fileId
+  );
+  if (existingAsset) {
+    const existingLoan = next.loans.find((loan) => loan.assetId === existingAsset.id);
+    return { state: next, asset: existingAsset, loan: existingLoan || null, inventoryAdjustments: [] };
+  }
+
+  const timestamp = nowIso(now);
+  const safeName = String(input.printName || input.originalFilename || fileId || "Customer print").trim();
+  const collectionCode = input.collectionCode || String(crypto.randomInt(100000, 999999));
+  const returnDueAt = new Date(new Date(now).getTime() + 365 * 24 * 60 * 60 * 1000).toISOString();
+  const asset = {
+    id: stableId("asset_customer_print", fileId),
+    name: safeName,
+    description: `Completed customer print awaiting collection.${input.actualGrams ? ` Final filament: ${Number(input.actualGrams).toFixed(2)} g.` : ""}`,
+    loanable: false,
+    groupId: CUSTOMER_PRINTS_GROUP_ID,
+    imageUrl: String(input.imageUrl || "").trim(),
+    unitLabel: "items",
+    continuous: false,
+    quantityValue: 1,
+    sourceType: "customer_print",
+    printFileId: fileId,
+    actualFilamentGrams: Number(input.actualGrams || 0) || null,
+    actualFilamentBreakdown: Array.isArray(input.actualBreakdown) ? input.actualBreakdown : [],
+    pricePence: Math.max(0, Math.round(Number(input.pricePence || 0))),
+    lateFeePence: 0,
+    totalFailureDays: DEFAULT_FAILURE_DAYS,
+    maxLoanDays: null,
+    availability: normalizeAvailability(),
+    units: [{
+      id: stableId("unit_customer_print", fileId),
+      serial: `PRINT-${fileId.slice(0, 8).toUpperCase()}`,
+      condition: "normal",
+      damageHistory: [],
+      createdAt: timestamp,
+      deletedAt: null,
+    }],
+    loanabilityHistory: [],
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    deletedAt: null,
+  };
+
+  const loan = {
+    id: stableId("loan_customer_print", fileId),
+    assetId: asset.id,
+    unitIds: asset.units.map((unit) => unit.id),
+    userId: input.userId || input.ownerSub || null,
+    userEmail: input.userEmail || input.ownerEmail || null,
+    status: "reserved",
+    collectionOnly: true,
+    openEndedCollection: true,
+    collectionLabel: "Come in whenever",
+    collectionAt: timestamp,
+    originallyBookedCollectionAt: null,
+    returnDueAt,
+    collectedAt: null,
+    returnedAt: null,
+    cancelledAt: null,
+    lostAt: null,
+    collectionCode,
+    returnCode: null,
+    termsAcceptedAt: timestamp,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
+
+  next.assets.push(asset);
+  next.loans.push(loan);
+  const inventoryAdjustments = subtractFilamentFromInventory(next, asset.actualFilamentBreakdown);
+  next.updatedAt = timestamp;
+  return { state: next, asset, loan, inventoryAdjustments };
+}
+
 export function adjustAccountBalance(state, input, admin = {}, now = new Date()) {
   const next = migrateAssetState(state);
   const userId = input.userId || null;
@@ -1164,12 +1602,14 @@ function decorateAsset(state, asset, now = new Date()) {
       loanHistory: loanHistoryForUnit(state, unit.id),
     })),
     loanabilityHistory: normalizeLoanabilityHistory(asset),
-    quantityTotal: units.length,
-    quantityNormal: normalUnits.length,
+    quantityTotal: asset.continuous ? Number(asset.quantityValue || 0) : units.length,
+    quantityNormal: asset.continuous ? Number(asset.quantityValue || 0) : normalUnits.length,
     quantityDamaged: damagedUnits.length,
     quantityLost: lostUnits.length,
-    quantityPhysicallyPresent: physicallyPresentUnits.length,
+    quantityPhysicallyPresent: asset.continuous ? Number(asset.quantityValue || 0) : physicallyPresentUnits.length,
     quantityOutOfPremises: outOfPremisesUnits.length,
+    unitLabel: normalizeUnitLabel(asset.unitLabel),
+    continuous: Boolean(asset.continuous),
     bookableNow,
     nextAvailableAt: bookableNow ? nowIso(now) : nextAvailability(asset, state, now),
   };
@@ -1189,7 +1629,70 @@ export function selectInventory(state, now = new Date()) {
       ...asset,
       units: activeUnits(asset).filter((unit) => unit.condition !== "lost" && !isUnitOutOfPremises(migrateAssetState(state), unit.id)),
     }))
-    .filter((asset) => asset.units.length);
+    .filter((asset) => asset.continuous || asset.units.length);
+}
+
+function groupBreadcrumbs(groups, currentGroupId) {
+  const byId = new Map(groups.map((group) => [group.id, group]));
+  const breadcrumbs = [];
+  const seen = new Set();
+  let cursor = currentGroupId || null;
+  while (cursor && byId.has(cursor) && !seen.has(cursor)) {
+    seen.add(cursor);
+    const group = byId.get(cursor);
+    breadcrumbs.unshift(group);
+    cursor = group.parentId || null;
+  }
+  return breadcrumbs;
+}
+
+export function selectInventoryTree(state, options = {}, now = new Date()) {
+  const current = migrateAssetState(state);
+  const groups = activeGroups(current).sort((left, right) => left.name.localeCompare(right.name));
+  const groupId = normalizeAssetGroupId(options.groupId);
+  if (groupId) findGroup(current, groupId);
+  const inventory = selectInventory(current, now);
+
+  return {
+    currentGroupId: groupId,
+    breadcrumbs: groupBreadcrumbs(groups, groupId),
+    groups,
+    childGroups: groups.filter((group) => (group.parentId || null) === (groupId || null)),
+    inventory: inventory.filter((asset) => (asset.groupId || null) === (groupId || null)),
+    rootInventory: inventory.filter((asset) => !asset.groupId),
+  };
+}
+
+export function selectInventoryUnits(state) {
+  const current = migrateAssetState(state);
+  const units = current.stockUnits
+    .filter((unit) => !unit.deletedAt)
+    .sort((left, right) => left.name.localeCompare(right.name));
+  const conversions = current.unitConversions
+    .filter((conversion) => !conversion.deletedAt)
+    .map((conversion) => ({
+      ...conversion,
+      fromUnitName: units.find((unit) => unit.id === conversion.fromUnitId)?.name || conversion.fromUnitId,
+      toUnitName: units.find((unit) => unit.id === conversion.toUnitId)?.name || conversion.toUnitId,
+    }))
+    .sort((left, right) =>
+      left.fromUnitName.localeCompare(right.fromUnitName) ||
+      left.toUnitName.localeCompare(right.toUnitName)
+    );
+
+  return { units, conversions };
+}
+
+export function selectInventoryExport(state, now = new Date()) {
+  const current = migrateAssetState(state);
+  return {
+    exportedAt: nowIso(now),
+    groups: activeGroups(current),
+    inventory: selectInventory(current, now),
+    catalogue: selectCatalogue(current, now),
+    loans: selectAdminLoans(current, now).all,
+    units: selectInventoryUnits(current),
+  };
 }
 
 function loanableStatus(asset) {
@@ -1252,6 +1755,11 @@ function decorateLoan(state, loan, now = new Date()) {
     failureAt,
     effectiveCollectionAt,
     effectiveReturnAt,
+    collectionLabel: loan.collectionLabel || null,
+    collectionOnly: Boolean(loan.collectionOnly),
+    openEndedCollection: Boolean(loan.openEndedCollection),
+    printFileId: asset?.printFileId || null,
+    assetSourceType: asset?.sourceType || null,
     collectedEarly: Boolean(loan.collectedEarly),
   };
 }

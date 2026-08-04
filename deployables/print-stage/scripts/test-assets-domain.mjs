@@ -5,6 +5,10 @@ import {
   bookLoan,
   createAsset,
   createInitialAssetState,
+  createCustomerPrintCollection,
+  createInventoryGroup,
+  createInventoryUnit,
+  createUnitConversion,
   deleteAsset,
   deleteUnit,
   expireMissedCollections,
@@ -21,6 +25,9 @@ import {
   selectAdminLoans,
   selectCatalogue,
   selectInventory,
+  selectInventoryExport,
+  selectInventoryTree,
+  selectInventoryUnits,
   selectLoanableListings,
   selectLostDamaged,
   selectUserLoans,
@@ -30,6 +37,7 @@ import {
   verifyCollectionCode,
   verifyReturnCode,
 } from "../lib/assetsDomain.js";
+import { computePrintPriceForBreakdown } from "../lib/printPricing.js";
 import {
   fromDatetimeLocalValue,
   toDatetimeLocalValue,
@@ -42,6 +50,10 @@ function throwsMessage(fn, text) {
 
 function actor(id, email = `${id}@example.com`) {
   return { userId: id, userEmail: email };
+}
+
+function inventoryAsset(state, assetId, now) {
+  return selectInventory(state, now).find((asset) => asset.id === assetId);
 }
 
 const mondayMorning = new Date("2026-07-06T10:00:00.000Z");
@@ -182,7 +194,7 @@ result = bookLoan(
 state = result.state;
 const loanA = result.loan;
 assert.equal(loanA.collectionCode, "111111");
-assert.equal(selectInventory(state, mondayMorning)[0].quantityPhysicallyPresent, 2);
+assert.equal(inventoryAsset(state, camera.id, mondayMorning).quantityPhysicallyPresent, 2);
 
 throwsMessage(
   () => verifyCollectionCode(state, { loanId: loanA.id, code: "000000" }, mondayMorning),
@@ -198,7 +210,7 @@ result = verifyCollectionCode(state, { loanId: loanA.id, code: "111111", adminId
 state = result.state;
 assert.equal(result.loan.status, "collected");
 assert.equal(result.loan.collectedEarly, true);
-assert.equal(selectInventory(state, mondayMorning)[0].quantityPhysicallyPresent, 1);
+assert.equal(inventoryAsset(state, camera.id, mondayMorning).quantityPhysicallyPresent, 1);
 
 result = bookLoan(
   state,
@@ -678,5 +690,83 @@ futureResult = bookLoan(
   mondayMorning,
 );
 assert.equal(futureResult.loan.status, "reserved");
+
+const smallQuote = computePrintPriceForBreakdown([{ filamentType: "PLA", grams: 70 }]);
+assert.equal(smallQuote.totalMinor, 560);
+assert.equal(smallQuote.pricingModel, "tiered_weight");
+const largerQuote = computePrintPriceForBreakdown([{ filamentType: "PLA", grams: 80 }]);
+assert.equal(largerQuote.totalMinor, 620);
+assert.equal(largerQuote.lineItems[0].pricingDescription.includes("8p/g"), true);
+
+let inventoryState = createInitialAssetState();
+let inventoryTree = selectInventoryTree(inventoryState);
+assert.ok(inventoryTree.groups.some((group) => group.name === "Customer prints"));
+assert.ok(inventoryTree.groups.some((group) => group.name === "Filament"));
+assert.ok(inventoryTree.rootInventory.length === 0);
+let groupResult = createInventoryGroup(
+  inventoryState,
+  { id: "group_cameras", name: "Cameras", description: "Optics and imaging.", imageUrl: "https://example.com/camera.jpg" },
+  mondayMorning,
+);
+inventoryState = groupResult.state;
+let groupedAsset = createAsset(
+  inventoryState,
+  {
+    name: "Inspection Camera",
+    groupId: "group_cameras",
+    loanable: false,
+    quantity: 1,
+    unitLabel: "items",
+  },
+  mondayMorning,
+);
+inventoryState = groupedAsset.state;
+inventoryTree = selectInventoryTree(inventoryState, { groupId: "group_cameras" }, mondayMorning);
+assert.equal(inventoryTree.inventory[0].name, "Inspection Camera");
+assert.equal(inventoryTree.breadcrumbs[0].name, "Cameras");
+
+let unitResult = createInventoryUnit(inventoryState, { id: "unit_meter", name: "metres" }, mondayMorning);
+inventoryState = unitResult.state;
+unitResult = createInventoryUnit(inventoryState, { id: "unit_centimeter", name: "centimetres" }, mondayMorning);
+inventoryState = unitResult.state;
+const conversionResult = createUnitConversion(
+  inventoryState,
+  { fromUnitId: "unit_meter", toUnitId: "unit_centimeter", factor: 100 },
+  mondayMorning,
+);
+inventoryState = conversionResult.state;
+assert.equal(selectInventoryUnits(inventoryState).conversions[0].factor, 100);
+assert.ok(selectInventoryExport(inventoryState, mondayMorning).groups.some((group) => group.id === "group_cameras"));
+
+let printState = createInitialAssetState();
+let printResult = createCustomerPrintCollection(
+  printState,
+  {
+    fileId: "file_test_print",
+    printName: "Bracket.3mf",
+    ownerSub: "customer-a",
+    ownerEmail: "customer-a@example.com",
+    actualGrams: 125,
+    actualBreakdown: [{ filamentType: "PLA", grams: 125 }],
+    collectionCode: "909090",
+    pricePence: 890,
+  },
+  mondayMorning,
+);
+printState = printResult.state;
+assert.equal(printResult.loan.collectionOnly, true);
+assert.equal(printResult.loan.collectionLabel, "Come in whenever");
+const filamentAsset = selectInventoryTree(printState, { groupId: "group_filament" }, mondayMorning).inventory
+  .find((asset) => asset.id === "asset_dummy_pla");
+assert.equal(filamentAsset.quantityPhysicallyPresent, 875);
+assert.equal(selectAdminLoans(printState, mondayMorning).upcoming.some((loan) => loan.id === printResult.loan.id), true);
+printResult = verifyCollectionCode(
+  printState,
+  { loanId: printResult.loan.id, code: "909090", adminId: "admin" },
+  mondayMorning,
+);
+printState = printResult.state;
+assert.equal(printResult.loan.status, "returned");
+assert.equal(selectInventoryTree(printState, { groupId: "group_customer_prints" }, mondayMorning).inventory.length, 0);
 
 console.log("asset domain tests passed");

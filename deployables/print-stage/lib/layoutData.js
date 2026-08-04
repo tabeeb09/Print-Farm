@@ -9,6 +9,7 @@ export const menuItems = [
   { href: "/account/security", title: "Account security", label: "Password email" },
   { href: "/admin/assets/catalogue", title: "Asset catalogue", label: "Loan settings", assetAdminOnly: true },
   { href: "/admin/assets/inventory", title: "Inventory", label: "On-premises assets", assetAdminOnly: true },
+  { href: "/admin/assets/units", title: "Inventory units", label: "Units and conversions", assetAdminOnly: true },
   { href: "/admin/assets/loans", title: "Asset loans", label: "Collections and returns", assetAdminOnly: true },
   { href: "/admin/assets/gantt", title: "Loan Gantt", label: "Asset timeline", assetAdminOnly: true },
   { href: "/admin/assets/lost-damaged", title: "Lost and damaged", label: "Repair ledger", assetAdminOnly: true },

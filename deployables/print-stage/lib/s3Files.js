@@ -15,6 +15,7 @@ import {
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 import {
+  createCustomerPrintCollection,
   recordPrintFilamentAdjustmentTransaction,
   recordPrintPaymentTransaction,
 } from "./assetsDomain.js";
@@ -1101,7 +1102,10 @@ export async function completePrintedFile(fileId, updates = {}) {
   const expectedQuote = manifest.paymentQuoteAtCheckout ||
     computePrintPriceQuote(manifest, manifest.paymentDiscount || null);
   const expectedGrams = getExpectedFilamentGrams(manifest, expectedQuote);
-  const actualGrams = Number(updates.actualGrams ?? expectedGrams);
+  const submittedActualGrams = typeof updates.actualGrams === "string" && !updates.actualGrams.trim()
+    ? null
+    : updates.actualGrams;
+  const actualGrams = Number(submittedActualGrams ?? expectedGrams);
 
   if (!Number.isFinite(actualGrams) || actualGrams <= 0) {
     throw new Error("Actual filament grams must be greater than zero.");
@@ -1115,10 +1119,12 @@ export async function completePrintedFile(fileId, updates = {}) {
   const actualMinor = Number(actualQuote?.totalMinor || 0);
   const deltaMinor = actualQuote ? actualMinor - expectedMinor : 0;
 
-  let adjustmentTransaction = null;
-  if (deltaMinor !== 0) {
-    const adjustment = await updateAssetState((state) =>
-      recordPrintFilamentAdjustmentTransaction(state, {
+  const assetUpdate = await updateAssetState((state) => {
+    let nextState = state;
+    let adjustmentTransaction = null;
+
+    if (deltaMinor !== 0) {
+      const adjustment = recordPrintFilamentAdjustmentTransaction(nextState, {
         fileId: manifest.id,
         userId: manifest.ownerSub,
         userEmail: manifest.ownerEmail,
@@ -1127,10 +1133,35 @@ export async function completePrintedFile(fileId, updates = {}) {
         createdByAdminId: updates.completedById || null,
         createdByAdminEmail: updates.completedByEmail || null,
         description: `${deltaMinor > 0 ? "Extra" : "Reduced"} filament usage for ${manifest.originalFilename}: expected ${(expectedGrams || 0).toFixed(2)} g, actual ${actualGrams.toFixed(2)} g`,
-      }),
-    );
-    adjustmentTransaction = adjustment.transaction || null;
-  }
+      });
+      nextState = adjustment.state;
+      adjustmentTransaction = adjustment.transaction || null;
+    }
+
+    const collection = createCustomerPrintCollection(nextState, {
+      fileId: manifest.id,
+      printName: manifest.originalFilename,
+      ownerSub: manifest.ownerSub,
+      ownerEmail: manifest.ownerEmail,
+      actualGrams,
+      actualBreakdown,
+      pricePence: actualMinor,
+    });
+
+    return {
+      state: collection.state,
+      adjustmentTransaction,
+      collectionAsset: collection.asset || null,
+      collectionLoan: collection.loan || null,
+      inventoryAdjustments: collection.inventoryAdjustments || [],
+    };
+  });
+  const adjustmentTransaction = assetUpdate.adjustmentTransaction || null;
+  const collectionAsset = assetUpdate.collectionAsset || null;
+  const collectionLoan = assetUpdate.collectionLoan || null;
+  const inventoryAdjustments = Array.isArray(assetUpdate.inventoryAdjustments)
+    ? assetUpdate.inventoryAdjustments
+    : [];
 
   await deleteQueueCopyIfPresent(manifest);
 
@@ -1143,6 +1174,10 @@ export async function completePrintedFile(fileId, updates = {}) {
     printCompletionSource: updates.source || "manual",
     printCompletionAdjustmentMinor: deltaMinor,
     printCompletionAdjustmentTransactionId: adjustmentTransaction?.id || null,
+    customerPrintAssetId: collectionAsset?.id || null,
+    customerPrintLoanId: collectionLoan?.id || null,
+    customerPrintCollectionCode: collectionLoan?.collectionCode || null,
+    filamentInventoryAdjustments: inventoryAdjustments,
     printQueueObjectKey: null,
     updatedAt: new Date().toISOString(),
   };
@@ -1158,6 +1193,9 @@ export async function completePrintedFile(fileId, updates = {}) {
     actualMinor,
     deltaMinor,
     adjustmentTransaction,
+    collectionAsset,
+    collectionLoan,
+    inventoryAdjustments,
   };
 }
 

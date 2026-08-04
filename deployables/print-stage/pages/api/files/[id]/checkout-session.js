@@ -79,7 +79,7 @@ export default async function handler(req, res) {
           unit_amount: lineItem.chargeAmountMinor ?? lineItem.amountMinor,
           product_data: {
             name: `${lineItem.label} filament`,
-            description: `${lineItem.grams.toFixed(2)} g @ ${(lineItem.unitAmountMinorPerGram / 100).toFixed(2)} ${lineItem.currency.toUpperCase()}/g`,
+            description: `${lineItem.grams.toFixed(2)} g. ${lineItem.pricingDescription || "Tiered filament pricing"}`,
           },
         },
       })),
