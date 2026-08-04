@@ -46,7 +46,8 @@ jobs:
             echo "ref=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Validate deployment secrets
+      - name: Check deployment secrets
+        id: deploy_secrets
         env:
           DEPLOY_HOST: ${{ secrets.PRINT_DEPLOY_HOST || secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.PRINT_DEPLOY_USER || secrets.DEPLOY_USER }}
@@ -55,12 +56,20 @@ jobs:
           DEPLOY_SSH_KNOWN_HOSTS: ${{ secrets.PRINT_DEPLOY_SSH_KNOWN_HOSTS || secrets.DEPLOY_SSH_KNOWN_HOSTS }}
           DEPLOY_SSH_KNOWN_HOSTS_B64: ${{ secrets.PRINT_DEPLOY_SSH_KNOWN_HOSTS_B64 || secrets.DEPLOY_SSH_KNOWN_HOSTS_B64 }}
         run: |
-          test -n "$DEPLOY_HOST" || { echo "Missing secret PRINT_DEPLOY_HOST or DEPLOY_HOST"; exit 1; }
-          test -n "$DEPLOY_USER" || { echo "Missing secret PRINT_DEPLOY_USER or DEPLOY_USER"; exit 1; }
-          test -n "$DEPLOY_SSH_PRIVATE_KEY" || test -n "$DEPLOY_SSH_PRIVATE_KEY_B64" || { echo "Missing secret PRINT_DEPLOY_SSH_PRIVATE_KEY(_B64) or DEPLOY_SSH_PRIVATE_KEY(_B64)"; exit 1; }
-          test -n "$DEPLOY_SSH_KNOWN_HOSTS" || test -n "$DEPLOY_SSH_KNOWN_HOSTS_B64" || { echo "Missing secret PRINT_DEPLOY_SSH_KNOWN_HOSTS(_B64) or DEPLOY_SSH_KNOWN_HOSTS(_B64)"; exit 1; }
+          missing=()
+          test -n "$DEPLOY_HOST" || missing+=("PRINT_DEPLOY_HOST or DEPLOY_HOST")
+          test -n "$DEPLOY_USER" || missing+=("PRINT_DEPLOY_USER or DEPLOY_USER")
+          test -n "$DEPLOY_SSH_PRIVATE_KEY" || test -n "$DEPLOY_SSH_PRIVATE_KEY_B64" || missing+=("PRINT_DEPLOY_SSH_PRIVATE_KEY(_B64) or DEPLOY_SSH_PRIVATE_KEY(_B64)")
+          test -n "$DEPLOY_SSH_KNOWN_HOSTS" || test -n "$DEPLOY_SSH_KNOWN_HOSTS_B64" || missing+=("PRINT_DEPLOY_SSH_KNOWN_HOSTS(_B64) or DEPLOY_SSH_KNOWN_HOSTS(_B64)")
+          if ((${#missing[@]})); then
+            printf '::warning::Print deploy skipped because these GitHub secrets are missing: %s\n' "${missing[*]}"
+            echo "can_deploy=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "can_deploy=true" >> "$GITHUB_OUTPUT"
 
       - name: Configure SSH key
+        if: steps.deploy_secrets.outputs.can_deploy == 'true'
         env:
           SSH_PRIVATE_KEY: ${{ secrets.PRINT_DEPLOY_SSH_PRIVATE_KEY || secrets.DEPLOY_SSH_PRIVATE_KEY }}
           SSH_PRIVATE_KEY_B64: ${{ secrets.PRINT_DEPLOY_SSH_PRIVATE_KEY_B64 || secrets.DEPLOY_SSH_PRIVATE_KEY_B64 }}
@@ -82,6 +91,7 @@ jobs:
           chmod 600 ~/.ssh/known_hosts
 
       - name: Deploy print stage over SSH
+        if: steps.deploy_secrets.outputs.can_deploy == 'true'
         env:
           DEPLOY_HOST: ${{ secrets.PRINT_DEPLOY_HOST || secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.PRINT_DEPLOY_USER || secrets.DEPLOY_USER }}
