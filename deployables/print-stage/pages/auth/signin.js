@@ -55,9 +55,6 @@ export async function getServerSideProps() {
 
   if (env.KEYCLOAK_ISSUER && env.KEYCLOAK_CLIENT_ID && env.KEYCLOAK_CLIENT_SECRET) {
     providers.push({ id: "keycloak", name: "Keycloak" });
-  }
-
-  if (env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET) {
     providers.push({ id: "keycloakGoogle", name: "Google" });
   }
 
