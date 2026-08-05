@@ -41,6 +41,8 @@ const UPLOAD_URL_TTL_SECONDS = 300;
 const DEFAULT_RUNTIME_ENV_FILE = ".env.runtime";
 const DEFAULT_WORKER_CONFIG_DIR = process.env.PRINT_WORKER_CONFIG_DIR || process.env.XDG_CONFIG_HOME || path.join(process.env.HOME || process.env.USERPROFILE || ".", ".config");
 const DEFAULT_WORKER_CONFIG_FILE = process.env.PRINT_WORKER_PRINTER_CONFIG_FILE || path.join(DEFAULT_WORKER_CONFIG_DIR, "caid-print-worker", "printers.json");
+const PROCESSING_STALE_MS = 10 * 60 * 1000;
+const activeProcessingFiles = new Set();
 
 function normalizeObjectKey(value) {
   return String(value || "").replace(/^\/+|\/+$/g, "");
@@ -156,6 +158,15 @@ function hasQueueArtifact(manifest) {
   return typeof manifest?.printQueueObjectKey === "string" &&
     manifest.printQueueObjectKey.length > 0 &&
     /\.gcode\.3mf$/i.test(manifest.printQueueObjectKey);
+}
+
+function isProcessingStale(manifest) {
+  if (manifest?.extractionStatus !== "processing" && manifest?.sliceStatus !== "processing") {
+    return false;
+  }
+
+  const startedAt = Date.parse(manifest.processingStartedAt || manifest.updatedAt || "");
+  return !Number.isFinite(startedAt) || Date.now() - startedAt > PROCESSING_STALE_MS;
 }
 
 function decorateManifest(manifest) {
@@ -624,6 +635,61 @@ async function processFileForPrinting(manifest) {
   }
 }
 
+async function queueFileProcessing(actor, fileId) {
+  const manifest = await readManifest(fileId);
+
+  if (!manifest) {
+    throw new Error("File not found.");
+  }
+
+  if (!canAccessFile(actor, manifest.ownerSub)) {
+    throw new Error("Forbidden");
+  }
+
+  if (
+    manifest.extractionStatus === "verified" &&
+    manifest.sliceStatus === "sliced" &&
+    hasGeneratedGcodeArtifact(manifest)
+  ) {
+    return { file: await hydrateManifest(manifest), processing: false };
+  }
+
+  if (
+    activeProcessingFiles.has(fileId) ||
+    ((manifest.extractionStatus === "processing" || manifest.sliceStatus === "processing") && !isProcessingStale(manifest))
+  ) {
+    return { file: await hydrateManifest(manifest), processing: true };
+  }
+
+  const now = new Date().toISOString();
+  const queued = {
+    ...manifest,
+    status: "processing",
+    extractionStatus: "processing",
+    extractionError: null,
+    sliceStatus: isSliceableModelFile(manifest) ? "processing" : "not_required",
+    sliceError: null,
+    processingStartedAt: now,
+    updatedAt: now,
+  };
+
+  await writeManifest(queued);
+  activeProcessingFiles.add(fileId);
+
+  void processFileForPrinting(queued)
+    .catch((error) => {
+      console.error("Background print file processing failed", {
+        fileId,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    })
+    .finally(() => {
+      activeProcessingFiles.delete(fileId);
+    });
+
+  return { file: await hydrateManifest(queued), processing: true };
+}
+
 export async function createUploadUrl(actor, request) {
   if (!isValidFilamentSelection(request.filamentSelection)) {
     throw new Error("A valid filament selection is required before upload.");
@@ -850,17 +916,12 @@ export async function updateFileMetadata(actor, fileId, updates) {
 }
 
 export async function verifyFileFilamentMetadata(actor, fileId) {
-  const manifest = await readManifest(fileId);
+  const result = await queueFileProcessing(actor, fileId);
+  return result.file;
+}
 
-  if (!manifest) {
-    throw new Error("File not found.");
-  }
-
-  if (!canAccessFile(actor, manifest.ownerSub)) {
-    throw new Error("Forbidden");
-  }
-
-  return processFileForPrinting(manifest);
+export async function startFileFilamentProcessing(actor, fileId) {
+  return queueFileProcessing(actor, fileId);
 }
 
 export async function getFileForActor(actor, fileId) {
@@ -961,10 +1022,11 @@ export async function requestPrint(actor, fileId) {
     !hasGeneratedGcodeArtifact(manifest);
 
   if (needsProcessing) {
-    manifest = await verifyFileFilamentMetadata(actor, fileId);
-  } else {
-    manifest = await hydrateManifest(manifest);
+    await queueFileProcessing(actor, fileId);
+    throw new Error("Backend slicing has not completed yet. Processing has been started; refresh shortly.");
   }
+
+  manifest = await hydrateManifest(manifest);
 
   const printEligibility = getPrintEligibility(manifest);
 

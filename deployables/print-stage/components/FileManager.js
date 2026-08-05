@@ -42,6 +42,30 @@ function formatCurrency(minor, currency) {
   }).format(minor / 100);
 }
 
+function isFileProcessing(file) {
+  return file?.extractionStatus === "processing" || file?.sliceStatus === "processing";
+}
+
+function getProcessingSummary(file) {
+  if (isFileProcessing(file)) {
+    return "Backend slicing is running. This page refreshes automatically.";
+  }
+
+  if (file?.extractionStatus === "pending" || file?.sliceStatus === "pending") {
+    return "Backend processing has not run yet.";
+  }
+
+  if (file?.extractionStatus === "failed" || file?.sliceStatus === "failed") {
+    return file?.extractionError || file?.sliceError || "Backend processing failed.";
+  }
+
+  if (file?.extractionStatus === "verified" && file?.sliceStatus === "sliced") {
+    return "Backend-sliced package is ready.";
+  }
+
+  return null;
+}
+
 function PaymentModal({ file, onClose, onContinue, loading }) {
   if (!file?.paymentQuote) {
     return null;
@@ -188,6 +212,23 @@ export default function FileManager() {
     void loadFiles();
   }, []);
 
+  const hasActiveProcessing = useMemo(
+    () => files.some((file) => isFileProcessing(file)),
+    [files],
+  );
+
+  useEffect(() => {
+    if (!hasActiveProcessing) {
+      return undefined;
+    }
+
+    const timer = window.setInterval(() => {
+      void loadFiles();
+    }, 5000);
+
+    return () => window.clearInterval(timer);
+  }, [hasActiveProcessing]);
+
   const selectedSummary = useMemo(() => {
     if (!selectedFile) {
       return "No file chosen";
@@ -211,7 +252,7 @@ export default function FileManager() {
     }
 
     setFiles((current) => current.map((file) => (file.id === fileId ? payload.file : file)));
-    return payload.file;
+    return payload;
   }
 
   async function handleUpload() {
@@ -273,12 +314,15 @@ export default function FileManager() {
 
       if (payload.file?.id) {
         try {
-          await verifyFilamentForFile(payload.file.id);
+          const processingResult = await verifyFilamentForFile(payload.file.id);
+          if (processingResult.processing) {
+            setNotice("File uploaded and backend slicing has started. The job list will refresh automatically.");
+          }
         } catch (caught) {
           setNotice(
             caught instanceof Error
-              ? `File uploaded, but backend processing failed: ${caught.message}`
-              : "File uploaded, but backend processing failed.",
+              ? `File uploaded, but backend processing could not start: ${caught.message}`
+              : "File uploaded, but backend processing could not start.",
           );
         }
       }
@@ -365,6 +409,8 @@ export default function FileManager() {
       }
 
       setFiles((current) => current.filter((file) => file.id !== fileId));
+      setNotice("File deleted.");
+      await loadFiles();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Delete failed.");
     } finally {
@@ -392,15 +438,7 @@ export default function FileManager() {
 
       setFiles((current) => current.map((file) => (file.id === fileId ? payload.file : file)));
       setFileFilamentEdits((current) => ({ ...current, [fileId]: payload.file.filamentSelection || "" }));
-      try {
-        await verifyFilamentForFile(fileId);
-      } catch (caught) {
-        setNotice(
-          caught instanceof Error
-            ? `Filament updated, but backend processing failed: ${caught.message}`
-            : "Filament updated, but backend processing failed.",
-        );
-      }
+      setNotice("Filament updated. Click Process file to regenerate the print package.");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Failed to update filament.");
     } finally {
@@ -414,7 +452,12 @@ export default function FileManager() {
     setNotice(null);
 
     try {
-      await verifyFilamentForFile(fileId);
+      const result = await verifyFilamentForFile(fileId);
+      setNotice(
+        result.processing
+          ? "Backend slicing has started. The job list will refresh automatically."
+          : "Backend-sliced package is ready.",
+      );
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Filament verification failed.");
     } finally {
@@ -525,7 +568,9 @@ export default function FileManager() {
                 const effectiveSelection = getPendingFilamentValue(file);
                 const fileWithPendingSelection = { ...file, filamentSelection: effectiveSelection };
                 const printEligibility = getPrintEligibility(fileWithPendingSelection);
-                const needsProcessingCheck = file.extractionStatus !== "verified";
+                const processing = isFileProcessing(file);
+                const processingSummary = getProcessingSummary(file);
+                const needsProcessingCheck = file.extractionStatus !== "verified" && !processing;
                 const paymentRequired = file.paymentStatus !== "paid";
                 const quote = file.paymentQuote;
 
@@ -553,6 +598,11 @@ export default function FileManager() {
                         {file.extractionStatus === "verified" && typeof file.extractedGrams === "number" ? (
                           <small style={{ color: "#555" }}>Filament mass: {file.extractedGrams.toFixed(2)} g</small>
                         ) : null}
+                        {processingSummary ? (
+                          <small style={{ color: processing ? "#8a6500" : file.extractionStatus === "failed" ? "#a40000" : "#555" }}>
+                            {processingSummary}
+                          </small>
+                        ) : null}
                         {quote ? (
                           <small style={{ color: "#555" }}>
                             Price: {formatCurrency(quote.totalMinor, quote.currency)}
@@ -573,14 +623,13 @@ export default function FileManager() {
                         ) : (
                           <small style={{ color: "#8a6500" }}>Payment required before joining the print queue</small>
                         )}
-                        {file.extractionStatus === "failed" && file.extractionError ? (
-                          <small style={{ color: "#a40000" }}>{file.extractionError}</small>
-                        ) : null}
                       </div>
                     </td>
                     <td style={{ padding: "0.65rem 0" }}>{formatBytes(file.sizeBytes)}</td>
                     <td style={{ padding: "0.65rem 0", textTransform: "capitalize" }}>
-                      {file.printStatus && file.printStatus !== "idle"
+                      {processing
+                        ? "Processing"
+                        : file.printStatus && file.printStatus !== "idle"
                         ? file.printStatus === "printing"
                           ? "Being printed"
                           : "In queue"
@@ -601,8 +650,13 @@ export default function FileManager() {
                       {file.printStatus === "idle" || !file.printStatus ? (
                         <>
                           {needsProcessingCheck ? (
-                            <button type="button" onClick={() => handleVerifyFilament(file.id)} disabled={verifyingId === file.id}>
+                            <button type="button" onClick={() => handleVerifyFilament(file.id)} disabled={verifyingId === file.id || processing}>
                               {verifyingId === file.id ? "Processing..." : "Process file"}
+                            </button>
+                          ) : null}
+                          {processing ? (
+                            <button type="button" disabled>
+                              Processing...
                             </button>
                           ) : null}
                           {paymentRequired ? (

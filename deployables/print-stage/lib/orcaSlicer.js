@@ -6,8 +6,6 @@ import { spawn } from "node:child_process";
 import { env } from "./env.js";
 import { FILAMENT_EXTRACT_VALUE } from "./printPolicy.js";
 
-const SLICER_TIMEOUT_MS = 5 * 60 * 1000;
-
 const FILAMENT_PROFILE_CANDIDATES = {
   PLA: ["Bambu PLA Basic @BBL X1C.json"],
   "PLA+": ["Bambu PLA Basic @BBL X1C.json"],
@@ -117,6 +115,26 @@ function runProcess(command, args, timeoutMs) {
   });
 }
 
+function shouldUseXvfb() {
+  return os.platform() !== "win32" &&
+    env.ORCA_SLICER_USE_XVFB !== "false" &&
+    !process.env.DISPLAY;
+}
+
+function buildSlicerCommand(args) {
+  if (!shouldUseXvfb()) {
+    return {
+      command: env.ORCA_SLICER_BIN,
+      args,
+    };
+  }
+
+  return {
+    command: "xvfb-run",
+    args: ["-a", env.ORCA_SLICER_BIN, ...args],
+  };
+}
+
 export function isSliceableModelFilename(filename) {
   const extension = path.extname(filename || "").toLowerCase().replace(/^\./, "");
   return SLICABLE_EXTENSIONS.has(extension);
@@ -181,7 +199,8 @@ export async function sliceModelTo3mf({ buffer, originalFilename, filamentSelect
       ];
     }
 
-    await runProcess(env.ORCA_SLICER_BIN, args, SLICER_TIMEOUT_MS);
+    const slicerCommand = buildSlicerCommand(args);
+    await runProcess(slicerCommand.command, slicerCommand.args, env.ORCA_SLICER_TIMEOUT_MS);
     const outputBuffer = await fs.readFile(outputPath);
 
     return {

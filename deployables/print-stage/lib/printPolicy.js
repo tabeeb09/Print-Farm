@@ -72,6 +72,13 @@ export function getPrintEligibility(file) {
     };
   }
 
+  if (file?.extractionStatus === "processing" || file?.sliceStatus === "processing") {
+    return {
+      canPrint: false,
+      reason: "Backend slicing is still running.",
+    };
+  }
+
   if (file?.extractionStatus !== "verified" || !file?.extractedFilamentType) {
     return {
       canPrint: false,

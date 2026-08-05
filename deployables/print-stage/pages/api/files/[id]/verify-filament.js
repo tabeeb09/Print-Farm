@@ -2,7 +2,7 @@ import { getServerSession } from "next-auth/next";
 
 import { authOptions } from "../../../../lib/authOptions";
 import { toFileActor } from "../../../../lib/auth";
-import { verifyFileFilamentMetadata } from "../../../../lib/s3Files";
+import { startFileFilamentProcessing } from "../../../../lib/s3Files";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -17,8 +17,8 @@ export default async function handler(req, res) {
   }
 
   try {
-    const file = await verifyFileFilamentMetadata(actor, req.query.id);
-    return res.status(200).json({ file });
+    const result = await startFileFilamentProcessing(actor, req.query.id);
+    return res.status(result.processing ? 202 : 200).json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Filament verification failed.";
     const status =

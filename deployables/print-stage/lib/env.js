@@ -109,6 +109,8 @@ const envSchema = z.object({
         ? "C:\\Users\\This PC\\AppData\\Roaming\\OrcaSlicer\\system\\BBL\\filament"
         : "/opt/orca-profiles/BBL/filament",
     ),
+  ORCA_SLICER_USE_XVFB: z.string().default(isWindows ? "false" : "true"),
+  ORCA_SLICER_TIMEOUT_MS: z.coerce.number().int().positive().default(5 * 60 * 1000),
 });
 
 export const env = envSchema.parse(process.env);

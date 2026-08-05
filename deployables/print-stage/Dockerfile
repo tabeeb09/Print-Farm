@@ -29,6 +29,7 @@ RUN apt-get update \
     libsm6 \
     libice6 \
     libmspack0 \
+    xvfb \
     libnss3 \
     libasound2t64 \
   && mkdir -p /etc/apt/keyrings \
