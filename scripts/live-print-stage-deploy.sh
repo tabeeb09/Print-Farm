@@ -7,12 +7,44 @@ REPO_ROOT="${REPO_ROOT:-/srv/print/repo}"
 PRINT_DEPLOY_PATH="${PRINT_DEPLOY_PATH:-/srv/print/app}"
 PRINT_STATE_DIR="${PRINT_STATE_DIR:-/etc/print}"
 CAID_INIT_FILE="${CAID_INIT_FILE:-/etc/caid/openbao-init.json}"
+PRINT_DEPLOY_ENSURE_SWAP="${PRINT_DEPLOY_ENSURE_SWAP:-true}"
+PRINT_SWAP_FILE="${PRINT_SWAP_FILE:-/swapfile}"
+PRINT_SWAP_SIZE="${PRINT_SWAP_SIZE:-4G}"
+PRINT_DOCKER_PRUNE_BEFORE_BUILD="${PRINT_DOCKER_PRUNE_BEFORE_BUILD:-true}"
 
 require_root() {
   if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
     echo "Run as root." >&2
     exit 1
   fi
+}
+
+ensure_swap_if_needed() {
+  [[ "$PRINT_DEPLOY_ENSURE_SWAP" == "true" ]] || return 0
+
+  if swapon --show=NAME --noheadings | grep -Fxq "$PRINT_SWAP_FILE"; then
+    return 0
+  fi
+
+  if [[ ! -f "$PRINT_SWAP_FILE" ]]; then
+    fallocate -l "$PRINT_SWAP_SIZE" "$PRINT_SWAP_FILE" ||
+      dd if=/dev/zero of="$PRINT_SWAP_FILE" bs=1M count=4096
+    chmod 600 "$PRINT_SWAP_FILE"
+    mkswap "$PRINT_SWAP_FILE"
+  fi
+
+  swapon "$PRINT_SWAP_FILE"
+
+  if ! grep -q "^$PRINT_SWAP_FILE " /etc/fstab; then
+    echo "$PRINT_SWAP_FILE none swap sw 0 0" >> /etc/fstab
+  fi
+}
+
+prune_docker_before_build() {
+  [[ "$PRINT_DOCKER_PRUNE_BEFORE_BUILD" == "true" ]] || return 0
+
+  docker builder prune -af || true
+  docker image prune -af || true
 }
 
 unseal_openbao_if_needed() {
@@ -73,6 +105,8 @@ main() {
   BOOTSTRAP_ON_FAILURE=exit STATE_DIR="$PRINT_STATE_DIR" bash "$REPO_ROOT/scripts/bootstrap-print-vps.sh"
 
   cd "$PRINT_DEPLOY_PATH"
+  ensure_swap_if_needed
+  prune_docker_before_build
   docker compose -p print \
     -f docker-compose.print.yaml \
     -f docker-compose.print.same-host-rustfs.yaml \
