@@ -23,6 +23,7 @@ export default async function handler(req, res) {
   try {
     const result = await markPrintSuccessful(actor, req.query.id, {
       actualGrams: req.body?.actualGrams,
+      completionPhotos: req.body?.completionPhotos,
       source: "manual",
     });
     await recordAuditEvent(actor, {
@@ -37,6 +38,7 @@ export default async function handler(req, res) {
         adjustmentTransactionId: result.adjustmentTransaction?.id || null,
         customerPrintAssetId: result.collectionAsset?.id || null,
         customerPrintLoanId: result.collectionLoan?.id || null,
+        completionPhotoCount: result.file?.printCompletionPhotos?.length || 0,
         filamentInventoryAdjustments: result.inventoryAdjustments || [],
       },
     });

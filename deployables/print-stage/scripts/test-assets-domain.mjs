@@ -14,6 +14,7 @@ import {
   expireMissedCollections,
   extendLoan,
   markLoanLostByUser,
+  markUnitsDamaged,
   normalizeAvailability,
   recordPrintPaymentTransaction,
   recoverLostUnits,
@@ -50,6 +51,10 @@ function throwsMessage(fn, text) {
 
 function actor(id, email = `${id}@example.com`) {
   return { userId: id, userEmail: email };
+}
+
+function evidencePhoto(name = "evidence.jpg") {
+  return { name, type: "image/jpeg", size: 128, dataUrl: "data:image/jpeg;base64,abcd" };
 }
 
 function inventoryAsset(state, assetId, now) {
@@ -206,10 +211,21 @@ throwsMessage(
   "Early collection",
 );
 
-result = verifyCollectionCode(state, { loanId: loanA.id, code: "111111", adminId: "admin", allowEarlyCollection: true }, mondayMorning);
+result = verifyCollectionCode(
+  state,
+  {
+    loanId: loanA.id,
+    code: "111111",
+    adminId: "admin",
+    allowEarlyCollection: true,
+    collectionPhotos: [evidencePhoto("collection.jpg")],
+  },
+  mondayMorning,
+);
 state = result.state;
 assert.equal(result.loan.status, "collected");
 assert.equal(result.loan.collectedEarly, true);
+assert.equal(result.loan.collectionPhotos.length, 1);
 assert.equal(inventoryAsset(state, camera.id, mondayMorning).quantityPhysicallyPresent, 1);
 
 result = bookLoan(
@@ -286,6 +302,7 @@ result = verifyReturnCode(
     code: "222222",
     damaged: true,
     damageDescription: "Lens cracked on return",
+    returnPhotos: [evidencePhoto("damaged-return.jpg")],
     damageChargePence: 2500,
     adminId: "admin",
   },
@@ -297,6 +314,7 @@ assert.equal(selectLostDamaged(state, wednesdayMorning).length, 1);
 assert.equal(selectAccountDebts(state, actor("borrower-a")).reduce((sum, debt) => sum + debt.amountPence, 0), 2500);
 
 const damagedEntry = selectLostDamaged(state, wednesdayMorning)[0];
+assert.equal(damagedEntry.lastRecord.photos.length, 1);
 result = repairUnits(
   state,
   {
@@ -308,10 +326,12 @@ result = repairUnits(
     originalChargePence: 2500,
     chargedUserId: "borrower-a",
     chargedUserEmail: "borrower-a@example.com",
+    repairPhotos: [evidencePhoto("repair.jpg")],
   },
   wednesdayMorning,
 );
 state = result.state;
+assert.equal(result.asset.units.find((unit) => unit.id === damagedEntry.unit.id).damageHistory.slice(-1)[0].photos.length, 1);
 assert.equal(selectLostDamaged(state, wednesdayMorning).length, 0);
 assert.equal(selectAccountDebts(state, actor("borrower-a")).reduce((sum, debt) => sum + debt.amountPence, 0), 1000);
 assert.equal(selectAccountBalance(state, actor("borrower-a")), 1000);
@@ -419,11 +439,13 @@ result = recoverLostUnits(
     unitIds: [lostEntry.unit.id],
     damaged: true,
     damageDescription: "Recovered with scratched housing",
+    damagePhotos: [evidencePhoto("recovered-damage.jpg")],
   },
   new Date("2026-07-10T10:00:00.000Z"),
 );
 state = result.state;
 assert.equal(selectLostDamaged(state, wednesdayMorning)[0].unit.condition, "damaged");
+assert.equal(selectLostDamaged(state, wednesdayMorning)[0].lastRecord.photos.length, 1);
 result = repairUnits(
   state,
   {
@@ -431,10 +453,12 @@ result = repairUnits(
     unitIds: [lostEntry.unit.id],
     fixDescription: "Polished housing",
     repairCostPence: 0,
+    repairPhotos: [evidencePhoto("recovered-repair.jpg")],
   },
   new Date("2026-07-10T11:00:00.000Z"),
 );
 state = result.state;
+assert.equal(result.asset.units.find((unit) => unit.id === lostEntry.unit.id).damageHistory.slice(-1)[0].photos.length, 1);
 assert.equal(selectLostDamaged(state, wednesdayMorning).length, 0);
 
 result = bookLoan(
@@ -474,6 +498,32 @@ result = updateAsset(state, iron.id, { quantity: 3, loanable: true, name: "Solde
 state = result.state;
 assert.equal(result.asset.units.length, 3);
 assert.equal(selectLoanableListings(state, mondayMorning).some((asset) => asset.id === iron.id), true);
+
+const ironUnitForDamage = result.asset.units[0];
+result = markUnitsDamaged(
+  state,
+  {
+    assetId: iron.id,
+    unitIds: [ironUnitForDamage.id],
+    damageDescription: "Bench accident.",
+    damagePhotos: [evidencePhoto("admin-damage.jpg")],
+  },
+  mondayMorning,
+);
+state = result.state;
+assert.equal(selectLostDamaged(state, mondayMorning)[0].lastRecord.photos.length, 1);
+result = repairUnits(
+  state,
+  {
+    assetId: iron.id,
+    unitIds: [ironUnitForDamage.id],
+    fixDescription: "Replaced tip.",
+    repairPhotos: [evidencePhoto("admin-repair.jpg")],
+  },
+  mondayMorning,
+);
+state = result.state;
+assert.equal(result.asset.units.find((unit) => unit.id === ironUnitForDamage.id).damageHistory.slice(-1)[0].photos.length, 1);
 
 const deleteTarget = result.asset.units[0];
 result = deleteUnit(state, iron.id, deleteTarget.id, mondayMorning);
@@ -738,6 +788,68 @@ inventoryState = conversionResult.state;
 assert.equal(selectInventoryUnits(inventoryState).conversions[0].factor, 100);
 assert.ok(selectInventoryExport(inventoryState, mondayMorning).groups.some((group) => group.id === "group_cameras"));
 
+let purchaseState = createInitialAssetState();
+let purchaseResult = createAsset(
+  purchaseState,
+  {
+    id: "asset_merch_mug",
+    name: "Makerspace mug",
+    assetClass: "purchase",
+    quantity: 2,
+    pricePence: 1200,
+    availability: {
+      weekly: [{ day: 2, start: "09:00", end: "17:00" }],
+      dateRanges: [],
+    },
+  },
+  mondayMorning,
+);
+purchaseState = purchaseResult.state;
+assert.equal(purchaseResult.asset.assetClass, "purchase");
+assert.equal(purchaseResult.asset.loanable, false);
+assert.equal(selectLoanableListings(purchaseState, tuesdayMorning).some((asset) => asset.id === "asset_merch_mug"), true);
+purchaseResult = bookLoan(
+  purchaseState,
+  {
+    id: "loan_merch_mug",
+    assetId: "asset_merch_mug",
+    collectionAt: "2026-07-07T10:00:00.000Z",
+    quantity: 1,
+    collectionCode: "515151",
+    acceptTerms: true,
+    ...actor("buyer-a"),
+  },
+  mondayMorning,
+);
+purchaseState = purchaseResult.state;
+assert.equal(purchaseResult.loan.collectionOnly, true);
+assert.equal(purchaseResult.loan.returnCode, null);
+assert.equal(purchaseResult.loan.returnDueAt, "2026-07-07T11:00:00.000Z");
+assert.equal(selectAdminLoans(purchaseState, mondayMorning).upcoming[0].requiresReturn, false);
+throwsMessage(
+  () => verifyReturnCode(purchaseState, { loanId: "loan_merch_mug", code: "anything" }, mondayMorning),
+  "Collection-only purchases do not require return codes.",
+);
+purchaseResult = rescheduleLoan(
+  purchaseState,
+  {
+    loanId: "loan_merch_mug",
+    collectionAt: "2026-07-07T12:00:00.000Z",
+    ...actor("buyer-a"),
+  },
+  mondayMorning,
+);
+purchaseState = purchaseResult.state;
+assert.equal(purchaseResult.loan.returnDueAt, "2026-07-07T13:00:00.000Z");
+purchaseResult = verifyCollectionCode(
+  purchaseState,
+  { loanId: "loan_merch_mug", code: "515151", adminId: "admin" },
+  new Date("2026-07-07T12:00:00.000Z"),
+);
+purchaseState = purchaseResult.state;
+assert.equal(purchaseResult.loan.status, "returned");
+assert.equal(selectInventory(purchaseState, tuesdayMorning).some((asset) => asset.id === "asset_merch_mug"), false);
+
 let printState = createInitialAssetState();
 let printResult = createCustomerPrintCollection(
   printState,
@@ -750,12 +862,16 @@ let printResult = createCustomerPrintCollection(
     actualBreakdown: [{ filamentType: "PLA", grams: 125 }],
     collectionCode: "909090",
     pricePence: 890,
+    completionPhotos: [evidencePhoto("completed-print.jpg")],
   },
   mondayMorning,
 );
 printState = printResult.state;
 assert.equal(printResult.loan.collectionOnly, true);
 assert.equal(printResult.loan.collectionLabel, "Come in whenever");
+assert.equal(printResult.loan.printCompletionPhotos.length, 1);
+assert.equal(printResult.asset.printCompletionPhotos.length, 1);
+assert.equal(selectLoanableListings(printState, mondayMorning).some((asset) => asset.id === printResult.asset.id), false);
 const filamentAsset = selectInventoryTree(printState, { groupId: "group_filament" }, mondayMorning).inventory
   .find((asset) => asset.id === "asset_dummy_pla");
 assert.equal(filamentAsset.quantityPhysicallyPresent, 875);

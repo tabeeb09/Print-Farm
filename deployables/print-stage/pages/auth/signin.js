@@ -1,6 +1,4 @@
 import Link from "next/link";
-import { signIn } from "next-auth/react";
-import { useRouter } from "next/router";
 
 import { env } from "../../lib/env";
 
@@ -9,17 +7,17 @@ const providerLabels = {
   keycloakGoogle: "Continue with Google",
 };
 
-export default function SignInPage({ providers = [] }) {
-  const router = useRouter();
-  const callbackUrl = typeof router.query.callbackUrl === "string" ? router.query.callbackUrl : "/";
-
+export default function SignInPage({ providers = [], callbackUrl = "/" }) {
   function handleProviderSignIn(provider) {
+    const params = new URLSearchParams({ callbackUrl });
+
     if (provider.id === "keycloakGoogle") {
-      signIn("keycloak", { callbackUrl }, { kc_idp_hint: "google" });
+      params.set("kc_idp_hint", "google");
+      window.location.assign(`/api/auth/signin/keycloak?${params.toString()}`);
       return;
     }
 
-    signIn(provider.id, { callbackUrl });
+    window.location.assign(`/api/auth/signin/${provider.id}?${params.toString()}`);
   }
 
   return (
@@ -50,8 +48,12 @@ export default function SignInPage({ providers = [] }) {
   );
 }
 
-export async function getServerSideProps() {
+export async function getServerSideProps(context) {
   const providers = [];
+  const callbackUrl =
+    typeof context.query.callbackUrl === "string" && context.query.callbackUrl.startsWith("/")
+      ? context.query.callbackUrl
+      : "/";
 
   if (env.KEYCLOAK_ISSUER && env.KEYCLOAK_CLIENT_ID && env.KEYCLOAK_CLIENT_SECRET) {
     providers.push({ id: "keycloak", name: "Keycloak" });
@@ -59,6 +61,6 @@ export async function getServerSideProps() {
   }
 
   return {
-    props: { providers },
+    props: { providers, callbackUrl },
   };
 }

@@ -8,6 +8,8 @@ const FILAMENT_GROUP_ID = "group_filament";
 const DUMMY_PLA_ASSET_ID = "asset_dummy_pla";
 const MAX_RETURN_PHOTOS = 6;
 const MAX_RETURN_PHOTO_DATA_URL_BYTES = 2_500_000;
+const PURCHASE_COLLECTION_WINDOW_MS = 60 * 60 * 1000;
+const ASSET_CLASSES = new Set(["inventory", "loan", "purchase", "consumable"]);
 const DEFAULT_WEEKLY_WINDOWS = [
   { day: 1, start: "09:00", end: "17:00" },
   { day: 2, start: "09:00", end: "17:00" },
@@ -106,6 +108,39 @@ function normalizeAssetGroupId(value) {
   return text || null;
 }
 
+function normalizeAssetClass(value, context = {}) {
+  const text = String(value || "").trim().toLowerCase();
+  if (ASSET_CLASSES.has(text)) return text;
+  if (context.sourceType === "customer_print") return "purchase";
+  if (context.continuous || context.sourceType === "consumable") return "consumable";
+  if (context.loanable) return "loan";
+  return "inventory";
+}
+
+function isPurchaseAsset(asset) {
+  return normalizeAssetClass(asset?.assetClass, {
+    continuous: asset?.continuous,
+    loanable: asset?.loanable,
+    sourceType: asset?.sourceType,
+  }) === "purchase";
+}
+
+function isReturnableLoanAsset(asset) {
+  return normalizeAssetClass(asset?.assetClass, {
+    continuous: asset?.continuous,
+    loanable: asset?.loanable,
+    sourceType: asset?.sourceType,
+  }) === "loan";
+}
+
+function isReservableAsset(asset) {
+  return isReturnableLoanAsset(asset) || isPurchaseAsset(asset);
+}
+
+function purchaseReservationEnd(collectionAt) {
+  return new Date(collectionAt.getTime() + PURCHASE_COLLECTION_WINDOW_MS);
+}
+
 function slug(value) {
   const normalized = String(value || "asset")
     .normalize("NFKC")
@@ -167,19 +202,30 @@ export function migrateAssetState(input) {
 
   for (const asset of state.assets) {
     asset.units = Array.isArray(asset.units) ? asset.units : [];
-    asset.loanabilityHistory = normalizeLoanabilityHistory(asset);
-    asset.maxLoanDays = toOptionalPositiveInteger(asset.maxLoanDays);
     asset.groupId = normalizeAssetGroupId(asset.groupId);
     asset.unitLabel = normalizeUnitLabel(asset.unitLabel);
     asset.continuous = Boolean(asset.continuous);
+    asset.sourceType = String(asset.sourceType || "").trim() || null;
+    asset.assetClass = normalizeAssetClass(asset.assetClass, {
+      continuous: asset.continuous,
+      loanable: asset.loanable,
+      sourceType: asset.sourceType,
+    });
+    asset.continuous = asset.assetClass === "consumable" || asset.continuous;
+    asset.loanable = asset.assetClass === "loan";
+    asset.maxLoanDays = ["purchase", "consumable"].includes(asset.assetClass) ? null : toOptionalPositiveInteger(asset.maxLoanDays);
+    asset.lateFeePence = ["purchase", "consumable"].includes(asset.assetClass) ? 0 : toPence(asset.lateFeePence, DEFAULT_LATE_FEE_PENCE);
+    asset.loanabilityHistory = normalizeLoanabilityHistory(asset);
     asset.quantityValue = asset.continuous
       ? Number(asset.quantityValue ?? asset.quantityTotal ?? asset.quantity ?? 0) || 0
       : activeUnits(asset).length;
     asset.imageUrl = String(asset.imageUrl || "").trim();
-    asset.sourceType = String(asset.sourceType || "").trim() || null;
 
     for (const unit of asset.units) {
       unit.damageHistory = Array.isArray(unit.damageHistory) ? unit.damageHistory : [];
+      for (const record of unit.damageHistory) {
+        record.photos = Array.isArray(record.photos) ? record.photos : [];
+      }
     }
   }
 
@@ -296,9 +342,10 @@ function assertMaxLoanDuration(asset, start, end) {
 }
 
 function effectiveLoanDurationMs(asset, loan) {
+  if (loan.collectionOnly || isPurchaseAsset(asset)) return PURCHASE_COLLECTION_WINDOW_MS;
   if (asset.maxLoanDays) return asset.maxLoanDays * 24 * 60 * 60 * 1000;
   return Math.max(
-    60 * 60 * 1000,
+    PURCHASE_COLLECTION_WINDOW_MS,
     new Date(loan.returnDueAt).getTime() - new Date(loan.collectionAt).getTime(),
   );
 }
@@ -475,6 +522,7 @@ function ensureDefaultInventoryStructure(state) {
       name: "Dummy PLA filament",
       description: "Bootstrap PLA stock for testing inventory and print-completion consumption.",
       loanable: false,
+      assetClass: "consumable",
       groupId: FILAMENT_GROUP_ID,
       unitLabel: "grams",
       continuous: true,
@@ -628,12 +676,14 @@ function setLoanability(asset, loanable, timestamp, admin = {}) {
 }
 
 function recordUnitHistory(unit, entry) {
+  const photos = Array.isArray(entry.photos) ? entry.photos : [];
   unit.damageHistory = Array.isArray(unit.damageHistory) ? unit.damageHistory : [];
   unit.damageHistory.push({
     id: entry.id || id("damage"),
     kind: entry.kind,
     damageDescription: entry.damageDescription || "",
     fixDescription: entry.fixDescription || "",
+    photos,
     chargePence: Math.max(0, Math.round(entry.chargePence || 0)),
     chargedUserId: entry.chargedUserId || null,
     chargedUserEmail: entry.chargedUserEmail || null,
@@ -663,13 +713,19 @@ export function createAsset(state, input, now = new Date()) {
   const name = String(input.name || "").trim();
   assert(name, "Asset name is required.");
 
-  const continuous = Boolean(input.continuous);
+  const requestedClass = normalizeAssetClass(input.assetClass, {
+    continuous: input.continuous,
+    loanable: input.loanable,
+    sourceType: input.sourceType,
+  });
+  const continuous = requestedClass === "consumable" || Boolean(input.continuous);
+  const assetClass = continuous ? "consumable" : requestedClass;
   const quantityValue = continuous ? toNonNegativeNumber(input.quantity ?? input.quantityValue, 0) : toPositiveInteger(input.quantity, 1);
   const quantity = continuous ? 0 : quantityValue;
   const groupId = normalizeAssetGroupId(input.groupId);
   if (groupId) findGroup(next, groupId);
   const timestamp = nowIso(now);
-  const loanable = Boolean(input.loanable) && !continuous;
+  const loanable = assetClass === "loan";
   const unitLabel = normalizeUnitLabel(input.unitLabel);
   ensureStockUnit(next, unitLabel, now);
   const units = makeSerials(name, quantity).map((serial) => ({
@@ -685,6 +741,7 @@ export function createAsset(state, input, now = new Date()) {
     name,
     description: String(input.description || "").trim(),
     loanable,
+    assetClass,
     groupId,
     imageUrl: String(input.imageUrl || "").trim(),
     unitLabel,
@@ -693,9 +750,11 @@ export function createAsset(state, input, now = new Date()) {
     sourceType: String(input.sourceType || "").trim() || null,
     printFileId: input.printFileId || null,
     pricePence: toPence(input.pricePence ?? input.assetPricePence ?? input.assetPrice, 0),
-    lateFeePence: toPence(input.lateFeePence ?? input.lateFee, DEFAULT_LATE_FEE_PENCE),
+    lateFeePence: ["purchase", "consumable"].includes(assetClass)
+      ? 0
+      : toPence(input.lateFeePence ?? input.lateFee, DEFAULT_LATE_FEE_PENCE),
     totalFailureDays: toPositiveInteger(input.totalFailureDays, DEFAULT_FAILURE_DAYS),
-    maxLoanDays: toOptionalPositiveInteger(input.maxLoanDays),
+    maxLoanDays: assetClass === "loan" ? toOptionalPositiveInteger(input.maxLoanDays) : null,
     availability: normalizeAvailability(input.availability),
     units,
     loanabilityHistory: loanable
@@ -726,20 +785,37 @@ export function updateAsset(state, assetId, input, now = new Date()) {
   assert(name, "Asset name is required.");
   const groupId = input.groupId === undefined ? asset.groupId || null : normalizeAssetGroupId(input.groupId);
   if (groupId) findGroup(next, groupId);
-  const nextContinuous = Boolean(input.continuous ?? asset.continuous);
+  const requestedClass = input.assetClass === undefined && input.loanable !== undefined
+    ? (input.loanable ? "loan" : (input.continuous ?? asset.continuous) ? "consumable" : "inventory")
+    : input.assetClass === undefined
+    ? normalizeAssetClass(asset.assetClass, asset)
+    : normalizeAssetClass(input.assetClass, {
+        continuous: input.continuous,
+        loanable: input.loanable,
+        sourceType: input.sourceType ?? asset.sourceType,
+      });
+  const nextContinuous = requestedClass === "consumable" || Boolean(input.continuous ?? asset.continuous);
+  const nextAssetClass = nextContinuous ? "consumable" : requestedClass;
 
   asset.name = name;
   asset.description = String(input.description ?? asset.description ?? "").trim();
-  setLoanability(asset, nextContinuous ? false : Boolean(input.loanable ?? asset.loanable), timestamp);
+  asset.assetClass = nextAssetClass;
+  setLoanability(asset, nextAssetClass === "loan", timestamp);
   asset.groupId = groupId;
   asset.imageUrl = String(input.imageUrl ?? asset.imageUrl ?? "").trim();
   asset.unitLabel = normalizeUnitLabel(input.unitLabel ?? asset.unitLabel);
   ensureStockUnit(next, asset.unitLabel, now);
   asset.continuous = nextContinuous;
   asset.pricePence = toPence(input.pricePence ?? input.assetPricePence ?? input.assetPrice, asset.pricePence);
-  asset.lateFeePence = toPence(input.lateFeePence ?? input.lateFee, asset.lateFeePence ?? DEFAULT_LATE_FEE_PENCE);
+  asset.lateFeePence = ["purchase", "consumable"].includes(nextAssetClass)
+    ? 0
+    : toPence(input.lateFeePence ?? input.lateFee, asset.lateFeePence ?? DEFAULT_LATE_FEE_PENCE);
   asset.totalFailureDays = toPositiveInteger(input.totalFailureDays, asset.totalFailureDays ?? DEFAULT_FAILURE_DAYS);
-  asset.maxLoanDays = input.maxLoanDays === undefined ? asset.maxLoanDays ?? null : toOptionalPositiveInteger(input.maxLoanDays);
+  asset.maxLoanDays = ["purchase", "consumable"].includes(nextAssetClass)
+    ? null
+    : nextAssetClass === "loan"
+    ? (input.maxLoanDays === undefined ? asset.maxLoanDays ?? null : toOptionalPositiveInteger(input.maxLoanDays))
+    : asset.maxLoanDays ?? null;
   asset.availability = normalizeAvailability(input.availability || asset.availability);
 
   if (asset.continuous) {
@@ -785,6 +861,7 @@ export function setAssetLoanable(state, assetId, loanable, now = new Date()) {
   const next = migrateAssetState(state);
   const asset = findAsset(next, assetId);
   const timestamp = nowIso(now);
+  asset.assetClass = loanable ? "loan" : asset.continuous ? "consumable" : "inventory";
   setLoanability(asset, loanable, timestamp);
   asset.updatedAt = timestamp;
   next.updatedAt = timestamp;
@@ -841,24 +918,31 @@ export function userHasOverdueLoan(state, actor, now = new Date()) {
 export function bookLoan(state, input, now = new Date()) {
   let next = expireMissedCollections(state, now);
   const asset = findAsset(next, input.assetId);
-  assert(asset.loanable, "This asset is not loanable.");
-  assert(!asset.continuous, "Continuous consumables cannot be booked as loans.");
-  assert(input.acceptTerms === true, "The loan terms must be accepted before booking.");
+  const purchase = isPurchaseAsset(asset);
+  assert(isReservableAsset(asset), "This asset is not available for booking or collection.");
+  assert(!asset.continuous, "Continuous consumables cannot be booked.");
+  assert(input.acceptTerms === true, purchase
+    ? "The purchase and collection terms must be accepted before booking."
+    : "The loan terms must be accepted before booking.");
 
   const actor = { userId: input.userId, userEmail: input.userEmail };
   assert(actor.userId || actor.userEmail, "A borrower identity is required.");
   assert(!userHasOverdueLoan(next, actor, now), "Borrowers with overdue loans cannot make new bookings.");
 
   const collectionAt = toDate(input.collectionAt, "Collection date");
-  const returnDueAt = toDate(input.returnAt ?? input.returnDueAt, "Return date");
+  const returnDueAt = purchase
+    ? purchaseReservationEnd(collectionAt)
+    : toDate(input.returnAt ?? input.returnDueAt, "Return date");
   assert(collectionAt.getTime() >= new Date(now).getTime(), "Collection date cannot be in the past.");
-  assert(returnDueAt.getTime() > collectionAt.getTime(), "Return date must be after collection date.");
-  assertMaxLoanDuration(asset, collectionAt, returnDueAt);
+  if (!purchase) {
+    assert(returnDueAt.getTime() > collectionAt.getTime(), "Return date must be after collection date.");
+    assertMaxLoanDuration(asset, collectionAt, returnDueAt);
+  }
   assert(isCollectionTimeAllowed(asset, collectionAt), "Collection time is outside this asset's availability windows.");
 
   const quantity = toRequiredPositiveInteger(
     input.quantity ?? (Array.isArray(input.unitIds) ? input.unitIds.length : undefined),
-    "Loan quantity",
+    purchase ? "Purchase quantity" : "Loan quantity",
   );
   const available = availableUnitsForRange(next, asset, collectionAt, returnDueAt);
   const selectedUnitIds = Array.isArray(input.unitIds) && input.unitIds.length
@@ -880,6 +964,7 @@ export function bookLoan(state, input, now = new Date()) {
     userId: input.userId || null,
     userEmail: input.userEmail || null,
     status: "reserved",
+    collectionOnly: purchase,
     collectionAt: collectionAt.toISOString(),
     originallyBookedCollectionAt: null,
     returnDueAt: returnDueAt.toISOString(),
@@ -888,7 +973,7 @@ export function bookLoan(state, input, now = new Date()) {
     cancelledAt: null,
     lostAt: null,
     collectionCode: input.collectionCode || String(crypto.randomInt(100000, 999999)),
-    returnCode: input.returnCode || String(crypto.randomInt(100000, 999999)),
+    returnCode: purchase ? null : input.returnCode || String(crypto.randomInt(100000, 999999)),
     termsAcceptedAt: timestamp,
     createdAt: timestamp,
     updatedAt: timestamp,
@@ -909,6 +994,7 @@ export function verifyCollectionCode(state, input, now = new Date()) {
   const bookedCollectionAt = new Date(loan.collectionAt);
   const earlyCollection = actualCollectionAt.getTime() < bookedCollectionAt.getTime() - 60_000;
   let nextReturnDueAt = new Date(loan.returnDueAt);
+  const collectionPhotos = normalizeEvidencePhotos(input.collectionPhotos, "Collection photos");
 
   if (earlyCollection) {
     assert(input.allowEarlyCollection === true, "Early collection requires admin override.");
@@ -930,9 +1016,10 @@ export function verifyCollectionCode(state, input, now = new Date()) {
   }
   loan.collectedAt = actualCollectionAt.toISOString();
   loan.collectionVerifiedBy = input.adminId || null;
+  loan.collectionPhotos = collectionPhotos;
   loan.updatedAt = timestamp;
 
-  if (asset.sourceType === "customer_print" || loan.collectionOnly) {
+  if (asset.sourceType === "customer_print" || loan.collectionOnly || isPurchaseAsset(asset)) {
     loan.status = "returned";
     loan.returnedAt = actualCollectionAt.toISOString();
     loan.fulfilledAt = timestamp;
@@ -968,17 +1055,17 @@ function normalizeReturnItems(inputItems, loan, legacyDamagedUnitIds, legacyDama
   });
 }
 
-function normalizeReturnPhotos(inputPhotos) {
+export function normalizeEvidencePhotos(inputPhotos, label = "Evidence photos") {
   const photos = Array.isArray(inputPhotos) ? inputPhotos.slice(0, MAX_RETURN_PHOTOS) : [];
   return photos.map((photo) => {
-    const name = textOrNull(photo?.name, 200) || "return-photo.jpg";
+    const name = textOrNull(photo?.name, 200) || "evidence-photo.jpg";
     const type = textOrNull(photo?.type, 100) || "image/jpeg";
     const dataUrl = String(photo?.dataUrl || "");
-    assert(type.startsWith("image/"), "Return photos must be images.");
-    assert(dataUrl.startsWith("data:image/"), "Return photos must be image data URLs.");
-    assert(dataUrl.length <= MAX_RETURN_PHOTO_DATA_URL_BYTES, "Return photos must be 2.5 MB or smaller after compression.");
+    assert(type.startsWith("image/"), `${label} must be images.`);
+    assert(dataUrl.startsWith("data:image/"), `${label} must be image data URLs.`);
+    assert(dataUrl.length <= MAX_RETURN_PHOTO_DATA_URL_BYTES, `${label} must be 2.5 MB or smaller after compression.`);
     return {
-      id: photo?.id || id("return_photo"),
+      id: photo?.id || id("evidence_photo"),
       name,
       type,
       size: Math.max(0, Math.round(Number(photo?.size || 0))),
@@ -991,9 +1078,10 @@ function normalizeReturnPhotos(inputPhotos) {
 export function verifyReturnCode(state, input, now = new Date()) {
   const next = migrateAssetState(state);
   const loan = findLoan(next, input.loanId);
+  const asset = findAsset(next, loan.assetId);
+  assert(!loan.collectionOnly && !isPurchaseAsset(asset), "Collection-only purchases do not require return codes.");
   assert(loan.status === "collected", "Only collected loans can be returned.");
   assert(String(input.code || "").trim() === loan.returnCode, "Return code is incorrect.");
-  const asset = findAsset(next, loan.assetId);
   const timestamp = nowIso(now);
   const legacyDamagedUnitIds = new Set(input.damagedUnitIds || []);
   const returnItems = normalizeReturnItems(input.returnItems, loan, legacyDamagedUnitIds, input.damaged === true);
@@ -1005,7 +1093,7 @@ export function verifyReturnCode(state, input, now = new Date()) {
   const overdue = new Date(loan.returnDueAt).getTime() < new Date(now).getTime();
   const lateFeeWaived = Boolean(input.waiveLateFee);
   const lateFeePence = overdue && !lateFeeWaived ? (asset.lateFeePence || DEFAULT_LATE_FEE_PENCE) * loan.unitIds.length : 0;
-  const returnPhotos = normalizeReturnPhotos(input.returnPhotos);
+  const returnPhotos = normalizeEvidencePhotos(input.returnPhotos, "Return photos");
   const damageByUnitId = new Map(returnItems.map((item) => [item.unitId, item]));
 
   for (const unitId of loan.unitIds) {
@@ -1019,6 +1107,7 @@ export function verifyReturnCode(state, input, now = new Date()) {
         chargePence,
         chargedUserId: chargePence ? loan.userId : null,
         chargedUserEmail: chargePence ? loan.userEmail : null,
+        photos: returnPhotos,
         createdAt: timestamp,
       });
     }
@@ -1092,11 +1181,16 @@ export function rescheduleLoan(state, input, now = new Date()) {
   assert(actorMatchesLoan(loan, input), "Only the borrower can reschedule this loan.");
 
   const asset = findAsset(next, loan.assetId);
+  const purchase = loan.collectionOnly || isPurchaseAsset(asset);
   const collectionAt = toDate(input.collectionAt ?? loan.collectionAt, "Collection date");
-  const returnDueAt = toDate(input.returnAt ?? input.returnDueAt ?? loan.returnDueAt, "Return date");
+  const returnDueAt = purchase
+    ? purchaseReservationEnd(collectionAt)
+    : toDate(input.returnAt ?? input.returnDueAt ?? loan.returnDueAt, "Return date");
   assert(collectionAt.getTime() >= new Date(now).getTime(), "Collection date cannot be in the past.");
-  assert(returnDueAt.getTime() > collectionAt.getTime(), "Return date must be after collection date.");
-  assertMaxLoanDuration(asset, collectionAt, returnDueAt);
+  if (!purchase) {
+    assert(returnDueAt.getTime() > collectionAt.getTime(), "Return date must be after collection date.");
+    assertMaxLoanDuration(asset, collectionAt, returnDueAt);
+  }
   assert(isCollectionTimeAllowed(asset, collectionAt), "Collection time is outside this asset's availability windows.");
 
   for (const unitId of loan.unitIds) {
@@ -1113,6 +1207,8 @@ export function rescheduleLoan(state, input, now = new Date()) {
 export function extendLoan(state, input, now = new Date()) {
   const next = migrateAssetState(state);
   const loan = findLoan(next, input.loanId);
+  const asset = findAsset(next, loan.assetId);
+  assert(!loan.collectionOnly && !isPurchaseAsset(asset), "Collection-only purchases cannot be extended.");
   assert(actorMatchesLoan(loan, input), "Only the borrower can update this loan.");
   assert(loan.status === "collected", "Only collected loans can be updated.");
   assert(new Date(loan.returnDueAt).getTime() >= new Date(now).getTime(), "Overdue loans cannot be extended.");
@@ -1120,7 +1216,7 @@ export function extendLoan(state, input, now = new Date()) {
   const newReturnAt = toDate(input.returnAt ?? input.returnDueAt, "Return date");
   assert(newReturnAt.getTime() >= new Date(now).getTime(), "Return date cannot be in the past.");
   assert(newReturnAt.getTime() > new Date(loan.collectedAt || loan.collectionAt).getTime(), "Return date must be after collection.");
-  assertMaxLoanDuration(findAsset(next, loan.assetId), new Date(loan.collectedAt || loan.collectionAt), newReturnAt);
+  assertMaxLoanDuration(asset, new Date(loan.collectedAt || loan.collectionAt), newReturnAt);
 
   for (const unitId of loan.unitIds) {
     assert(!conflictingLoans(next, unitId, new Date(loan.collectedAt || loan.collectionAt), newReturnAt, loan.id).length, "The selected return date clashes with another booking.");
@@ -1179,6 +1275,7 @@ export function markUnitsDamaged(state, input, now = new Date()) {
   const asset = findAsset(next, input.assetId);
   const timestamp = nowIso(now);
   const unitIds = input.unitIds || [];
+  const damagePhotos = normalizeEvidencePhotos(input.damagePhotos, "Damage photos");
   assert(unitIds.length, "At least one serial number must be selected.");
 
   for (const unitId of unitIds) {
@@ -1190,6 +1287,7 @@ export function markUnitsDamaged(state, input, now = new Date()) {
       chargePence: input.chargePence || 0,
       chargedUserId: input.chargeUserId || null,
       chargedUserEmail: input.chargeUserEmail || null,
+      photos: damagePhotos,
       createdAt: timestamp,
     });
   }
@@ -1218,6 +1316,7 @@ export function recoverLostUnits(state, input, now = new Date()) {
   const asset = findAsset(next, input.assetId);
   const timestamp = nowIso(now);
   const unitIds = input.unitIds || [];
+  const damagePhotos = normalizeEvidencePhotos(input.damagePhotos, "Recovery photos");
   assert(unitIds.length, "At least one serial number must be selected.");
 
   for (const unitId of unitIds) {
@@ -1230,6 +1329,7 @@ export function recoverLostUnits(state, input, now = new Date()) {
       chargePence: input.chargePence || 0,
       chargedUserId: input.chargeUserId || null,
       chargedUserEmail: input.chargeUserEmail || null,
+      photos: damagePhotos,
       createdAt: timestamp,
     });
   }
@@ -1258,6 +1358,7 @@ export function repairUnits(state, input, now = new Date()) {
   const asset = findAsset(next, input.assetId);
   const timestamp = nowIso(now);
   const unitIds = input.unitIds || [];
+  const repairPhotos = normalizeEvidencePhotos(input.repairPhotos, "Repair photos");
   assert(unitIds.length, "At least one serial number must be selected.");
   const repairCostPence = Math.max(0, Math.round(input.repairCostPence || 0));
 
@@ -1269,6 +1370,7 @@ export function repairUnits(state, input, now = new Date()) {
       kind: "repair",
       fixDescription: input.fixDescription || "Marked repaired.",
       chargePence: repairCostPence,
+      photos: repairPhotos,
       createdAt: timestamp,
     });
   }
@@ -1383,11 +1485,13 @@ export function createCustomerPrintCollection(state, input, now = new Date()) {
   const safeName = String(input.printName || input.originalFilename || fileId || "Customer print").trim();
   const collectionCode = input.collectionCode || String(crypto.randomInt(100000, 999999));
   const returnDueAt = new Date(new Date(now).getTime() + 365 * 24 * 60 * 60 * 1000).toISOString();
+  const printCompletionPhotos = normalizeEvidencePhotos(input.completionPhotos, "Print completion photos");
   const asset = {
     id: stableId("asset_customer_print", fileId),
     name: safeName,
     description: `Completed customer print awaiting collection.${input.actualGrams ? ` Final filament: ${Number(input.actualGrams).toFixed(2)} g.` : ""}`,
     loanable: false,
+    assetClass: "purchase",
     groupId: CUSTOMER_PRINTS_GROUP_ID,
     imageUrl: String(input.imageUrl || "").trim(),
     unitLabel: "items",
@@ -1397,6 +1501,7 @@ export function createCustomerPrintCollection(state, input, now = new Date()) {
     printFileId: fileId,
     actualFilamentGrams: Number(input.actualGrams || 0) || null,
     actualFilamentBreakdown: Array.isArray(input.actualBreakdown) ? input.actualBreakdown : [],
+    printCompletionPhotos,
     pricePence: Math.max(0, Math.round(Number(input.pricePence || 0))),
     lateFeePence: 0,
     totalFailureDays: DEFAULT_FAILURE_DAYS,
@@ -1435,6 +1540,8 @@ export function createCustomerPrintCollection(state, input, now = new Date()) {
     lostAt: null,
     collectionCode,
     returnCode: null,
+    printCompletionPhotos,
+    collectionPhotos: [],
     termsAcceptedAt: timestamp,
     createdAt: timestamp,
     updatedAt: timestamp,
@@ -1571,6 +1678,7 @@ function loanHistoryForUnit(state, unitId) {
       borrowerEmail: loan.userEmail || null,
       status: loan.status,
       collectionAt: loan.collectionAt,
+      collectionOnly: Boolean(loan.collectionOnly),
       collectedAt: loan.collectedAt || null,
       returnDueAt: loan.returnDueAt,
       returnedAt: loan.returnedAt || null,
@@ -1592,11 +1700,14 @@ function decorateAsset(state, asset, now = new Date()) {
   );
   const outOfPremisesUnits = units.filter((unit) => isUnitOutOfPremises(state, unit.id));
   const oneHour = new Date(new Date(now).getTime() + 60 * 60 * 1000);
-  const bookableNow = asset.loanable && isCollectionTimeAllowed(asset, now) &&
+  const bookableNow = isReservableAsset(asset) && isCollectionTimeAllowed(asset, now) &&
     availableUnitsForRange(state, asset, new Date(now), oneHour).length > 0;
+  const assetClass = normalizeAssetClass(asset.assetClass, asset);
 
   return {
     ...asset,
+    assetClass,
+    requiresReturn: assetClass === "loan",
     units: units.map((unit) => ({
       ...unit,
       loanHistory: loanHistoryForUnit(state, unit.id),
@@ -1696,14 +1807,16 @@ export function selectInventoryExport(state, now = new Date()) {
 }
 
 function loanableStatus(asset) {
+  const purchase = isPurchaseAsset(asset);
+  const bookable = purchase ? "Collectable" : "Bookable";
   if (asset.bookableNow) {
-    return { loanStatus: "bookable_now", loanStatusLabel: "Bookable now" };
+    return { loanStatus: "bookable_now", loanStatusLabel: `${bookable} now` };
   }
 
   const presentNormalUnits = Math.max(0, asset.quantityNormal - asset.quantityOutOfPremises);
 
   if (presentNormalUnits > 0) {
-    return { loanStatus: "bookable_later", loanStatusLabel: "Bookable later" };
+    return { loanStatus: "bookable_later", loanStatusLabel: `${bookable} later` };
   }
 
   if (asset.quantityOutOfPremises > 0) {
@@ -1715,7 +1828,7 @@ function loanableStatus(asset) {
 
 export function selectLoanableListings(state, now = new Date()) {
   return selectCatalogue(state, now)
-    .filter((asset) => asset.loanable)
+    .filter((asset) => isReservableAsset(asset) && asset.sourceType !== "customer_print")
     .map((asset) => ({
       ...asset,
       ...loanableStatus(asset),
@@ -1734,20 +1847,28 @@ function decorateLoan(state, loan, now = new Date()) {
   const asset = state.assets.find((entry) => entry.id === loan.assetId);
   const unitIds = Array.isArray(loan.unitIds) ? loan.unitIds : [];
   const units = (asset?.units || []).filter((unit) => unitIds.includes(unit.id));
-  const overdue = loan.status === "collected" && new Date(loan.returnDueAt).getTime() < new Date(now).getTime();
-  const failureAt = asset && loan.collectedAt
+  const assetClass = asset
+    ? normalizeAssetClass(asset.assetClass, asset)
+    : loan.collectionOnly ? "purchase" : "inventory";
+  const collectionOnly = Boolean(loan.collectionOnly) || assetClass === "purchase";
+  const overdue = !collectionOnly && loan.status === "collected" && new Date(loan.returnDueAt).getTime() < new Date(now).getTime();
+  const failureAt = asset && loan.collectedAt && !collectionOnly
     ? new Date(new Date(loan.collectedAt).getTime() + (asset.totalFailureDays || DEFAULT_FAILURE_DAYS) * 24 * 60 * 60 * 1000).toISOString()
     : null;
   const effectiveCollectionAt = loan.collectedAt || loan.collectionAt;
-  const effectiveReturnAt = loan.returnedAt || loan.returnDueAt;
+  const effectiveReturnAt = collectionOnly
+    ? loan.fulfilledAt || loan.returnedAt || loan.collectedAt || loan.collectionAt
+    : loan.returnedAt || loan.returnDueAt;
 
   return {
     ...loan,
     unitIds,
     assetName: asset?.name || "Deleted asset",
     assetPricePence: asset?.pricePence || 0,
-    lateFeePence: asset?.lateFeePence || DEFAULT_LATE_FEE_PENCE,
+    lateFeePence: collectionOnly ? 0 : asset?.lateFeePence || DEFAULT_LATE_FEE_PENCE,
     maxLoanDays: asset?.maxLoanDays || null,
+    assetClass,
+    requiresReturn: !collectionOnly,
     serials: units.map((unit) => unit.serial),
     units,
     displayState: classifyLoan(loan, now),
@@ -1756,7 +1877,7 @@ function decorateLoan(state, loan, now = new Date()) {
     effectiveCollectionAt,
     effectiveReturnAt,
     collectionLabel: loan.collectionLabel || null,
-    collectionOnly: Boolean(loan.collectionOnly),
+    collectionOnly,
     openEndedCollection: Boolean(loan.openEndedCollection),
     printFileId: asset?.printFileId || null,
     assetSourceType: asset?.sourceType || null,
@@ -1864,6 +1985,8 @@ export function selectAccountBalance(state, actor) {
 export function defaultBookingWindow(asset, now = new Date()) {
   const current = migrateAssetState({ assets: [asset], loans: [] });
   const start = nextAvailability(asset, current, now) || nowIso(now);
-  const end = new Date(new Date(start).getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  const end = isPurchaseAsset(asset)
+    ? null
+    : new Date(new Date(start).getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
   return { collectionAt: start, returnAt: end };
 }

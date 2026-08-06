@@ -35,8 +35,8 @@ function formatMoney(pence) {
 function formatSignedMoney(pence) {
   const amount = Number(pence) || 0;
   const formatted = formatMoney(Math.abs(amount));
-  if (amount < 0) return `-${formatted}`;
-  if (amount > 0) return `+${formatted}`;
+  if (amount < 0) return `+${formatted}`;
+  if (amount > 0) return `-${formatted}`;
   return formatted;
 }
 
@@ -98,6 +98,13 @@ const dayOptions = [
 ];
 const MAX_RETURN_PHOTOS = 6;
 const MAX_RETURN_PHOTO_DATA_URL_BYTES = 2_500_000;
+const PURCHASE_COLLECTION_WINDOW_MS = 60 * 60 * 1000;
+const assetClassOptions = [
+  ["inventory", "Inventory only"],
+  ["loan", "Loan / returnable"],
+  ["purchase", "Purchase / collection only"],
+  ["consumable", "Consumable / continuous quantity"],
+];
 
 function dateOnly(value) {
   if (!value) return "";
@@ -221,8 +228,53 @@ function parseBookingQuantity(value) {
   return Number.parseInt(text, 10);
 }
 
-function bookingWindow(form) {
+function assetClassForItem(item = {}) {
+  const text = String(item.assetClass || "").trim().toLowerCase();
+  if (text) return text;
+  if (item.assetSourceType === "customer_print" || item.sourceType === "customer_print" || item.collectionOnly) return "purchase";
+  if (item.continuous || item.sourceType === "consumable") return "consumable";
+  if (item.loanable) return "loan";
+  return "inventory";
+}
+
+function isPurchaseItem(item) {
+  return assetClassForItem(item) === "purchase";
+}
+
+function requiresReturnForItem(item) {
+  return !isPurchaseItem(item) && item?.requiresReturn !== false;
+}
+
+function assetClassLabel(item) {
+  const labels = {
+    inventory: "Inventory",
+    loan: "Loan",
+    purchase: "Purchase",
+    consumable: "Consumable",
+  };
+  return labels[assetClassForItem(item)] || "Inventory";
+}
+
+function assetClassTone(item) {
+  const tones = {
+    inventory: "neutral",
+    loan: "green",
+    purchase: "amber",
+    consumable: "neutral",
+  };
+  return tones[assetClassForItem(item)] || "neutral";
+}
+
+function purchaseReservationEnd(start) {
+  return new Date(start.getTime() + PURCHASE_COLLECTION_WINDOW_MS);
+}
+
+function bookingWindow(form, asset = null) {
   const start = new Date(form?.collectionAt || "");
+  if (isPurchaseItem(asset)) {
+    if (!Number.isFinite(start.getTime())) return null;
+    return { start, end: purchaseReservationEnd(start) };
+  }
   const end = new Date(form?.returnAt || "");
   if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end.getTime() <= start.getTime()) {
     return null;
@@ -239,7 +291,7 @@ function loanOverlapsWindow(loan, window) {
 }
 
 function availableUnitsForBooking(asset, form) {
-  const window = bookingWindow(form);
+  const window = bookingWindow(form, asset);
   return (asset?.units || []).filter((unit) =>
     unit.condition === "normal" &&
     !unit.deletedAt &&
@@ -248,22 +300,28 @@ function availableUnitsForBooking(asset, form) {
 }
 
 function bookingDateError(asset, form) {
+  const purchase = isPurchaseItem(asset);
   const collectionAt = new Date(form?.collectionAt || "");
-  const returnAt = new Date(form?.returnAt || "");
-  if (!Number.isFinite(collectionAt.getTime()) || !Number.isFinite(returnAt.getTime())) {
-    return "Choose valid collection and return dates.";
+  if (!Number.isFinite(collectionAt.getTime())) {
+    return purchase ? "Choose a valid collection date." : "Choose valid collection and return dates.";
   }
   if (collectionAt.getTime() < Date.now() - 60_000) {
     return "Collection date cannot be in the past.";
   }
-  if (returnAt.getTime() <= collectionAt.getTime()) {
-    return "Return date must be after collection date.";
-  }
   if (asset && !isDateBookableForAsset(asset, dateOnly(form.collectionAt))) {
     return "Collection date is outside this asset's availability windows.";
   }
-  if (asset && !isDateInAssetDateRanges(asset, dateOnly(form.returnAt))) {
-    return "Return date is outside this asset's available date ranges.";
+  if (!purchase) {
+    const returnAt = new Date(form?.returnAt || "");
+    if (!Number.isFinite(returnAt.getTime())) {
+      return "Choose valid collection and return dates.";
+    }
+    if (returnAt.getTime() <= collectionAt.getTime()) {
+      return "Return date must be after collection date.";
+    }
+    if (asset && !isDateInAssetDateRanges(asset, dateOnly(form.returnAt))) {
+      return "Return date is outside this asset's available date ranges.";
+    }
   }
   return "";
 }
@@ -278,6 +336,7 @@ function bookingQuantityError(asset, form) {
 }
 
 function bookingDurationError(asset, form) {
+  if (isPurchaseItem(asset)) return "";
   if (!asset?.maxLoanDays) return "";
   const collectionAt = new Date(form?.collectionAt || "");
   const returnAt = new Date(form?.returnAt || "");
@@ -326,7 +385,7 @@ function blobToDataUrl(blob) {
   });
 }
 
-async function compressReturnPhoto(file) {
+async function compressEvidencePhoto(file) {
   if (!file.type.startsWith("image/")) {
     throw new Error(`${file.name} is not an image.`);
   }
@@ -356,6 +415,25 @@ async function compressReturnPhoto(file) {
     throw new Error(`${file.name} is still too large after compression.`);
   }
   return { name: file.name.replace(/\.[^.]+$/, ".jpg"), type: "image/jpeg", size: blob.size, dataUrl };
+}
+
+function EvidencePhotoGrid({ photos = [], label = "Evidence photo", onRemove }) {
+  if (!photos.length) return null;
+  return (
+    <div className="returnPhotoGrid">
+      {photos.map((photo, index) => (
+        <figure key={photo.id || `${photo.name}-${index}`} className="returnPhotoThumb">
+          <img src={photo.dataUrl} alt={photo.name || `${label} ${index + 1}`} />
+          <figcaption>{photo.name || `${label} ${index + 1}`}</figcaption>
+          {onRemove ? (
+            <button type="button" className="assetDanger" onClick={() => onRemove(index)}>
+              Remove
+            </button>
+          ) : null}
+        </figure>
+      ))}
+    </div>
+  );
 }
 
 function sanitizeBookingForm(asset, nextForm) {
@@ -395,6 +473,9 @@ function activeBlockedRangesForAsset(asset) {
 }
 
 function parseAssetForm(form) {
+  const assetClass = assetClassForItem(form);
+  const continuous = assetClass === "consumable" || Boolean(form.continuous);
+  const returnableLoan = assetClass === "loan";
   const weekly = String(form.weekly || "")
     .split(/\r?\n/)
     .map((line) => line.trim())
@@ -420,33 +501,41 @@ function parseAssetForm(form) {
   return {
     name: form.name,
     description: form.description,
-    loanable: form.loanable,
+    assetClass,
+    loanable: returnableLoan,
     groupId: form.groupId || null,
     imageUrl: form.imageUrl || "",
     unitLabel: form.unitLabel || "items",
-    continuous: Boolean(form.continuous),
-    quantity: form.continuous ? 0 : Number.parseInt(form.quantity, 10) || 1,
-    quantityValue: form.continuous ? Number.parseFloat(String(form.quantity || "0")) || 0 : Number.parseInt(form.quantity, 10) || 1,
+    continuous,
+    quantity: continuous ? 0 : Number.parseInt(form.quantity, 10) || 1,
+    quantityValue: continuous ? Number.parseFloat(String(form.quantity || "0")) || 0 : Number.parseInt(form.quantity, 10) || 1,
     pricePence: parsePounds(form.price, 0),
-    lateFeePence: parsePounds(form.lateFee, 500),
+    lateFeePence: returnableLoan ? parsePounds(form.lateFee, 500) : undefined,
     totalFailureDays: Number.parseInt(form.totalFailureDays, 10) || 30,
-    maxLoanDays: String(form.maxLoanDays || "").trim() ? Number.parseInt(form.maxLoanDays, 10) : null,
+    maxLoanDays: returnableLoan
+      ? (String(form.maxLoanDays || "").trim() ? Number.parseInt(form.maxLoanDays, 10) : null)
+      : undefined,
     availability: { weekly, dateRanges },
   };
 }
 
-function emptyAssetForm(loanable = true, groupId = null) {
+function emptyAssetForm(assetClassOrLoanable = "loan", groupId = null) {
+  const assetClass = typeof assetClassOrLoanable === "string"
+    ? assetClassOrLoanable
+    : assetClassOrLoanable ? "loan" : "inventory";
+  const continuous = assetClass === "consumable";
   return {
     name: "",
     description: "",
     groupId,
     imageUrl: "",
-    unitLabel: "items",
-    continuous: false,
-    loanable,
-    quantity: 1,
+    assetClass,
+    unitLabel: continuous ? "grams" : "items",
+    continuous,
+    loanable: assetClass === "loan",
+    quantity: continuous ? 0 : 1,
     price: "",
-    lateFee: "5.00",
+    lateFee: assetClass === "loan" ? "5.00" : "0.00",
     totalFailureDays: 30,
     maxLoanDays: "",
     weekly: "1,09:00,17:00\n2,09:00,17:00\n3,09:00,17:00\n4,09:00,17:00\n5,09:00,17:00",
@@ -455,14 +544,16 @@ function emptyAssetForm(loanable = true, groupId = null) {
 }
 
 function formFromAsset(asset) {
+  const assetClass = assetClassForItem(asset);
   return {
     name: asset.name || "",
     description: asset.description || "",
     groupId: asset.groupId || null,
     imageUrl: asset.imageUrl || "",
+    assetClass,
     unitLabel: asset.unitLabel || "items",
     continuous: Boolean(asset.continuous),
-    loanable: Boolean(asset.loanable),
+    loanable: assetClass === "loan",
     quantity: asset.continuous ? Number(asset.quantityValue ?? asset.quantityTotal ?? 0) : asset.quantityTotal || asset.units?.length || 1,
     price: ((asset.pricePence || 0) / 100).toFixed(2),
     lateFee: ((asset.lateFeePence ?? 500) / 100).toFixed(2),
@@ -587,10 +678,17 @@ export default function AssetClient({ mode }) {
     }
   }
 
-  function openCreate(loanable) {
-    setForm(emptyAssetForm(loanable, currentGroupId));
+  function openCreate(assetClassOrLoanable) {
+    const nextForm = emptyAssetForm(assetClassOrLoanable, currentGroupId);
+    const titles = {
+      inventory: "Add inventory item",
+      loan: "Add loanable asset",
+      purchase: "Add purchase item",
+      consumable: "Add consumable",
+    };
+    setForm(nextForm);
     setModalError("");
-    setModal({ type: "asset", title: loanable ? "Add loanable asset" : "Add non-loanable asset" });
+    setModal({ type: "asset", title: titles[nextForm.assetClass] || "Add asset" });
   }
 
   function openEdit(asset) {
@@ -600,6 +698,7 @@ export default function AssetClient({ mode }) {
   }
 
   function openBook(asset) {
+    const purchase = isPurchaseItem(asset);
     const collectionAt = asset.nextAvailableAt || new Date().toISOString();
     const defaultLoanDays = asset.maxLoanDays || 7;
     const nextForm = {
@@ -607,12 +706,12 @@ export default function AssetClient({ mode }) {
       quantity: 1,
       unitIds: [],
       collectionAt: toFutureDatetimeLocalValue(collectionAt),
-      returnAt: toDatetimeLocalValue(addDays(collectionAt, defaultLoanDays)),
+      returnAt: purchase ? "" : toDatetimeLocalValue(addDays(collectionAt, defaultLoanDays)),
       acceptTerms: false,
     };
     setForm(sanitizeBookingForm(asset, nextForm));
     setModalError("");
-    setModal({ type: "book", title: `Book ${asset.name}`, asset });
+    setModal({ type: "book", title: `${purchase ? "Reserve collection" : "Book"} ${asset.name}`, asset });
   }
 
   function openCode(type, loan) {
@@ -626,6 +725,7 @@ export default function AssetClient({ mode }) {
       returnItems: type === "return" ? returnItemsFromLoan(loan) : [],
       returnNote: "",
       returnPhotos: [],
+      collectionPhotos: [],
       damageCharge: "",
       discretionaryCharge: "",
       discretionaryChargeDescription: "",
@@ -636,7 +736,7 @@ export default function AssetClient({ mode }) {
   }
 
   function openDamage(asset, unitIds = []) {
-    setForm({ assetId: asset.id, unitIds, damageDescription: "", chargePence: 0, chargeUserEmail: "" });
+    setForm({ assetId: asset.id, unitIds, damageDescription: "", damagePhotos: [], chargePence: 0, chargeUserEmail: "" });
     setModal({ type: "damage", title: `Mark damaged: ${asset.name}`, asset });
   }
 
@@ -652,6 +752,7 @@ export default function AssetClient({ mode }) {
       chargedUserId: "",
       chargedUserEmail: "",
       originalChargePence: 0,
+      repairPhotos: [],
     });
     setModal({ type: "repair", title: `Repair ${asset.name}`, asset });
   }
@@ -726,6 +827,7 @@ export default function AssetClient({ mode }) {
 
   async function submitBook(event) {
     event.preventDefault();
+    const purchase = isPurchaseItem(modal?.asset);
     const quantity = form.unitIds?.length || parseBookingQuantity(form.quantity);
     const formError = bookingFormError(modal?.asset, form);
     if (formError) {
@@ -739,13 +841,15 @@ export default function AssetClient({ mode }) {
         quantity,
         unitIds: form.unitIds?.length ? form.unitIds : undefined,
         collectionAt: fromDatetimeLocalValue(form.collectionAt),
-        returnAt: fromDatetimeLocalValue(form.returnAt),
+        returnAt: purchase ? undefined : fromDatetimeLocalValue(form.returnAt),
         acceptTerms: form.acceptTerms,
       },
-      "Booking created.",
+      purchase ? "Collection reservation created." : "Booking created.",
     );
     if (result?.loan) {
-      window.alert(`Collection code: ${result.loan.collectionCode}\nReturn code: ${result.loan.returnCode}`);
+      window.alert(result.loan.returnCode
+        ? `Collection code: ${result.loan.collectionCode}\nReturn code: ${result.loan.returnCode}`
+        : `Collection code: ${result.loan.collectionCode}`);
     }
   }
 
@@ -758,6 +862,7 @@ export default function AssetClient({ mode }) {
         code: form.code,
         allowEarlyCollection: Boolean(form.allowEarlyCollection),
         overrideCollectionAt: form.allowEarlyCollection ? new Date().toISOString() : undefined,
+        collectionPhotos: form.collectionPhotos || [],
       },
       "Collection authorised.",
     );
@@ -784,22 +889,23 @@ export default function AssetClient({ mode }) {
     );
   }
 
-  async function addReturnPhotos(fileList) {
+  async function addEvidencePhotos(field, fileList, label = "evidence photos") {
     const files = Array.from(fileList || []);
     if (!files.length) return;
     setModalError("");
     try {
-      const remainingSlots = Math.max(0, MAX_RETURN_PHOTOS - (form.returnPhotos || []).length);
+      const existing = form[field] || [];
+      const remainingSlots = Math.max(0, MAX_RETURN_PHOTOS - existing.length);
       if (remainingSlots < 1) {
-        throw new Error(`Only ${MAX_RETURN_PHOTOS} return photos can be uploaded.`);
+        throw new Error(`Only ${MAX_RETURN_PHOTOS} ${label} can be uploaded.`);
       }
       const photos = [];
       for (const file of files.slice(0, remainingSlots)) {
-        photos.push(await compressReturnPhoto(file));
+        photos.push(await compressEvidencePhoto(file));
       }
-      setForm({ ...form, returnPhotos: [...(form.returnPhotos || []), ...photos] });
+      setForm({ ...form, [field]: [...existing, ...photos] });
     } catch (caught) {
-      setModalError(caught instanceof Error ? caught.message : "Unable to attach return photos.");
+      setModalError(caught instanceof Error ? caught.message : `Unable to attach ${label}.`);
     }
   }
 
@@ -811,6 +917,7 @@ export default function AssetClient({ mode }) {
         assetId: form.assetId,
         unitIds: form.unitIds,
         damageDescription: form.damageDescription,
+        damagePhotos: form.damagePhotos || [],
         chargePence: parsePounds(form.charge, 0),
         chargeUserEmail: form.chargeUserEmail,
       },
@@ -831,6 +938,7 @@ export default function AssetClient({ mode }) {
         chargedUserId: form.chargedUserId,
         chargedUserEmail: form.chargedUserEmail,
         originalChargePence: parsePounds(form.originalCharge, 0),
+        repairPhotos: form.repairPhotos || [],
       },
       "Repair recorded.",
     );
@@ -848,6 +956,8 @@ export default function AssetClient({ mode }) {
   const bookingAvailableUnitIds = new Set(bookingAvailableUnits.map((unit) => unit.id));
   const currentBookingDateError = modal?.type === "book" ? bookingDateError(modal.asset, form) : "";
   const currentBookingError = modal?.type === "book" ? bookingFormError(modal.asset, form) : "";
+  const bookingRequiresReturn = modal?.type === "book" ? requiresReturnForItem(modal.asset) : true;
+  const bookingIsPurchase = modal?.type === "book" ? isPurchaseItem(modal.asset) : false;
   const returnItems = modal?.type === "return" ? (form.returnItems || []) : [];
   const returnReadyError = modal?.type === "return" && returnItems.some((item) => !item.returned)
     ? "All loaned serials must be marked returned before the loan can be closed."
@@ -940,7 +1050,7 @@ export default function AssetClient({ mode }) {
             setForm({
               loanId: loan.id,
               collectionAt: toDatetimeLocalValue(loan.collectionAt),
-              returnAt: toDatetimeLocalValue(loan.returnDueAt),
+              returnAt: requiresReturnForItem(loan) ? toDatetimeLocalValue(loan.returnDueAt) : "",
             });
             setModal({ type: "reschedule", title: `Edit booking: ${loan.assetName}`, loan });
           }}
@@ -1008,26 +1118,28 @@ export default function AssetClient({ mode }) {
               </select>
             </label>
             <p className="assetMuted">
-              Available for selected dates: {bookingAvailableUnits.length} / {modal.asset.quantityNormal || 0} normal serials.
+              Available for selected {bookingIsPurchase ? "collection time" : "dates"}: {bookingAvailableUnits.length} / {modal.asset.quantityNormal || 0} normal serials.
             </p>
             {currentBookingError ? <p className="assetErrorInline">{currentBookingError}</p> : null}
-            <DateRangeCalendar
-              label="Booking range"
-              value={bookingRangeText(form.collectionAt, form.returnAt)}
-              blockedRanges={activeBlockedRangesForAsset(modal.asset)}
-              availabilityAsset={modal.asset}
-              replaceOnSelect
-              onChange={(rangeValue) => {
-                const [range] = parseRangeLines(rangeValue);
-                if (range) {
-                  setForm(sanitizeBookingForm(modal.asset, {
-                    ...form,
-                    collectionAt: datetimeWithDate(form.collectionAt, range.start, "09:00"),
-                    returnAt: datetimeWithDate(form.returnAt, range.end, "17:00"),
-                  }));
-                }
-              }}
-            />
+            {bookingRequiresReturn ? (
+              <DateRangeCalendar
+                label="Booking range"
+                value={bookingRangeText(form.collectionAt, form.returnAt)}
+                blockedRanges={activeBlockedRangesForAsset(modal.asset)}
+                availabilityAsset={modal.asset}
+                replaceOnSelect
+                onChange={(rangeValue) => {
+                  const [range] = parseRangeLines(rangeValue);
+                  if (range) {
+                    setForm(sanitizeBookingForm(modal.asset, {
+                      ...form,
+                      collectionAt: datetimeWithDate(form.collectionAt, range.start, "09:00"),
+                      returnAt: datetimeWithDate(form.returnAt, range.end, "17:00"),
+                    }));
+                  }
+                }}
+              />
+            ) : null}
             <label>
               Collection date and time
               <input
@@ -1037,18 +1149,20 @@ export default function AssetClient({ mode }) {
                 required
               />
             </label>
-            <label>
-              Return date and time
-              <input
-                type="datetime-local"
-                value={form.returnAt}
-                onChange={(event) => setForm(sanitizeBookingForm(modal.asset, { ...form, returnAt: event.target.value }))}
-                required
-              />
-            </label>
+            {bookingRequiresReturn ? (
+              <label>
+                Return date and time
+                <input
+                  type="datetime-local"
+                  value={form.returnAt}
+                  onChange={(event) => setForm(sanitizeBookingForm(modal.asset, { ...form, returnAt: event.target.value }))}
+                  required
+                />
+              </label>
+            ) : null}
             <fieldset className="assetFieldset">
               <legend>Serial numbers, optional</legend>
-              <p className="assetMuted">Unavailable serials are locked for the selected dates. Leave blank to let the backend pick the first free serials.</p>
+              <p className="assetMuted">Unavailable serials are locked for the selected {bookingIsPurchase ? "collection time" : "dates"}. Leave blank to let the backend pick the first free serials.</p>
               {(modal.asset.units || []).filter((unit) => unit.condition === "normal" && !unit.deletedAt).map((unit) => {
                 const checked = (form.unitIds || []).includes(unit.id);
                 const available = !currentBookingDateError && bookingAvailableUnitIds.has(unit.id);
@@ -1077,11 +1191,11 @@ export default function AssetClient({ mode }) {
             <label className="assetCheckbox">
               <input type="checkbox" checked={Boolean(form.acceptTerms)} onChange={(event) => setForm({ ...form, acceptTerms: event.target.checked })} />
               <span>
-                I accept the <Link href="/assets/terms">loan terms and liability agreement</Link>.
+                I accept the <Link href="/assets/terms">{bookingIsPurchase ? "purchase and collection terms" : "loan terms and liability agreement"}</Link>.
               </span>
             </label>
             <button type="submit" disabled={pending || Boolean(currentBookingError)}>
-              Book asset
+              {bookingIsPurchase ? "Reserve collection" : "Book asset"}
             </button>
           </form>
         </Modal>
@@ -1109,6 +1223,15 @@ export default function AssetClient({ mode }) {
               </fieldset>
             ) : null}
             <input value={form.code} onChange={(event) => setForm({ ...form, code: event.target.value })} required />
+            <label>
+              Collection photos, optional
+              <input type="file" accept="image/*" multiple onChange={(event) => addEvidencePhotos("collectionPhotos", event.target.files, "collection photos")} />
+            </label>
+            <EvidencePhotoGrid
+              photos={form.collectionPhotos || []}
+              label="Collection photo"
+              onRemove={(index) => setForm({ ...form, collectionPhotos: (form.collectionPhotos || []).filter((_, photoIndex) => photoIndex !== index) })}
+            />
             <button type="submit" disabled={pending}>
               Authorise collection
             </button>
@@ -1192,25 +1315,13 @@ export default function AssetClient({ mode }) {
             </label>
             <label>
               Return photos
-              <input type="file" accept="image/*" multiple onChange={(event) => addReturnPhotos(event.target.files)} />
+              <input type="file" accept="image/*" multiple onChange={(event) => addEvidencePhotos("returnPhotos", event.target.files, "return photos")} />
             </label>
-            {form.returnPhotos?.length ? (
-              <div className="returnPhotoGrid">
-                {form.returnPhotos.map((photo, index) => (
-                  <figure key={`${photo.name}-${index}`} className="returnPhotoThumb">
-                    <img src={photo.dataUrl} alt={photo.name || `Return photo ${index + 1}`} />
-                    <figcaption>{photo.name}</figcaption>
-                    <button
-                      type="button"
-                      className="assetDanger"
-                      onClick={() => setForm({ ...form, returnPhotos: form.returnPhotos.filter((_, photoIndex) => photoIndex !== index) })}
-                    >
-                      Remove
-                    </button>
-                  </figure>
-                ))}
-              </div>
-            ) : null}
+            <EvidencePhotoGrid
+              photos={form.returnPhotos || []}
+              label="Return photo"
+              onRemove={(index) => setForm({ ...form, returnPhotos: (form.returnPhotos || []).filter((_, photoIndex) => photoIndex !== index) })}
+            />
             <button type="submit" disabled={pending || Boolean(returnReadyError)}>
               Record return
             </button>
@@ -1233,6 +1344,15 @@ export default function AssetClient({ mode }) {
               Account email to charge, optional
               <input value={form.chargeUserEmail || ""} onChange={(event) => setForm({ ...form, chargeUserEmail: event.target.value })} placeholder="person@example.com" />
             </label>
+            <label>
+              Damage photos, optional
+              <input type="file" accept="image/*" multiple onChange={(event) => addEvidencePhotos("damagePhotos", event.target.files, "damage photos")} />
+            </label>
+            <EvidencePhotoGrid
+              photos={form.damagePhotos || []}
+              label="Damage photo"
+              onRemove={(index) => setForm({ ...form, damagePhotos: (form.damagePhotos || []).filter((_, photoIndex) => photoIndex !== index) })}
+            />
             <button type="submit" disabled={pending}>
               Mark damaged
             </button>
@@ -1271,6 +1391,15 @@ export default function AssetClient({ mode }) {
                 </label>
               </>
             ) : null}
+            <label>
+              Repair photos, optional
+              <input type="file" accept="image/*" multiple onChange={(event) => addEvidencePhotos("repairPhotos", event.target.files, "repair photos")} />
+            </label>
+            <EvidencePhotoGrid
+              photos={form.repairPhotos || []}
+              label="Repair photo"
+              onRemove={(index) => setForm({ ...form, repairPhotos: (form.repairPhotos || []).filter((_, photoIndex) => photoIndex !== index) })}
+            />
             <button type="submit" disabled={pending}>
               Mark repaired
             </button>
@@ -1308,38 +1437,43 @@ export default function AssetClient({ mode }) {
         <Modal title={modal.title} error={modalError} onClose={() => setModal(null)}>
           <form className="assetForm" onSubmit={(event) => {
             event.preventDefault();
+            const requiresReturn = requiresReturnForItem(modal.loan);
             post({
               action: "rescheduleLoan",
               loanId: form.loanId,
               collectionAt: fromDatetimeLocalValue(form.collectionAt),
-              returnAt: fromDatetimeLocalValue(form.returnAt),
+              returnAt: requiresReturn ? fromDatetimeLocalValue(form.returnAt) : undefined,
             }, "Booking updated.");
           }}>
-            <DateRangeCalendar
-              label="Booking range"
-              value={bookingRangeText(form.collectionAt, form.returnAt)}
-              replaceOnSelect
-              onChange={(rangeValue) => {
-                const [range] = parseRangeLines(rangeValue);
-                if (range) {
-                  setForm({
-                    ...form,
-                    collectionAt: datetimeWithDate(form.collectionAt, range.start, "09:00"),
-                    returnAt: datetimeWithDate(form.returnAt, range.end, "17:00"),
-                  });
-                }
-              }}
-            />
+            {requiresReturnForItem(modal.loan) ? (
+              <DateRangeCalendar
+                label="Booking range"
+                value={bookingRangeText(form.collectionAt, form.returnAt)}
+                replaceOnSelect
+                onChange={(rangeValue) => {
+                  const [range] = parseRangeLines(rangeValue);
+                  if (range) {
+                    setForm({
+                      ...form,
+                      collectionAt: datetimeWithDate(form.collectionAt, range.start, "09:00"),
+                      returnAt: datetimeWithDate(form.returnAt, range.end, "17:00"),
+                    });
+                  }
+                }}
+              />
+            ) : null}
             <label>
               Collection date
               <input type="datetime-local" value={form.collectionAt} onChange={(event) => setForm({ ...form, collectionAt: event.target.value })} required />
             </label>
-            <label>
-              Return date
-              <input type="datetime-local" value={form.returnAt} onChange={(event) => setForm({ ...form, returnAt: event.target.value })} required />
-            </label>
+            {requiresReturnForItem(modal.loan) ? (
+              <label>
+                Return date
+                <input type="datetime-local" value={form.returnAt} onChange={(event) => setForm({ ...form, returnAt: event.target.value })} required />
+              </label>
+            ) : null}
             <button type="submit" disabled={pending}>
-              Update booking
+              {requiresReturnForItem(modal.loan) ? "Update booking" : "Update collection"}
             </button>
           </form>
         </Modal>
@@ -1366,6 +1500,25 @@ export default function AssetClient({ mode }) {
 }
 
 function AssetForm({ form, setForm, onSubmit, pending, units = [] }) {
+  const assetClass = assetClassForItem(form);
+  const continuous = assetClass === "consumable";
+  const reservable = assetClass === "loan" || assetClass === "purchase";
+  const returnableLoan = assetClass === "loan";
+
+  function setAssetClass(nextClass) {
+    const nextContinuous = nextClass === "consumable";
+    setForm({
+      ...form,
+      assetClass: nextClass,
+      continuous: nextContinuous,
+      loanable: nextClass === "loan",
+      unitLabel: nextContinuous && (!form.unitLabel || form.unitLabel === "items") ? "grams" : form.unitLabel || "items",
+      quantity: nextContinuous && !form.quantity ? 0 : form.quantity || 1,
+      lateFee: nextClass === "loan" ? form.lateFee || "5.00" : "0.00",
+      maxLoanDays: nextClass === "loan" ? form.maxLoanDays || "" : "",
+    });
+  }
+
   return (
     <form className="assetForm" onSubmit={onSubmit}>
       <label>
@@ -1380,37 +1533,24 @@ function AssetForm({ form, setForm, onSubmit, pending, units = [] }) {
         Description
         <textarea value={form.description || ""} onChange={(event) => setForm({ ...form, description: event.target.value })} />
       </label>
-      <label className="assetCheckbox">
-        <input
-          type="checkbox"
-          checked={Boolean(form.loanable)}
-          onChange={(event) => setForm({ ...form, loanable: event.target.checked })}
-          disabled={Boolean(form.continuous)}
-        />
-        <span>Available to loan</span>
+      <label>
+        Item class
+        <select value={assetClass} onChange={(event) => setAssetClass(event.target.value)}>
+          {assetClassOptions.map(([value, label]) => (
+            <option key={value} value={value}>{label}</option>
+          ))}
+        </select>
       </label>
-      <label className="assetCheckbox">
-        <input
-          type="checkbox"
-          checked={Boolean(form.continuous)}
-          onChange={(event) =>
-            setForm({
-              ...form,
-              continuous: event.target.checked,
-              loanable: event.target.checked ? false : form.loanable,
-              unitLabel: event.target.checked && (!form.unitLabel || form.unitLabel === "items") ? "grams" : form.unitLabel,
-            })
-          }
-        />
-        <span>Continuous quantity, such as filament or other consumables</span>
-      </label>
+      <p className="assetMuted">
+        Purchases and merch use collection codes and collection times, but never return dates or return codes.
+      </p>
       <label>
         Quantity available
         <input
           type="number"
-          min={form.continuous ? "0" : "1"}
-          step={form.continuous ? "0.01" : "1"}
-          value={form.quantity ?? (form.continuous ? 0 : 1)}
+          min={continuous ? "0" : "1"}
+          step={continuous ? "0.01" : "1"}
+          value={form.quantity ?? (continuous ? 0 : 1)}
           onChange={(event) => setForm({ ...form, quantity: event.target.value })}
           required
         />
@@ -1429,24 +1569,28 @@ function AssetForm({ form, setForm, onSubmit, pending, units = [] }) {
           ))}
         </datalist>
       </label>
-      {form.loanable ? (
+      {reservable ? (
         <>
           <label>
-            Asset price, GBP
+            {returnableLoan ? "Asset price, GBP" : "Purchase price, GBP"}
             <input value={form.price || ""} onChange={(event) => setForm({ ...form, price: event.target.value })} placeholder="25.00" />
           </label>
-          <label>
-            Late fee, GBP
-            <input value={form.lateFee || "5.00"} onChange={(event) => setForm({ ...form, lateFee: event.target.value })} />
-          </label>
-          <label>
-            Total failure to return after days
-            <input type="number" min="1" value={form.totalFailureDays || 30} onChange={(event) => setForm({ ...form, totalFailureDays: event.target.value })} />
-          </label>
-          <label>
-            Maximum loan duration in days, optional
-            <input type="number" min="1" value={form.maxLoanDays || ""} onChange={(event) => setForm({ ...form, maxLoanDays: event.target.value })} placeholder="Blank for no fixed maximum" />
-          </label>
+          {returnableLoan ? (
+            <>
+              <label>
+                Late fee, GBP
+                <input value={form.lateFee || "5.00"} onChange={(event) => setForm({ ...form, lateFee: event.target.value })} />
+              </label>
+              <label>
+                Total failure to return after days
+                <input type="number" min="1" value={form.totalFailureDays || 30} onChange={(event) => setForm({ ...form, totalFailureDays: event.target.value })} />
+              </label>
+              <label>
+                Maximum loan duration in days, optional
+                <input type="number" min="1" value={form.maxLoanDays || ""} onChange={(event) => setForm({ ...form, maxLoanDays: event.target.value })} placeholder="Blank for no fixed maximum" />
+              </label>
+            </>
+          ) : null}
           <WeeklyAvailabilityEditor form={form} setForm={setForm} />
           <DateRangeCalendar
             label="Optional available date ranges. Blank means indefinite."
@@ -1594,8 +1738,9 @@ function CatalogueView({ assets, onCreate, onEdit, onDelete, onLoanable, onDamag
           <p>All assets appear here regardless of loan status. Loanable defaults are retained when loaning is disabled.</p>
         </div>
         <div className="assetButtonRow">
-          <button type="button" onClick={() => onCreate(true)}>Add loanable asset</button>
-          <button type="button" onClick={() => onCreate(false)}>Add non-loanable asset</button>
+          <button type="button" onClick={() => onCreate("loan")}>Add loanable asset</button>
+          <button type="button" onClick={() => onCreate("purchase")}>Add purchase item</button>
+          <button type="button" onClick={() => onCreate("inventory")}>Add non-loanable asset</button>
         </div>
       </div>
       <AssetList assets={assets} onEdit={onEdit} onDelete={onDelete} onLoanable={onLoanable} onDamage={onDamage} />
@@ -1614,7 +1759,7 @@ function AssetList({ assets, onEdit, onDelete, onLoanable, onDamage }) {
               <h2>{asset.name}</h2>
               <p>{asset.description || "No description."}</p>
             </div>
-            <StatusBadge tone={asset.loanable ? "green" : "neutral"}>{asset.loanable ? "Loanable" : "Non-loanable"}</StatusBadge>
+            <StatusBadge tone={assetClassTone(asset)}>{assetClassLabel(asset)}</StatusBadge>
           </div>
           <div className="assetStats">
             <span>Total: {asset.quantityTotal}</span>
@@ -1627,11 +1772,11 @@ function AssetList({ assets, onEdit, onDelete, onLoanable, onDamage }) {
           </div>
           <div className="assetButtonRow">
             <button type="button" onClick={() => onEdit(asset)}>Edit details</button>
-            {asset.loanable ? (
+            {assetClassForItem(asset) === "loan" ? (
               <button type="button" onClick={() => onLoanable(asset, false)}>Make non-loanable</button>
-            ) : (
+            ) : assetClassForItem(asset) === "inventory" ? (
               <button type="button" onClick={() => onLoanable(asset, true)}>Make loanable</button>
-            )}
+            ) : null}
             <button type="button" className="assetDanger" onClick={() => onDelete(asset)}>Delete item</button>
           </div>
           <details>
@@ -1675,7 +1820,8 @@ function UnitLoanHistory({ history = [] }) {
     <ul className="assetHistoryList">
       {history.map((entry) => (
         <li key={entry.loanId}>
-          {entry.status}: {formatDate(entry.collectionAt)} to {formatDate(entry.returnDueAt)}
+          {entry.status}: {formatDate(entry.collectionAt)}
+          {entry.collectionOnly ? " collection only" : ` to ${formatDate(entry.returnDueAt)}`}
           {entry.borrowerEmail ? `, ${entry.borrowerEmail}` : ""}
           {entry.returnedAt ? `, returned ${formatDate(entry.returnedAt)}` : ""}
           {entry.lostAt ? `, lost ${formatDate(entry.lostAt)}` : ""}
@@ -1703,8 +1849,9 @@ function InventoryView({ tree, onCreate, onCreateGroup, onNavigateGroup, onEdit,
           <p>Folders organise physical makerspace stock. Customer prints live here temporarily until collection is fulfilled.</p>
         </div>
         <div className="assetButtonRow">
-          <button type="button" onClick={() => onCreate(false)}>Add inventory item</button>
-          <button type="button" onClick={() => onCreate(true)}>Add loanable item</button>
+          <button type="button" onClick={() => onCreate("inventory")}>Add inventory item</button>
+          <button type="button" onClick={() => onCreate("loan")}>Add loanable item</button>
+          <button type="button" onClick={() => onCreate("purchase")}>Add purchase item</button>
           <button type="button" onClick={onCreateGroup}>Create group</button>
           <a href="/api/assets/export?format=json">Export JSON</a>
           <a href="/api/assets/export?format=xml">Export XML</a>
@@ -1738,7 +1885,7 @@ function InventoryView({ tree, onCreate, onCreateGroup, onNavigateGroup, onEdit,
                   <h2>{asset.name}</h2>
                   <p>{asset.description || "No description."}</p>
                 </div>
-                <StatusBadge tone={asset.loanable ? "green" : "neutral"}>{asset.loanable ? "Loanable" : "Non-loanable"}</StatusBadge>
+                <StatusBadge tone={assetClassTone(asset)}>{assetClassLabel(asset)}</StatusBadge>
               </div>
               <div className="assetStats">
                 <span>
@@ -1897,58 +2044,80 @@ function loanReturnRows(loan) {
 
 function LoanDetails({ loan }) {
   const returnRows = loanReturnRows(loan);
+  const requiresReturn = requiresReturnForItem(loan);
   return (
     <div className="assetStack">
       <div className="assetStats">
         <span>Status: {loan.status}</span>
         <span>Borrower: {loan.userEmail || loan.userId || "-"}</span>
         <span>Collection: {formatDate(loan.effectiveCollectionAt || loan.collectionAt)}</span>
-        <span>Return: {formatDate(loan.effectiveReturnAt || loan.returnDueAt)}</span>
+        <span>{requiresReturn ? `Return: ${formatDate(loan.effectiveReturnAt || loan.returnDueAt)}` : "Return: not required"}</span>
         <span>Collection code: {loan.collectionCode || "-"}</span>
-        <span>Return code: {loan.returnCode || "-"}</span>
+        {requiresReturn ? <span>Return code: {loan.returnCode || "-"}</span> : <span>Fulfilment: collection only</span>}
       </div>
       {loan.collectedEarly ? <StatusBadge tone="amber">Collected early</StatusBadge> : null}
       {loan.overdue ? <StatusBadge tone="red">Overdue</StatusBadge> : null}
-      <table className="assetTable">
-        <thead>
-          <tr>
-            <th>Serial</th>
-            <th>Returned</th>
-            <th>Damaged</th>
-            <th>Damage note</th>
-          </tr>
-        </thead>
-        <tbody>
-          {returnRows.map((item) => (
-            <tr key={item.unitId}>
-              <td>{item.serial}</td>
-              <td>{item.returned === false ? "No" : "Yes"}</td>
-              <td>{item.damaged ? "Yes" : "No"}</td>
-              <td>{item.damageDescription || "-"}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <div className="assetStats">
-        <span>Late fee: {formatMoney(loan.lateFeePence || 0)}</span>
-        <span>Late fee waived: {loan.lateFeeWaived ? "Yes" : "No"}</span>
-        <span>Damage charge: {formatMoney(loan.damageChargePence || 0)}</span>
-        <span>Discretionary charge: {formatMoney(loan.discretionaryChargePence || 0)}</span>
-      </div>
+      {requiresReturn ? (
+        <>
+          <table className="assetTable">
+            <thead>
+              <tr>
+                <th>Serial</th>
+                <th>Returned</th>
+                <th>Damaged</th>
+                <th>Damage note</th>
+              </tr>
+            </thead>
+            <tbody>
+              {returnRows.map((item) => (
+                <tr key={item.unitId}>
+                  <td>{item.serial}</td>
+                  <td>{item.returned === false ? "No" : "Yes"}</td>
+                  <td>{item.damaged ? "Yes" : "No"}</td>
+                  <td>{item.damageDescription || "-"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="assetStats">
+            <span>Late fee: {formatMoney(loan.lateFeePence || 0)}</span>
+            <span>Late fee waived: {loan.lateFeeWaived ? "Yes" : "No"}</span>
+            <span>Damage charge: {formatMoney(loan.damageChargePence || 0)}</span>
+            <span>Discretionary charge: {formatMoney(loan.discretionaryChargePence || 0)}</span>
+          </div>
+        </>
+      ) : null}
       {loan.discretionaryChargeDescription ? <p>{loan.discretionaryChargeDescription}</p> : null}
+      {loan.printCompletionPhotos?.length ? (
+        <>
+          <h3>Print completion photos</h3>
+          <EvidencePhotoGrid photos={loan.printCompletionPhotos} label="Print completion photo" />
+        </>
+      ) : null}
+      {loan.collectionPhotos?.length ? (
+        <>
+          <h3>Collection photos</h3>
+          <EvidencePhotoGrid photos={loan.collectionPhotos} label="Collection photo" />
+        </>
+      ) : null}
       {loan.returnNote ? <p>Return note: {loan.returnNote}</p> : null}
       {loan.returnPhotos?.length ? (
-        <div className="returnPhotoGrid">
-          {loan.returnPhotos.map((photo, index) => (
-            <figure key={photo.id || `${photo.name}-${index}`} className="returnPhotoThumb">
-              <img src={photo.dataUrl} alt={photo.name || `Return photo ${index + 1}`} />
-              <figcaption>{photo.name || `Return photo ${index + 1}`}</figcaption>
-            </figure>
-          ))}
-        </div>
+        <>
+          <h3>Return photos</h3>
+          <EvidencePhotoGrid photos={loan.returnPhotos} label="Return photo" />
+        </>
       ) : null}
     </div>
   );
+}
+
+function loanVisualEnd(loan) {
+  if (requiresReturnForItem(loan)) {
+    return new Date(loan.effectiveReturnAt || loan.returnDueAt);
+  }
+  const start = new Date(loan.effectiveCollectionAt || loan.collectionAt);
+  if (!Number.isFinite(start.getTime())) return new Date(loan.effectiveReturnAt || loan.returnDueAt);
+  return purchaseReservationEnd(start);
 }
 
 function LoanGantt({ loans = [], onSelect }) {
@@ -1956,7 +2125,7 @@ function LoanGantt({ loans = [], onSelect }) {
   if (!visible.length) return <p className="assetMuted">No active or upcoming loans to chart.</p>;
 
   const starts = visible.map((loan) => new Date(loan.effectiveCollectionAt || loan.collectionAt).getTime()).filter(Number.isFinite);
-  const ends = visible.map((loan) => new Date(loan.effectiveReturnAt || loan.returnDueAt).getTime()).filter(Number.isFinite);
+  const ends = visible.map((loan) => loanVisualEnd(loan).getTime()).filter(Number.isFinite);
   const min = Math.min(...starts, Date.now());
   const max = Math.max(...ends, min + 7 * 24 * 60 * 60 * 1000);
   const span = Math.max(1, max - min);
@@ -1973,7 +2142,7 @@ function LoanGantt({ loans = [], onSelect }) {
       </div>
       {visible.map((loan) => {
         const start = new Date(loan.effectiveCollectionAt || loan.collectionAt);
-        const end = new Date(loan.effectiveReturnAt || loan.returnDueAt);
+        const end = loanVisualEnd(loan);
         const left = Math.max(0, ((start.getTime() - min) / span) * 100);
         const width = Math.max(2, ((end.getTime() - start.getTime()) / span) * 100);
         const tone = loan.status === "returned" ? "loanGanttReturned" : loan.status === "collected" ? "loanGanttActive" : "loanGanttUpcoming";
@@ -1985,7 +2154,7 @@ function LoanGantt({ loans = [], onSelect }) {
                 type="button"
                 className={`loanGanttBar ${tone}`}
                 style={{ left: `${left}%`, width: `${Math.min(width, 100 - left)}%` }}
-                title={`${loan.assetName}: ${formatDate(start)} to ${formatDate(end)}`}
+                title={`${loan.assetName}: ${formatDate(start)}${requiresReturnForItem(loan) ? ` to ${formatDate(end)}` : " collection only"}`}
                 onClick={() => onSelect?.(loan)}
               >
                 {loan.collectedEarly ? "Collected early: " : ""}{loan.userEmail || loan.userId || loan.status}
@@ -2004,8 +2173,8 @@ function AdminLoansView({ loans, tab, onTab, onCollect, onReturn, onDetails }) {
     <section className="panel assetStack">
       <div className="assetHeaderRow">
         <div>
-          <h1>Asset loans</h1>
-          <p>Active loans place overdue records at the top. Upcoming reservations are ordered by collection time.</p>
+          <h1>Asset loans and collections</h1>
+          <p>Active returnable loans place overdue records at the top. Upcoming loans and purchase collections are ordered by collection time.</p>
         </div>
       </div>
       <div className="assetTabs">
@@ -2022,7 +2191,7 @@ function AdminLoansView({ loans, tab, onTab, onCollect, onReturn, onDetails }) {
             <th>Borrower</th>
             <th>Serials</th>
             <th>Collection</th>
-            <th>Return</th>
+            <th>Return / fulfilment</th>
             <th>State</th>
             <th>Action</th>
           </tr>
@@ -2037,15 +2206,15 @@ function AdminLoansView({ loans, tab, onTab, onCollect, onReturn, onDetails }) {
                 {formatDate(loan.effectiveCollectionAt || loan.collectionAt)}
                 {loan.collectedEarly ? <div><StatusBadge tone="amber">Collected early</StatusBadge></div> : null}
               </td>
-              <td>{formatDate(loan.effectiveReturnAt || loan.returnDueAt)}</td>
+              <td>{requiresReturnForItem(loan) ? formatDate(loan.effectiveReturnAt || loan.returnDueAt) : "No return required"}</td>
               <td>{loan.overdue ? <StatusBadge tone="red">Overdue</StatusBadge> : loan.status}</td>
               <td>
                 <button type="button" onClick={() => onDetails?.(loan)}>Details</button>
                 {tab === "upcoming" ? (
                   <button type="button" onClick={() => onCollect(loan)}>Enter collection key</button>
-                ) : (
+                ) : requiresReturnForItem(loan) ? (
                   <button type="button" onClick={() => onReturn(loan)}>Enter return code</button>
-                )}
+                ) : null}
               </td>
             </tr>
           ))}
@@ -2072,6 +2241,9 @@ function LostDamagedView({ entries, onRecover, onRepair }) {
               <StatusBadge tone={entry.unit.condition === "lost" ? "red" : "amber"}>{entry.unit.condition}</StatusBadge>
             </div>
             <p>{entry.lastRecord?.damageDescription || entry.lastRecord?.fixDescription || "No damage notes."}</p>
+            {entry.lastRecord?.photos?.length ? (
+              <EvidencePhotoGrid photos={entry.lastRecord.photos} label="Damage record photo" />
+            ) : null}
             <div className="assetButtonRow">
               {entry.unit.condition === "lost" ? (
                 <>
@@ -2094,23 +2266,28 @@ function LostDamagedView({ entries, onRecover, onRepair }) {
 function LoanableView({ listings, onBook }) {
   return (
     <section className="panel assetStack">
-      <h1>Borrow makerspace assets</h1>
-      <p>Green items can be booked immediately. Amber items can be booked for their next collection window or when units return.</p>
+      <h1>Borrow or collect makerspace items</h1>
+      <p>Green items can be reserved immediately. Amber items can be reserved for their next collection window or when units return.</p>
       <div className="assetCards">
         {listings.map((asset) => (
           <article key={asset.id} className={`assetCard ${asset.bookableNow ? "assetCardGreen" : "assetCardAmber"}`}>
             <div className="assetHeaderRow">
               <h2>{asset.name}</h2>
-              <StatusBadge tone={asset.bookableNow ? "green" : "amber"}>{asset.loanStatusLabel}</StatusBadge>
+              <div className="assetButtonRow">
+                <StatusBadge tone={assetClassTone(asset)}>{assetClassLabel(asset)}</StatusBadge>
+                <StatusBadge tone={asset.bookableNow ? "green" : "amber"}>{asset.loanStatusLabel}</StatusBadge>
+              </div>
             </div>
             <p>{asset.description || "No description."}</p>
             <p>Available serials: {asset.quantityNormal - asset.quantityOutOfPremises} / {asset.quantityNormal}</p>
             <p>Earliest available: {formatDate(asset.nextAvailableAt)}</p>
-            <button type="button" onClick={() => onBook(asset)}>Select dates and book</button>
+            <button type="button" onClick={() => onBook(asset)}>
+              {isPurchaseItem(asset) ? "Select collection and reserve" : "Select dates and book"}
+            </button>
           </article>
         ))}
       </div>
-      {!listings.length ? <p className="assetMuted">No loanable assets are currently available.</p> : null}
+      {!listings.length ? <p className="assetMuted">No reservable assets or purchase items are currently available.</p> : null}
     </section>
   );
 }
@@ -2138,16 +2315,19 @@ function MyLoansView({ groups, transactions, balancePence, onReschedule, onExten
               <article key={loan.id} className="assetCard">
                 <div className="assetHeaderRow">
                   <h3>{loan.assetName}</h3>
-                  <StatusBadge tone={group === "overdue" ? "red" : group === "future" ? "amber" : "green"}>{group}</StatusBadge>
+                  <div className="assetButtonRow">
+                    <StatusBadge tone={assetClassTone(loan)}>{assetClassLabel(loan)}</StatusBadge>
+                    <StatusBadge tone={group === "overdue" ? "red" : group === "future" ? "amber" : "green"}>{group}</StatusBadge>
+                  </div>
                 </div>
                 <p>Serials: {serialText(loan)}</p>
                 <p>Collection: {formatDate(loan.collectionAt)}</p>
-                <p>Return: {formatDate(loan.returnDueAt)}</p>
+                {requiresReturnForItem(loan) ? <p>Return: {formatDate(loan.returnDueAt)}</p> : <p>Return: not required</p>}
                 {group === "future" ? <p>Collection code: <strong>{loan.collectionCode}</strong></p> : null}
-                {group === "present" || group === "overdue" ? <p>Return code: <strong>{loan.returnCode}</strong></p> : null}
-                {group === "future" ? <button type="button" onClick={() => onReschedule(loan)}>Edit booking</button> : null}
-                {group === "present" ? <button type="button" onClick={() => onExtend(loan)}>Change return date</button> : null}
-                {group === "present" || group === "overdue" ? (
+                {requiresReturnForItem(loan) && (group === "present" || group === "overdue") ? <p>Return code: <strong>{loan.returnCode}</strong></p> : null}
+                {group === "future" ? <button type="button" onClick={() => onReschedule(loan)}>{requiresReturnForItem(loan) ? "Edit booking" : "Edit collection"}</button> : null}
+                {requiresReturnForItem(loan) && group === "present" ? <button type="button" onClick={() => onExtend(loan)}>Change return date</button> : null}
+                {requiresReturnForItem(loan) && (group === "present" || group === "overdue") ? (
                   <button type="button" className="assetDanger" onClick={() => onLost(loan)}>Lost</button>
                 ) : null}
                 {group === "overdue" ? <p className="assetErrorInline">Overdue loans must be returned in person before making new bookings.</p> : null}

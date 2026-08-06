@@ -16,6 +16,7 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 import {
   createCustomerPrintCollection,
+  normalizeEvidencePhotos,
   recordPrintFilamentAdjustmentTransaction,
   recordPrintPaymentTransaction,
 } from "./assetsDomain.js";
@@ -1180,6 +1181,7 @@ export async function completePrintedFile(fileId, updates = {}) {
     : Number(expectedQuote?.totalMinor || 0);
   const actualMinor = Number(actualQuote?.totalMinor || 0);
   const deltaMinor = actualQuote ? actualMinor - expectedMinor : 0;
+  const printCompletionPhotos = normalizeEvidencePhotos(updates.completionPhotos, "Print completion photos");
 
   const assetUpdate = await updateAssetState((state) => {
     let nextState = state;
@@ -1207,6 +1209,7 @@ export async function completePrintedFile(fileId, updates = {}) {
       ownerEmail: manifest.ownerEmail,
       actualGrams,
       actualBreakdown,
+      completionPhotos: printCompletionPhotos,
       pricePence: actualMinor,
     });
 
@@ -1233,6 +1236,7 @@ export async function completePrintedFile(fileId, updates = {}) {
     printCompletedAt: new Date().toISOString(),
     actualFilamentGrams: actualGrams,
     actualFilamentBreakdown: actualBreakdown,
+    printCompletionPhotos,
     printCompletionSource: updates.source || "manual",
     printCompletionAdjustmentMinor: deltaMinor,
     printCompletionAdjustmentTransactionId: adjustmentTransaction?.id || null,

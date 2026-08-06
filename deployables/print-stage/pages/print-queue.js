@@ -7,6 +7,9 @@ import { authOptions } from "../lib/authOptions";
 import { toFileActor } from "../lib/auth";
 import { listPrintQueue } from "../lib/s3Files";
 
+const MAX_COMPLETION_PHOTOS = 6;
+const MAX_COMPLETION_PHOTO_DATA_URL_BYTES = 2_500_000;
+
 function formatBytes(value) {
   if (typeof value !== "number" || Number.isNaN(value)) {
     return "—";
@@ -55,9 +58,77 @@ function expectedGramsForFile(file) {
   return null;
 }
 
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error || new Error("Unable to read image file."));
+    reader.readAsDataURL(file);
+  });
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error || new Error("Unable to read compressed image."));
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function compressCompletionPhoto(file) {
+  if (!file.type.startsWith("image/")) {
+    throw new Error(`${file.name} is not an image.`);
+  }
+
+  const original = await fileToDataUrl(file);
+  if (original.length <= MAX_COMPLETION_PHOTO_DATA_URL_BYTES) {
+    return { name: file.name, type: file.type, size: file.size, dataUrl: original };
+  }
+
+  if (typeof createImageBitmap !== "function") {
+    throw new Error(`${file.name} is too large. Use an image smaller than 2.5 MB.`);
+  }
+
+  const bitmap = await createImageBitmap(file);
+  const maxSide = 1600;
+  const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+  canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error(`${file.name} could not be compressed.`);
+  context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.82));
+  if (!blob) throw new Error(`${file.name} could not be compressed.`);
+  const dataUrl = await blobToDataUrl(blob);
+  if (dataUrl.length > MAX_COMPLETION_PHOTO_DATA_URL_BYTES) {
+    throw new Error(`${file.name} is still too large after compression.`);
+  }
+  return { name: file.name.replace(/\.[^.]+$/, ".jpg"), type: "image/jpeg", size: blob.size, dataUrl };
+}
+
+function CompletionPhotoGrid({ photos, onRemove }) {
+  if (!photos.length) return null;
+  return (
+    <div className="returnPhotoGrid">
+      {photos.map((photo, index) => (
+        <figure key={`${photo.name}-${index}`} className="returnPhotoThumb">
+          <img src={photo.dataUrl} alt={photo.name || `Print completion photo ${index + 1}`} />
+          <figcaption>{photo.name || `Print completion photo ${index + 1}`}</figcaption>
+          <button type="button" className="assetDanger" onClick={() => onRemove(index)}>
+            Remove
+          </button>
+        </figure>
+      ))}
+    </div>
+  );
+}
+
 export default function PrintQueuePage({ files }) {
   const [completionTarget, setCompletionTarget] = useState(null);
   const [actualGrams, setActualGrams] = useState("");
+  const [completionPhotos, setCompletionPhotos] = useState([]);
   const [completionPending, setCompletionPending] = useState(false);
   const [completionError, setCompletionError] = useState("");
 
@@ -81,7 +152,33 @@ export default function PrintQueuePage({ files }) {
     const expectedGrams = expectedGramsForFile(file);
     setCompletionTarget(file);
     setActualGrams(expectedGrams !== null ? expectedGrams.toFixed(2) : "");
+    setCompletionPhotos([]);
     setCompletionError("");
+  }
+
+  function closeCompletionModal() {
+    setCompletionTarget(null);
+    setCompletionPhotos([]);
+    setCompletionError("");
+  }
+
+  async function addCompletionPhotos(fileList) {
+    const files = Array.from(fileList || []);
+    if (!files.length) return;
+    setCompletionError("");
+    try {
+      const remainingSlots = Math.max(0, MAX_COMPLETION_PHOTOS - completionPhotos.length);
+      if (remainingSlots < 1) {
+        throw new Error(`Only ${MAX_COMPLETION_PHOTOS} print completion photos can be uploaded.`);
+      }
+      const photos = [];
+      for (const file of files.slice(0, remainingSlots)) {
+        photos.push(await compressCompletionPhoto(file));
+      }
+      setCompletionPhotos([...completionPhotos, ...photos]);
+    } catch (error) {
+      setCompletionError(error instanceof Error ? error.message : "Unable to attach print completion photos.");
+    }
   }
 
   async function completePrint(event) {
@@ -95,7 +192,7 @@ export default function PrintQueuePage({ files }) {
       const response = await fetch(`/api/print-queue/${encodeURIComponent(completionTarget.id)}/complete`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ actualGrams }),
+        body: JSON.stringify({ actualGrams, completionPhotos }),
       });
       const payload = await response.json();
 
@@ -104,6 +201,7 @@ export default function PrintQueuePage({ files }) {
       }
 
       setCompletionTarget(null);
+      setCompletionPhotos([]);
       if (payload.collectionLoan?.collectionCode) {
         window.alert(
           `Print completed and collection scheduled.\nCollection code: ${payload.collectionLoan.collectionCode}`,
@@ -204,7 +302,7 @@ export default function PrintQueuePage({ files }) {
                 <h2 style={{ margin: 0 }}>Manual print successful</h2>
                 <p className="assetMuted" style={{ marginBottom: 0 }}>{completionTarget.originalFilename}</p>
               </div>
-              <button type="button" onClick={() => setCompletionTarget(null)} disabled={completionPending}>
+              <button type="button" onClick={closeCompletionModal} disabled={completionPending}>
                 Close
               </button>
             </div>
@@ -225,6 +323,14 @@ export default function PrintQueuePage({ files }) {
                   onChange={(event) => setActualGrams(event.target.value)}
                 />
               </label>
+              <label>
+                Print completion photos, optional
+                <input type="file" accept="image/*" multiple onChange={(event) => addCompletionPhotos(event.target.files)} />
+              </label>
+              <CompletionPhotoGrid
+                photos={completionPhotos}
+                onRemove={(index) => setCompletionPhotos(completionPhotos.filter((_, photoIndex) => photoIndex !== index))}
+              />
               {completionTarget.paymentQuote ? (
                 <p className="assetMuted">
                   Paid quote: {formatCurrency(completionTarget.paymentQuote.totalMinor, completionTarget.paymentQuote.currency)}
@@ -234,7 +340,7 @@ export default function PrintQueuePage({ files }) {
               ) : null}
               {completionError ? <p style={{ color: "#a40000", margin: 0 }}>{completionError}</p> : null}
               <div style={{ display: "flex", gap: "0.75rem", justifyContent: "flex-end" }}>
-                <button type="button" onClick={() => setCompletionTarget(null)} disabled={completionPending}>
+                <button type="button" onClick={closeCompletionModal} disabled={completionPending}>
                   Cancel
                 </button>
                 <button type="submit" disabled={completionPending}>

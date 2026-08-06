@@ -6,7 +6,7 @@ export const menuItems = [
   { href: "/admin/filament", title: "Filament tracking", label: "Autoprint usage", adminOnly: true },
   { href: "/assets", title: "Borrow assets", label: "Loan catalogue" },
   { href: "/assets/my-loans", title: "My bookings", label: "Loans and codes" },
-  { href: "/account/security", title: "Account security", label: "Password email" },
+  { href: "/account", title: "Account", label: "Profile and security" },
   { href: "/admin/assets/catalogue", title: "Asset catalogue", label: "Loan settings", assetAdminOnly: true },
   { href: "/admin/assets/inventory", title: "Inventory", label: "On-premises assets", assetAdminOnly: true },
   { href: "/admin/assets/units", title: "Inventory units", label: "Units and conversions", assetAdminOnly: true },

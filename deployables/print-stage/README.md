@@ -81,7 +81,7 @@ KEYCLOAK_MANAGEABLE_ROLES=viewer,editor,media_admin,technician,print_admin,confi
 ## Password Emails
 
 Password recovery goes through the app endpoint at `/api/auth/recover`.
-Signed-in users can request a password-change email from `/account/security`,
+Signed-in users can request a password-change email from `/account`,
 which calls `/api/auth/change-password-email`.
 
 Both flows check the user in Keycloak, reserve one daily email quota event in
