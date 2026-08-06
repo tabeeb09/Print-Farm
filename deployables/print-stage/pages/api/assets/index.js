@@ -78,6 +78,24 @@ function publicActor(actor) {
   };
 }
 
+function redactLoanCodes(loan) {
+  return {
+    ...loan,
+    collectionCode: null,
+    returnCode: null,
+    codesRedacted: true,
+  };
+}
+
+function redactAdminLoansPayload(loans) {
+  const redactList = (entries = []) => entries.map(redactLoanCodes);
+  return {
+    active: redactList(loans.active),
+    upcoming: redactList(loans.upcoming),
+    all: redactList(loans.all),
+  };
+}
+
 function getViewPayload(state, actor, view) {
   const borrower = publicActor(actor);
 
@@ -122,7 +140,13 @@ function getViewPayload(state, actor, view) {
   }
 
   if (view === "admin-loans") {
-    return { loans: selectAdminLoans(state), actor: { isAssetAdmin: actor.isAssetAdmin } };
+    return {
+      loans: redactAdminLoansPayload(selectAdminLoans(state)),
+      actor: {
+        isAssetAdmin: actor.isAssetAdmin,
+        isCollectionCodeOverrideAdmin: actor.isCollectionCodeOverrideAdmin,
+      },
+    };
   }
 
   if (view === "lost-damaged") {

@@ -39,6 +39,7 @@ export function toFileActor(session) {
   const openBaoAdminRoles = parseCsv(env.KEYCLOAK_OPENBAO_ADMIN_ROLES);
   const hrAdminRoles = parseCsv(env.KEYCLOAK_HR_ADMIN_ROLES);
   const assetAdminRoles = parseCsv(env.KEYCLOAK_ASSET_ADMIN_ROLES);
+  const collectionCodeOverrideRoles = parseCsv(env.KEYCLOAK_COLLECTION_CODE_OVERRIDE_ROLES);
   const inventoryViewRoles = parseCsv(env.KEYCLOAK_INVENTORY_VIEW_ROLES);
   const inventoryUnitAdminRoles = parseCsv(env.KEYCLOAK_INVENTORY_UNIT_ADMIN_ROLES);
   const superadminEmails = parseCsv(env.SUPERADMIN_EMAILS).map(normalizeEmail);
@@ -59,6 +60,7 @@ export function toFileActor(session) {
     isOpenBaoAdmin: isSuperadmin || openBaoAdminRoles.some((role) => roles.includes(role)),
     isHrAdmin: isSuperadmin || hrAdminRoles.some((role) => roles.includes(role)),
     isAssetAdmin: isSuperadmin || assetAdminRoles.some((role) => roles.includes(role)),
+    isCollectionCodeOverrideAdmin: isSuperadmin || collectionCodeOverrideRoles.some((role) => roles.includes(role)),
     isInventoryViewAdmin: isSuperadmin || inventoryViewRoles.some((role) => roles.includes(role)),
     isInventoryUnitAdmin: isSuperadmin || inventoryUnitAdminRoles.some((role) => roles.includes(role)),
     isSuperadmin,

@@ -25,6 +25,41 @@ function formatDate(value) {
   }).format(new Date(value));
 }
 
+function formatShortDate(value) {
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "short",
+  }).format(new Date(value));
+}
+
+function startOfLocalDay(value) {
+  const date = new Date(value);
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function addCalendarDays(value, days) {
+  const date = new Date(value);
+  date.setDate(date.getDate() + days);
+  return date;
+}
+
+function borrowerDisplayName(loan) {
+  const explicitName = String(loan?.userName || loan?.borrowerName || "").trim();
+  if (explicitName) return explicitName;
+
+  const email = String(loan?.userEmail || "").trim();
+  if (email) {
+    const localPart = email.split("@")[0] || email;
+    return localPart
+      .split(/[._-]+/)
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" ") || email;
+  }
+
+  return String(loan?.userId || loan?.status || "Borrower");
+}
+
 function formatMoney(pence) {
   return new Intl.NumberFormat("en-GB", {
     style: "currency",
@@ -617,6 +652,7 @@ export default function AssetClient({ mode }) {
   const [modal, setModal] = useState(null);
   const [form, setForm] = useState({});
   const [loanTab, setLoanTab] = useState(mode === "admin-gantt" ? "timeline" : "upcoming");
+  const [revealedCollectionCodes, setRevealedCollectionCodes] = useState({});
   const view = viewForMode(mode);
   const currentGroupId = mode === "inventory"
     ? String(router.query.groupId || "").trim() || null
@@ -788,6 +824,32 @@ export default function AssetClient({ mode }) {
     setForm({});
     setModalError("");
     setModal({ type: "loanDetails", title: `Loan details: ${loan.assetName}`, loan });
+  }
+
+  async function revealCollectionCode(loan) {
+    if (!loan?.id) return;
+    setPending(true);
+    setModalError("");
+    setMessage("");
+
+    try {
+      const response = await fetch(`/api/assets/loans/${encodeURIComponent(loan.id)}/collection-code`, {
+        method: "POST",
+      });
+      const next = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(next.error || "Unable to reveal collection code.");
+      setRevealedCollectionCodes((current) => ({
+        ...current,
+        [loan.id]: next.collectionCode || "",
+      }));
+      setMessage("Collection code revealed and audited.");
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : "Unable to reveal collection code.";
+      setError(message);
+      setModalError(message);
+    } finally {
+      setPending(false);
+    }
   }
 
   async function submitAsset(event) {
@@ -1096,7 +1158,13 @@ export default function AssetClient({ mode }) {
 
       {modal?.type === "loanDetails" ? (
         <Modal title={modal.title} error={modalError} onClose={() => setModal(null)}>
-          <LoanDetails loan={modal.loan} />
+          <LoanDetails
+            loan={modal.loan}
+            canRevealCollectionCode={Boolean(payload?.actor?.isCollectionCodeOverrideAdmin)}
+            revealedCollectionCode={revealedCollectionCodes[modal.loan.id] || ""}
+            onRevealCollectionCode={revealCollectionCode}
+            pending={pending}
+          />
         </Modal>
       ) : null}
 
@@ -2042,9 +2110,12 @@ function loanReturnRows(loan) {
   }));
 }
 
-function LoanDetails({ loan }) {
+function LoanDetails({ loan, canRevealCollectionCode = false, revealedCollectionCode = "", onRevealCollectionCode, pending = false }) {
   const returnRows = loanReturnRows(loan);
   const requiresReturn = requiresReturnForItem(loan);
+  const adminCodesRedacted = Boolean(loan.codesRedacted);
+  const visibleCollectionCode = adminCodesRedacted ? revealedCollectionCode : loan.collectionCode || "";
+  const visibleReturnCode = adminCodesRedacted ? "" : loan.returnCode || "";
   return (
     <div className="assetStack">
       <div className="assetStats">
@@ -2052,9 +2123,22 @@ function LoanDetails({ loan }) {
         <span>Borrower: {loan.userEmail || loan.userId || "-"}</span>
         <span>Collection: {formatDate(loan.effectiveCollectionAt || loan.collectionAt)}</span>
         <span>{requiresReturn ? `Return: ${formatDate(loan.effectiveReturnAt || loan.returnDueAt)}` : "Return: not required"}</span>
-        <span>Collection code: {loan.collectionCode || "-"}</span>
-        {requiresReturn ? <span>Return code: {loan.returnCode || "-"}</span> : <span>Fulfilment: collection only</span>}
+        <span>Collection code: {visibleCollectionCode || (adminCodesRedacted ? "Hidden from admin view" : "-")}</span>
+        {requiresReturn ? <span>Return code: {visibleReturnCode || (adminCodesRedacted ? "Hidden from admin view" : "-")}</span> : <span>Fulfilment: collection only</span>}
       </div>
+      {adminCodesRedacted ? (
+        <div className="assetButtonRow">
+          {canRevealCollectionCode ? (
+            <button type="button" onClick={() => onRevealCollectionCode?.(loan)} disabled={pending || Boolean(visibleCollectionCode)}>
+              {visibleCollectionCode ? "Collection code revealed" : "Reveal collection code"}
+            </button>
+          ) : (
+            <p className="assetMuted" style={{ margin: 0 }}>
+              Collection code override permission is required to reveal borrower collection codes.
+            </p>
+          )}
+        </div>
+      ) : null}
       {loan.collectedEarly ? <StatusBadge tone="amber">Collected early</StatusBadge> : null}
       {loan.overdue ? <StatusBadge tone="red">Overdue</StatusBadge> : null}
       {requiresReturn ? (
@@ -2126,26 +2210,36 @@ function LoanGantt({ loans = [], onSelect }) {
 
   const starts = visible.map((loan) => new Date(loan.effectiveCollectionAt || loan.collectionAt).getTime()).filter(Number.isFinite);
   const ends = visible.map((loan) => loanVisualEnd(loan).getTime()).filter(Number.isFinite);
-  const min = Math.min(...starts, Date.now());
-  const max = Math.max(...ends, min + 7 * 24 * 60 * 60 * 1000);
-  const span = Math.max(1, max - min);
-  const dayCount = Math.min(45, Math.max(7, Math.ceil(span / (24 * 60 * 60 * 1000))));
-  const ticks = Array.from({ length: dayCount + 1 }, (_, index) => {
-    const date = new Date(min + index * 24 * 60 * 60 * 1000);
-    return date.toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
-  });
+  const dayMs = 24 * 60 * 60 * 1000;
+  const minDate = startOfLocalDay(Math.min(...starts, Date.now()));
+  const maxDate = addCalendarDays(startOfLocalDay(Math.max(...ends, minDate.getTime() + 7 * dayMs)), 1);
+  const dayCount = Math.max(7, Math.ceil((maxDate.getTime() - minDate.getTime()) / dayMs));
+  const timelineEnd = addCalendarDays(minDate, dayCount);
+  const span = Math.max(1, timelineEnd.getTime() - minDate.getTime());
+  const ticks = Array.from({ length: dayCount }, (_, index) => addCalendarDays(minDate, index));
+  const minWidthRem = Math.max(52, 12 + dayCount * 4);
 
   return (
-    <div className="loanGantt">
+    <div className="loanGantt" style={{ "--gantt-days": ticks.length, "--gantt-min-width": `${minWidthRem}rem` }}>
+      <div className="loanGanttInner">
       <div className="loanGanttScale">
-        {ticks.map((tick) => <span key={tick}>{tick}</span>)}
+        <span className="loanGanttScaleSpacer">Asset</span>
+        <div className="loanGanttDateRow">
+          {ticks.map((tick) => (
+            <span key={tick.toISOString()}>{formatShortDate(tick)}</span>
+          ))}
+        </div>
       </div>
       {visible.map((loan) => {
         const start = new Date(loan.effectiveCollectionAt || loan.collectionAt);
         const end = loanVisualEnd(loan);
-        const left = Math.max(0, ((start.getTime() - min) / span) * 100);
-        const width = Math.max(2, ((end.getTime() - start.getTime()) / span) * 100);
+        const left = Math.max(0, ((start.getTime() - minDate.getTime()) / span) * 100);
+        const width = Math.max(1.5, ((end.getTime() - start.getTime()) / span) * 100);
+        const visibleWidth = Math.min(width, 100 - left);
         const tone = loan.status === "returned" ? "loanGanttReturned" : loan.status === "collected" ? "loanGanttActive" : "loanGanttUpcoming";
+        const borrowerName = borrowerDisplayName(loan);
+        const label = `${loan.collectedEarly ? "Early: " : ""}${borrowerName}`;
+        const showLabel = visibleWidth >= 8;
         return (
           <div key={loan.id} className="loanGanttRow">
             <span className="loanGanttLabel">{loan.assetName}</span>
@@ -2153,16 +2247,17 @@ function LoanGantt({ loans = [], onSelect }) {
               <button
                 type="button"
                 className={`loanGanttBar ${tone}`}
-                style={{ left: `${left}%`, width: `${Math.min(width, 100 - left)}%` }}
-                title={`${loan.assetName}: ${formatDate(start)}${requiresReturnForItem(loan) ? ` to ${formatDate(end)}` : " collection only"}`}
+                style={{ left: `${left}%`, width: `${visibleWidth}%` }}
+                title={`${borrowerName} collecting ${loan.assetName}: ${formatDate(start)}${requiresReturnForItem(loan) ? ` to ${formatDate(end)}` : " collection only"}`}
                 onClick={() => onSelect?.(loan)}
               >
-                {loan.collectedEarly ? "Collected early: " : ""}{loan.userEmail || loan.userId || loan.status}
+                {showLabel ? <span className="loanGanttBarText">{label}</span> : null}
               </button>
             </div>
           </div>
         );
       })}
+      </div>
     </div>
   );
 }
