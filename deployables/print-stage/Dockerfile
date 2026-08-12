@@ -41,7 +41,7 @@ RUN apt-get update \
 
 ARG ORCA_APPIMAGE_URL=https://github.com/OrcaSlicer/OrcaSlicer/releases/download/nightly-builds/OrcaSlicer_Linux_AppImage_Ubuntu2404_nightly.AppImage
 RUN mkdir -p /opt/orca-slicer \
-  && curl -fsSL "$ORCA_APPIMAGE_URL" -o /opt/orca-slicer/OrcaSlicer.AppImage \
+  && curl -fL --retry 8 --retry-delay 5 --retry-max-time 900 --connect-timeout 30 --retry-all-errors "$ORCA_APPIMAGE_URL" -o /opt/orca-slicer/OrcaSlicer.AppImage \
   && chmod +x /opt/orca-slicer/OrcaSlicer.AppImage \
   && cd /opt/orca-slicer \
   && ./OrcaSlicer.AppImage --appimage-extract \
