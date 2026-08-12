@@ -1,29 +1,9 @@
-<?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<!-- Created with Inkscape (http://www.inkscape.org/) -->
-
-<svg
-   xml:space="preserve"
-   id="svg5"
-   version="1.1"
-   viewBox="0 0 10.340354 10.340355"
-   height="10.340354mm"
-   width="10.340354mm"
-   xmlns="http://www.w3.org/2000/svg"
-   xmlns:svg="http://www.w3.org/2000/svg"><defs
-     id="defs2"><linearGradient
-       id="linearGradient40361"><stop
-         style="stop-color:#ececec;stop-opacity:1;"
-         offset="0"
-         id="stop40359" /></linearGradient></defs><g
-     id="layer1"
-     transform="translate(-235.29265,-1044.7691)"><text
-       xml:space="preserve"
-       style="font-size:22.9306px;font-family:GENISO;-inkscape-font-specification:'GENISO, Normal';opacity:1;fill:#ffffff;fill-opacity:1;stroke:#000000;stroke-width:1.006;stroke-dasharray:none;stroke-opacity:1"
-       x="906.67462"
-       y="577.34076"
-       id="text33293"
-       transform="rotate(45)"><tspan
-         id="tspan33291"
-         style="stroke-width:1.006;stroke-dasharray:none"
-         x="906.67462"
-         y="577.34076">+</tspan></text></g></svg>
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10.340354 10.340355" width="10.340354mm" height="10.340354mm" aria-hidden="true">
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M2.1 2.1 8.240354 8.240355" stroke="#000000" stroke-width="2.35"/>
+    <path d="M8.240354 2.1 2.1 8.240355" stroke="#000000" stroke-width="2.35"/>
+    <path d="M2.1 2.1 8.240354 8.240355" stroke="#ffffff" stroke-width="1.28"/>
+    <path d="M8.240354 2.1 2.1 8.240355" stroke="#ffffff" stroke-width="1.28"/>
+  </g>
+</svg>

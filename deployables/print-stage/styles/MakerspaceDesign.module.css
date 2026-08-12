@@ -399,6 +399,16 @@
   font-synthesis: none;
 }
 
+.textOverlay :global(text[style*="font-family:GENISO"]),
+.textOverlay :global(tspan[style*="font-family:GENISO"]) {
+  font-family: "GENISO", "Makerspace Geniso", monospace !important;
+}
+
+.textOverlay :global(text[style*="Artifakt Element"]),
+.textOverlay :global(tspan[style*="Artifakt Element"]) {
+  font-family: "Artifakt Element", sans-serif !important;
+}
+
 .textOverlay path {
   transform-box: fill-box;
   transform-origin: center;

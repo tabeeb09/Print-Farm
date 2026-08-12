@@ -718,6 +718,9 @@ export default function Home({ mobileWelcomeMarkup }) {
           name="description"
           content="University of Bath's student-run workshop for printing, equipment borrowing, volunteering, and makerspace events."
         />
+        <link rel="preload" href="/makerspace-design/fonts/GENISO.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
+        <link rel="preload" href="/makerspace-design/fonts/ArtifaktElementMedium.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
+        <link rel="preload" href="/makerspace-design/fonts/ArtifaktElementBold.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
         <link rel="icon" href="/favicon.ico" />
       </Head>
 
