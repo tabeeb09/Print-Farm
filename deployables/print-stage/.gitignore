@@ -33,3 +33,7 @@ print-worker.env
 worker-config/
 worker-outbox/
 orca-lan-wrapper/bin/
+.local-dev/
+.next-local/
+archives/
+scripts/__pycache__/

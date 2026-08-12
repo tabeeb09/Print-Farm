@@ -1000,7 +1000,7 @@ export async function markFilePaidFromCheckoutSession(fileId, checkoutSession) {
   return hydrateManifest(updated);
 }
 
-export async function requestPrint(actor, fileId) {
+export async function requestPrint(actor, fileId, options = {}) {
   let manifest = await readManifest(fileId);
 
   if (!manifest) {
@@ -1039,8 +1039,19 @@ export async function requestPrint(actor, fileId) {
     throw new Error("Only backend-sliced files with a generated G-code artifact can enter the print queue.");
   }
 
-  if (manifest.paymentStatus !== "paid") {
-    throw new Error("Payment is required before this file can enter the print queue.");
+  const requestedPayOnCollection = options?.paymentMode === "pay_on_collection";
+  const alreadyPayOnCollection = manifest.paymentStatus === "pay_on_collection";
+  const quoteForQueue = manifest.paymentQuoteAtCheckout ||
+    computePrintPriceQuote(manifest, manifest.paymentDiscount || null);
+
+  if (manifest.paymentStatus !== "paid" && !alreadyPayOnCollection) {
+    if (!requestedPayOnCollection) {
+      throw new Error("Payment is required before this file can enter the print queue.");
+    }
+
+    if (!quoteForQueue?.lineItems?.length) {
+      throw new Error("A print price quote is required before choosing pay upon collection.");
+    }
   }
 
   const queueObjectKey = buildPrintQueueObjectKey(
@@ -1060,6 +1071,14 @@ export async function requestPrint(actor, fileId) {
 
   const updated = {
     ...manifest,
+    paymentStatus: manifest.paymentStatus === "paid" ? "paid" : "pay_on_collection",
+    paymentMethod: manifest.paymentStatus === "paid" ? manifest.paymentMethod ?? "stripe" : "pay_on_collection",
+    paymentQuoteAtCheckout: manifest.paymentQuoteAtCheckout ?? quoteForQueue ?? null,
+    paymentDiscount: quoteForQueue?.discount ?? manifest.paymentDiscount ?? null,
+    paymentAmountTotalMinor: manifest.paymentAmountTotalMinor ?? quoteForQueue?.totalMinor ?? null,
+    paymentCurrency: manifest.paymentCurrency ?? quoteForQueue?.currency ?? null,
+    payOnCollectionRequestedAt:
+      manifest.payOnCollectionRequestedAt ?? (manifest.paymentStatus === "paid" ? null : new Date().toISOString()),
     printStatus: "queued",
     printRequestedAt: new Date().toISOString(),
     printStartedAt: null,

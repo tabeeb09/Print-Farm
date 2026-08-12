@@ -1,0 +1,1589 @@
+@font-face {
+  font-family: "Makerspace Geniso";
+  src:
+    local("GENISO"),
+    url("/makerspace-design/fonts/GENISO.woff2") format("woff2"),
+    url("/makerspace-design/fonts/GENISO.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "GENISO";
+  src:
+    local("GENISO"),
+    url("/makerspace-design/fonts/GENISO.woff2") format("woff2"),
+    url("/makerspace-design/fonts/GENISO.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Artifakt Element";
+  src:
+    local("Artifakt Element Thin"),
+    url("/makerspace-design/fonts/ArtifaktElementThin.woff2") format("woff2"),
+    url("/makerspace-design/fonts/ArtifaktElementThin.ttf") format("truetype");
+  font-weight: 100;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Artifakt Element";
+  src:
+    local("Artifakt Element Medium"),
+    url("/makerspace-design/fonts/ArtifaktElementMedium.woff2") format("woff2"),
+    url("/makerspace-design/fonts/ArtifaktElementMedium.ttf") format("truetype");
+  font-weight: 500;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Artifakt Element";
+  src:
+    local("Artifakt Element Bold"),
+    url("/makerspace-design/fonts/ArtifaktElementBold.woff2") format("woff2"),
+    url("/makerspace-design/fonts/ArtifaktElementBold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: block;
+}
+
+.page {
+  min-height: 100vh;
+  overflow-x: hidden;
+  background: #f6f4ee;
+  font-family: "Makerspace Geniso", "GENISO", monospace;
+  font-synthesis: none;
+  scroll-behavior: auto;
+}
+
+.navToggle {
+  position: fixed;
+  left: clamp(0.58rem, 1.82vw, 2.2rem);
+  top: clamp(0.48rem, 3.2vh, 1.75rem);
+  z-index: 90;
+  display: block;
+  width: clamp(1.15rem, 1.55vw, 2.1rem);
+  aspect-ratio: 7.8847664 / 23.537114;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  line-height: 0;
+  --nav-arrow-fill: #080808;
+  --nav-arrow-stroke: rgba(246, 244, 238, 0.92);
+}
+
+.navToggle[data-contrast="light"] {
+  --nav-arrow-fill: #f6f4ee;
+  --nav-arrow-stroke: rgba(0, 0, 0, 0.78);
+}
+
+.navToggleSvg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform-origin: center;
+  transition: transform 150ms ease;
+}
+
+.navToggleGlyph {
+  fill: var(--nav-arrow-fill);
+  stroke: var(--nav-arrow-stroke);
+  stroke-width: 0.22;
+  stroke-linejoin: round;
+  paint-order: stroke fill;
+  transition:
+    fill 90ms linear,
+    stroke 90ms linear;
+}
+
+.navToggle[aria-expanded="true"] .navToggleSvg {
+  transform: rotate(180deg);
+}
+
+.navToggle:focus-visible {
+  outline: clamp(2px, 0.16vw, 4px) solid rgba(0, 0, 0, 0.82);
+  outline-offset: clamp(3px, 0.25vw, 5px);
+}
+
+.appNavBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  border: 0;
+  padding: 0;
+  background: rgba(23, 27, 31, 0.2);
+  cursor: pointer;
+}
+
+.appNavSidebar {
+  width: min(18.2rem, 55.9vw);
+  max-width: 55.9vw;
+  z-index: 80;
+  border-right: clamp(1.5px, 0.12vw, 3px) solid rgba(23, 27, 31, 0.3);
+  background:
+    linear-gradient(180deg, #faf7ee, #efe5d3),
+    #f6f4ee;
+  color: #171b1f;
+  font-family: "Artifakt Element", "Makerspace Geniso", sans-serif;
+  font-weight: 500;
+  backdrop-filter: none;
+  box-shadow: 0.7rem 0 2.4rem rgba(23, 27, 31, 0.22);
+}
+
+.page[data-layout="phone"] .appNavSidebar {
+  width: min(22.5rem, 92vw);
+  max-width: 92vw;
+}
+
+.appNavTop {
+  min-height: clamp(4.75rem, 7.5vh, 6.2rem);
+  padding: 0.9rem 0.75rem 0.9rem 0.95rem;
+  justify-content: space-between;
+  border-bottom-color: rgba(23, 27, 31, 0.24);
+}
+
+.appNavBrand {
+  display: flex;
+  min-width: 0;
+  gap: 0.78rem;
+}
+
+.appNavBrand strong {
+  color: #171b1f;
+  font-family: "Artifakt Element", "Makerspace Geniso", sans-serif;
+  font-size: clamp(1.03rem, 1.25vw, 1.28rem);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1;
+}
+
+.appNavBrand small {
+  color: #4b565d;
+  font-family: "Artifakt Element", "Makerspace Geniso", sans-serif;
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+}
+
+.appNavLogo {
+  display: block;
+  width: clamp(2.55rem, 3.35vw, 3.25rem);
+  height: clamp(2.55rem, 3.35vw, 3.25rem);
+  object-fit: contain;
+  border-radius: 999px;
+  flex: 0 0 auto;
+  pointer-events: none;
+}
+
+.appNavClose {
+  display: grid;
+  place-items: center;
+  width: clamp(1.75rem, 2vw, 2.35rem);
+  height: clamp(2.6rem, 4vw, 3.6rem);
+  margin-left: 0.35rem;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.appNavCloseSvg {
+  display: block;
+  width: clamp(0.85rem, 0.95vw, 1.18rem);
+  height: auto;
+  transform: rotate(180deg);
+  transform-origin: center;
+  transition: transform 140ms ease;
+}
+
+.appNavCloseGlyph {
+  fill: #171b1f;
+  stroke: rgba(246, 244, 238, 0.95);
+  stroke-width: 0.22;
+  stroke-linejoin: round;
+  paint-order: stroke fill;
+}
+
+.appNavClose:hover .appNavCloseSvg,
+.appNavClose:focus-visible .appNavCloseSvg {
+  transform: rotate(180deg) scale(1.12);
+}
+
+.appNavSection {
+  display: block;
+  padding: 1rem 0.75rem 1.4rem;
+}
+
+.appNavTitle {
+  color: #b43b2a;
+  font-family: "Artifakt Element", "Makerspace Geniso", sans-serif;
+  font-weight: 700;
+}
+
+.appNavLink {
+  border-color: transparent;
+  color: #171b1f;
+  font-family: "Artifakt Element", "Makerspace Geniso", sans-serif;
+  background: transparent;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    transform 140ms ease;
+}
+
+.appNavLink span {
+  color: #171b1f;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.appNavLink small {
+  color: #3d474f;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.appNavLink:hover,
+.appNavLink:focus-visible,
+.appNavLinkActive {
+  border-color: rgba(23, 27, 31, 0.22);
+  background: #fffdf8;
+  transform: translateX(0.12rem);
+}
+
+.appNavTreeRoot,
+.appNavTreeLink {
+  color: #263039;
+  font-family: "Artifakt Element", "Makerspace Geniso", sans-serif;
+  font-weight: 500;
+}
+
+.appNavAccount {
+  flex: 0 0 auto;
+  display: grid;
+  gap: 0.65rem;
+  padding: 0.85rem 0.75rem 1rem;
+  border-top: 1px solid rgba(23, 27, 31, 0.14);
+  color: #3d474f;
+  font-family: "Artifakt Element", "Makerspace Geniso", sans-serif;
+  font-size: 0.82rem;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.fixedSectionNav {
+  position: fixed;
+  left: clamp(2.55rem, 4.25vw, 5.6rem);
+  top: clamp(0.48rem, 3.2vh, 1.75rem);
+  z-index: 59;
+  display: flex;
+  gap: clamp(0.34rem, 0.7vw, 0.9rem);
+  align-items: center;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-0.4rem);
+  transition:
+    opacity 130ms ease,
+    transform 150ms ease;
+}
+
+.fixedSectionNavOpen {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
+}
+
+.fixedSectionNavItem {
+  display: grid;
+  place-items: center;
+  min-width: clamp(4.1rem, 7.8vw, 9rem);
+  height: clamp(1.35rem, 2.55vw, 3.05rem);
+  border: clamp(1.2px, 0.11vw, 2.4px) solid var(--button-tone);
+  padding: 0 0.45em;
+  box-sizing: border-box;
+  background: rgba(246, 244, 238, 0.92);
+  color: var(--button-tone);
+  cursor: pointer;
+  font: inherit;
+  font-size: clamp(0.9rem, 1.55vw, 2rem);
+  line-height: 0.94;
+  letter-spacing: 0.006em;
+  -webkit-text-fill-color: currentColor;
+  -webkit-text-stroke: clamp(0.55px, 0.08vw, 1.6px) currentColor;
+  paint-order: stroke fill;
+  transition:
+    background-color 130ms ease,
+    color 130ms ease,
+    transform 145ms ease,
+    -webkit-text-stroke-color 130ms ease;
+}
+
+.fixedSectionNavItem:hover,
+.fixedSectionNavItem:focus-visible {
+  background: var(--button-tone);
+  color: var(--button-contrast, #f6f4ee);
+  -webkit-text-fill-color: var(--button-contrast, #f6f4ee);
+  -webkit-text-stroke-color: var(--button-contrast, #f6f4ee);
+  transform: scale(1.018);
+}
+
+.vectorSection {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  background: #f6f4ee;
+  line-height: 0;
+  isolation: isolate;
+}
+
+:global(#print) {
+  margin-top: clamp(-42px, -2.1vw, -30px);
+}
+
+:global(#print) .convertedPlate {
+  margin-top: -12px;
+}
+
+.convertedPlate {
+  position: relative;
+  display: block;
+  width: 100%;
+  line-height: 0;
+}
+
+.backgroundPlate,
+.textOverlay {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.backgroundPlate {
+  object-fit: fill;
+  user-select: none;
+}
+
+.textOverlay {
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.textOverlay text,
+.textOverlay tspan {
+  paint-order: stroke fill;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  text-rendering: geometricPrecision;
+  font-synthesis: none;
+}
+
+.textOverlay path {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+:global(#mobile-site) .textOverlay :is(
+  :global(#g14779),
+  :global(#g7919),
+  :global(#text6902-1),
+  :global(#text7116-3),
+  :global(#text7120-1),
+  :global(#text11699-4)
+) {
+  opacity: 0 !important;
+  pointer-events: none;
+}
+
+:global(#mobile-site [id="g14779"]),
+:global(#mobile-site [id="g14779"] *),
+:global(#mobile-site [id="g7919"]),
+:global(#mobile-site [id="g7919"] *) {
+  display: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+:global(#mobile-site) .textOverlay :global(#text85135) {
+  opacity: 0 !important;
+}
+
+.mobileWelcomeBox {
+  position: absolute;
+  left: 6.6%;
+  top: 2.23%;
+  z-index: 4;
+  display: block;
+  width: 87.1%;
+  height: 6.05%;
+  pointer-events: none;
+}
+
+.hotspot {
+  position: absolute;
+  z-index: 3;
+  display: block;
+  pointer-events: auto;
+  border: 0;
+  padding: 0;
+  background: rgba(0, 0, 0, 0.001);
+  color: var(--tone, #f00);
+  cursor: pointer;
+  font: inherit;
+  line-height: 1;
+  text-decoration: none;
+}
+
+.hotspot span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.hotspot:focus-visible {
+  outline: clamp(2px, 0.16vw, 4px) solid rgba(0, 0, 0, 0.82);
+  outline-offset: clamp(2px, 0.16vw, 4px);
+}
+
+.labelHotspot::before,
+.labelHotspot::after {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 120ms ease,
+    transform 140ms ease;
+}
+
+.labelHotspot::before {
+  content: "";
+  border: clamp(1.5px, 0.13vw, 3px) solid currentColor;
+  background: currentColor;
+}
+
+.labelHotspot::after {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  content: attr(data-label);
+  color: #f6f4ee;
+  -webkit-text-fill-color: #f6f4ee;
+  -webkit-text-stroke: clamp(1.25px, 0.12vw, 2.4px) #f6f4ee;
+  font-size: clamp(1.1rem, 2.3vw, 4.8rem);
+  letter-spacing: 0.03em;
+  paint-order: stroke;
+}
+
+.labelHotspot:hover::before,
+.labelHotspot:focus-visible::before,
+.labelHotspot:hover::after,
+.labelHotspot:focus-visible::after {
+  opacity: 1;
+}
+
+.labelHotspot:hover::before,
+.labelHotspot:hover::after,
+.labelHotspot:focus-visible::before,
+.labelHotspot:focus-visible::after {
+  transform: scale(1.035);
+}
+
+.homeHotspots,
+.volunteerHotspots,
+.printHotspots,
+.equipmentHotspots,
+.eventsHotspots,
+.footerHotspots {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+}
+
+.equipmentHotspots,
+.eventsHotspots {
+  pointer-events: none;
+}
+
+.homeButtonRow {
+  left: 54.25%;
+  top: 3.31%;
+  right: 0.99%;
+  bottom: auto;
+  display: grid;
+  grid-template-columns: 14.45fr 28.39fr 29.18fr 21.09fr;
+  column-gap: 2.3%;
+  align-items: stretch;
+  height: 6.38%;
+}
+
+.outlineButton {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  border: clamp(1.4px, 0.13vw, 2.6px) solid var(--button-tone);
+  box-sizing: border-box;
+  padding: 0 0.34em;
+  overflow: hidden;
+  background: transparent;
+  color: var(--button-tone);
+  cursor: pointer;
+  font: inherit;
+  line-height: 1;
+  text-decoration: none;
+  transform-box: border-box;
+  transform-origin: center;
+  transition:
+    background-color 130ms ease,
+    transform 150ms ease;
+}
+
+.outlineButton span {
+  color: currentColor;
+  font-size: clamp(0.95rem, 2.48vw, 3.58rem);
+  letter-spacing: 0.006em;
+  line-height: 0.95;
+  -webkit-text-fill-color: currentColor;
+  -webkit-text-stroke: clamp(0.75px, 0.12vw, 2.25px) currentColor;
+  paint-order: stroke fill;
+  transform-origin: center;
+  transition:
+    color 130ms ease,
+    transform 150ms ease,
+    -webkit-text-stroke-color 130ms ease;
+}
+
+.outlineButton:hover,
+.outlineButton:focus-visible {
+  background: var(--button-tone);
+  transform: scale(1.018);
+}
+
+.outlineButton:hover span,
+.outlineButton:focus-visible span {
+  color: var(--button-contrast, #f6f4ee);
+  -webkit-text-fill-color: var(--button-contrast, #f6f4ee);
+  -webkit-text-stroke-color: var(--button-contrast, #f6f4ee);
+  transform: scale(1.008);
+}
+
+.homeOutlineButton {
+  min-width: 0;
+}
+
+.getInvolvedHotspot {
+  left: 54.25%;
+  top: 50.35%;
+  width: 14.964%;
+  height: 8.027%;
+}
+
+.getInvolvedHotspot,
+.mobileGetInvolvedHotspot {
+  isolation: isolate;
+  container-type: size;
+  transform-origin: center;
+  transition: transform 150ms ease;
+}
+
+.getInvolvedHotspot span,
+.mobileGetInvolvedHotspot span {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  margin: 0;
+  overflow: visible;
+  clip: auto;
+  white-space: nowrap;
+  border: 0;
+  color: #000;
+  -webkit-text-fill-color: #000;
+  font-family: "Artifakt Element", "Makerspace Geniso", sans-serif;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  text-decoration: none;
+  text-shadow: 0 0 0.35px currentColor;
+  transform: translate(-50%, -50%);
+  transition:
+    color 130ms ease,
+    -webkit-text-fill-color 130ms ease,
+    transform 145ms ease;
+}
+
+.getInvolvedHotspot span {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.mobileGetInvolvedHotspot span {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: max-content;
+  height: auto;
+  margin: 0;
+  overflow: visible;
+  clip: auto;
+  white-space: nowrap;
+  border: 0;
+  color: #000;
+  -webkit-text-fill-color: #000;
+  font-size: clamp(0.92rem, 5.15vw, 1.22rem);
+  transform: translate(-50%, -50%);
+}
+
+.getInvolvedHotspot::before,
+.mobileGetInvolvedHotspot::before {
+  display: none;
+}
+
+.getInvolvedHotspot:hover,
+.getInvolvedHotspot:focus-visible,
+.mobileGetInvolvedHotspot:hover,
+.mobileGetInvolvedHotspot:focus-visible {
+  transform: translateY(-0.8px) scale(1.04);
+}
+
+.getInvolvedHotspot:hover span,
+.getInvolvedHotspot:focus-visible span {
+  opacity: 0;
+  transform: none;
+}
+
+.mobileGetInvolvedHotspot:hover span,
+.mobileGetInvolvedHotspot:focus-visible span {
+  fill: #fff !important;
+  color: #fff !important;
+  -webkit-text-fill-color: #fff;
+  transform: translate(-50%, -50%) scale(1.03);
+}
+
+:global(#volunteer) .textOverlay :global(#text85135) {
+  opacity: 1 !important;
+  fill: #000 !important;
+  stroke: none !important;
+  pointer-events: none !important;
+}
+
+:global(#volunteer) .textOverlay :global(#text85135) tspan {
+  fill: #000 !important;
+  stroke: none !important;
+}
+
+:global(#volunteer):has(.getInvolvedHotspot:hover) .textOverlay :global(#text85135),
+:global(#volunteer):has(.getInvolvedHotspot:focus-visible) .textOverlay :global(#text85135),
+:global(#volunteer):has(.getInvolvedHotspot:hover) .textOverlay :global(#text85135) tspan,
+:global(#volunteer):has(.getInvolvedHotspot:focus-visible) .textOverlay :global(#text85135) tspan {
+  fill: #fff !important;
+  stroke: none !important;
+  pointer-events: none !important;
+}
+
+:global(#mobile-site) .textOverlay :global(#text85135),
+:global(#mobile-site) .textOverlay :global(#text85135) tspan {
+  transform-box: fill-box;
+  transform-origin: left center;
+  transition:
+    stroke 130ms ease,
+    fill 130ms ease,
+    transform 145ms ease;
+}
+
+:global(#mobile-site):has(.mobileGetInvolvedHotspot:hover) .textOverlay :global(#text85135),
+:global(#mobile-site):has(.mobileGetInvolvedHotspot:focus-visible) .textOverlay :global(#text85135) {
+  transform: translateY(-0.8px) scale(1.04);
+}
+
+:global(#mobile-site):has(.mobileGetInvolvedHotspot:hover) .textOverlay :global(#text85135),
+:global(#mobile-site):has(.mobileGetInvolvedHotspot:hover) .textOverlay :global(#text85135) tspan,
+:global(#mobile-site):has(.mobileGetInvolvedHotspot:focus-visible) .textOverlay :global(#text85135),
+:global(#mobile-site):has(.mobileGetInvolvedHotspot:focus-visible) .textOverlay :global(#text85135) tspan {
+  fill: #fff !important;
+  stroke: #fff !important;
+  color: #fff !important;
+  -webkit-text-fill-color: #fff;
+  paint-order: stroke fill;
+}
+
+.volunteerEmailHotspot {
+  left: 72.45%;
+  top: 57.3%;
+  width: 24.45%;
+  height: 8.35%;
+}
+
+.collectHotspot {
+  left: 0.1%;
+  top: 23.5%;
+  width: 18.1%;
+  height: 9.8%;
+}
+
+.designHotspot {
+  left: 0.1%;
+  top: 34.6%;
+  width: 18.1%;
+  height: 9.45%;
+}
+
+.courseHotspot {
+  left: 3.25%;
+  top: 45.1%;
+  width: 17.5%;
+  height: 8.65%;
+}
+
+.guideHotspot {
+  left: 3.25%;
+  top: 53.8%;
+  width: 22.2%;
+  height: 8.65%;
+}
+
+.orderHotspot {
+  left: 3.25%;
+  top: 62.4%;
+  width: 15.8%;
+  height: 8.7%;
+}
+
+:global(#print) .textOverlay :is(:global(#g26965), :global(#g26971), :global(#g8397)) {
+  opacity: 0;
+}
+
+.printHoverArrow {
+  position: absolute;
+  z-index: 5;
+  left: 5.62%;
+  top: var(--print-arrow-top);
+  width: 3.55%;
+  height: 7.5%;
+  overflow: visible;
+  opacity: var(--print-arrow-opacity, 0);
+  pointer-events: none;
+  transform: translateY(-50%);
+  transition:
+    top 145ms cubic-bezier(0.2, 0.9, 0.2, 1),
+    opacity 90ms ease;
+}
+
+.printHoverArrow path {
+  fill: none;
+  stroke: #fff;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.printHoverArrow path:first-child {
+  stroke-width: 1.492;
+}
+
+.printHoverArrow path:last-child {
+  stroke-width: 1.02514;
+}
+
+:global(#print) .textOverlay :is(:global(#path26992), :global(#path26990), :global(#path26994), :global(#path26996), :global(#path26998), :global(#path27000), :global(#path11107)),
+:global(#print) .textOverlay :is(:global(#g26965), :global(#g26971), :global(#g8397), :global(#text19471), :global(#text19577), :global(#text26953), :global(#text26975), :global(#text8401)) {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition:
+    transform 150ms ease,
+    opacity 150ms ease;
+}
+
+:global(#print):has(.collectHotspot:hover) .textOverlay :is(:global(#path26992), :global(#path26990)),
+:global(#print):has(.collectHotspot:focus-visible) .textOverlay :is(:global(#path26992), :global(#path26990)) {
+  transform: rotate(-1.1deg) scale(1.045);
+}
+
+:global(#print):has(.collectHotspot:hover) .textOverlay :global(#text19471),
+:global(#print):has(.collectHotspot:focus-visible) .textOverlay :global(#text19471) {
+  transform: translateY(-0.8px) scale(1.055);
+}
+
+:global(#print):has(.designHotspot:hover) .textOverlay :is(:global(#path26994), :global(#path26996)),
+:global(#print):has(.designHotspot:focus-visible) .textOverlay :is(:global(#path26994), :global(#path26996)) {
+  transform: rotate(1.35deg) scale(1.04);
+}
+
+:global(#print):has(.designHotspot:hover) .textOverlay :global(#text19577),
+:global(#print):has(.designHotspot:focus-visible) .textOverlay :global(#text19577) {
+  transform: translate(0.6px, -0.7px) scale(1.05);
+}
+
+:global(#print):has(.courseHotspot:hover) .textOverlay :global(#path26998),
+:global(#print):has(.courseHotspot:focus-visible) .textOverlay :global(#path26998) {
+  transform: rotate(-0.85deg) scale(1.045);
+}
+
+:global(#print):has(.courseHotspot:hover) .textOverlay :global(#text26953),
+:global(#print):has(.courseHotspot:focus-visible) .textOverlay :global(#text26953) {
+  transform: translate(0.5px, -0.6px) scale(1.055);
+}
+
+:global(#print):has(.guideHotspot:hover) .textOverlay :global(#path27000),
+:global(#print):has(.guideHotspot:focus-visible) .textOverlay :global(#path27000) {
+  transform: rotate(0.95deg) scale(1.04);
+}
+
+:global(#print):has(.guideHotspot:hover) .textOverlay :global(#text26975),
+:global(#print):has(.guideHotspot:focus-visible) .textOverlay :global(#text26975) {
+  transform: translate(0.4px, -0.6px) scale(1.05);
+}
+
+:global(#print):has(.orderHotspot:hover) .textOverlay :global(#path11107),
+:global(#print):has(.orderHotspot:focus-visible) .textOverlay :global(#path11107) {
+  transform: rotate(-1.45deg) scale(1.055);
+}
+
+:global(#print):has(.orderHotspot:hover) .textOverlay :global(#text8401),
+:global(#print):has(.orderHotspot:focus-visible) .textOverlay :global(#text8401) {
+  transform: translate(0.4px, -0.5px) scale(1.06);
+}
+
+.collectHotspot:hover,
+.designHotspot:hover,
+.courseHotspot:hover,
+.guideHotspot:hover,
+.orderHotspot:hover,
+.collectHotspot:focus-visible,
+.designHotspot:focus-visible,
+.courseHotspot:focus-visible,
+.guideHotspot:focus-visible,
+.orderHotspot:focus-visible {
+  outline-color: rgba(255, 255, 255, 0.9);
+}
+
+.equipmentPrev,
+.equipmentNext {
+  top: 43.6%;
+  width: 5.4%;
+  height: 4.8%;
+}
+
+.equipmentPrev {
+  left: 34.6%;
+}
+
+.equipmentNext {
+  left: 50.2%;
+}
+
+.borrowEquipment {
+  left: 33.08%;
+  top: 54.82%;
+  width: 57.0%;
+  height: 7.58%;
+  color: #000;
+}
+
+.borrowEquipment::before {
+  display: none;
+}
+
+.borrowEquipment::after {
+  display: none;
+}
+
+:global(#equipment) .textOverlay :global(#g2258) {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition:
+    scale 150ms ease,
+    opacity 150ms ease;
+}
+
+:global(#equipment):has(.borrowEquipment:hover) .textOverlay :global(#g2258),
+:global(#equipment):has(.borrowEquipment:focus-visible) .textOverlay :global(#g2258) {
+  scale: 1.018;
+}
+
+.galleryLayer {
+  position: absolute;
+  z-index: 2;
+  overflow: hidden;
+  pointer-events: auto;
+}
+
+.galleryTrack {
+  display: flex;
+  gap: var(--gallery-gap, 3.5%);
+  height: 100%;
+  transition: transform 420ms cubic-bezier(0.22, 0.78, 0.18, 1);
+  will-change: transform;
+}
+
+.galleryTrack[data-transition-suppressed="true"] {
+  transition: none;
+}
+
+.galleryItem {
+  position: relative;
+  display: block;
+  flex: 0 0 var(--item-width);
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: #000;
+  aspect-ratio: var(--item-ratio);
+  color: inherit;
+  text-decoration: none;
+}
+
+.galleryLinkItem {
+  pointer-events: auto;
+}
+
+.galleryMedia {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center center;
+  user-select: none;
+}
+
+.galleryShade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(0deg, rgba(0, 0, 0, 0.58), transparent 62%);
+  opacity: 0.88;
+  transition: opacity 180ms ease;
+}
+
+.galleryCaption {
+  position: absolute;
+  left: 5.2%;
+  right: 5.2%;
+  bottom: 4.5%;
+  z-index: 1;
+  color: #fff;
+  font-size: clamp(1.8rem, 3.3vw, 5.8rem);
+  line-height: 0.92;
+  letter-spacing: 0.02em;
+  -webkit-text-stroke: clamp(0.8px, 0.08vw, 1.6px) #fff;
+  paint-order: stroke;
+  transition:
+    opacity 150ms ease,
+    transform 180ms ease;
+}
+
+.gallerySubtitle {
+  position: absolute;
+  left: 5.2%;
+  right: 5.2%;
+  bottom: 5.5%;
+  z-index: 1;
+  color: #fff;
+  font-family: "Artifakt Element", sans-serif;
+  font-size: clamp(0.7rem, 1.05vw, 1.5rem);
+  font-weight: 700;
+  line-height: 1.12;
+  opacity: 0;
+  transform: translateY(0.6rem);
+  transition:
+    opacity 170ms ease,
+    transform 180ms ease;
+}
+
+.galleryLinkItem:hover .galleryCaption,
+.galleryLinkItem:focus-visible .galleryCaption {
+  transform: translateY(-1.08em);
+}
+
+.galleryLinkItem:hover .gallerySubtitle,
+.galleryLinkItem:focus-visible .gallerySubtitle {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.galleryLinkItem:hover .galleryShade,
+.galleryLinkItem:focus-visible .galleryShade {
+  opacity: 1;
+}
+
+.galleryNavigator {
+  position: absolute;
+  z-index: 20;
+  display: grid;
+  grid-template-columns: auto max-content auto;
+  align-items: center;
+  justify-content: center;
+  gap: var(--navigator-gap, clamp(0.45rem, 0.82vw, 1.1rem));
+  line-height: 0;
+}
+
+.galleryArrow,
+.galleryNode {
+  display: grid;
+  place-items: center;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.galleryArrow {
+  width: var(--arrow-width, clamp(1.3rem, 2.25vw, 3.25rem));
+  height: var(--arrow-height, clamp(0.85rem, 1.35vw, 2rem));
+  transition: transform 150ms ease;
+}
+
+.galleryArrowPrev:hover,
+.galleryArrowPrev:focus-visible {
+  transform: rotate(-4deg) scale(1.14);
+}
+
+.galleryArrowNext:hover,
+.galleryArrowNext:focus-visible {
+  transform: rotate(4deg) scale(1.14);
+}
+
+.galleryArrowIcon {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.galleryNodes {
+  display: grid;
+  grid-template-columns: repeat(var(--node-count), var(--node-size, clamp(0.72rem, 1.06vw, 1.35rem)));
+  gap: var(--node-gap, clamp(0.32rem, 0.62vw, 0.82rem));
+  align-items: center;
+}
+
+.galleryNode {
+  position: relative;
+  width: var(--node-size, clamp(0.72rem, 1.06vw, 1.35rem));
+  height: var(--node-size, clamp(0.72rem, 1.06vw, 1.35rem));
+  transition:
+    filter 120ms ease,
+    transform 140ms ease;
+}
+
+.galleryNodeIcon,
+.galleryNodeX {
+  position: absolute;
+  display: block;
+  left: 50%;
+  top: 50%;
+  width: var(--node-glyph-size, 112%);
+  height: var(--node-glyph-size, 112%);
+  object-fit: contain;
+  object-position: center;
+  transition:
+    filter 120ms ease,
+    opacity 120ms ease,
+    transform 140ms ease;
+  transform: translate(-50%, -50%);
+}
+
+.galleryNodeX {
+  width: var(--active-node-size, 134%);
+  height: var(--active-node-size, 134%);
+  opacity: 0;
+  transform-origin: center;
+}
+
+.galleryNodeActive .galleryNodeIcon {
+  opacity: 0;
+}
+
+.galleryNodeActive .galleryNodeX {
+  opacity: 1;
+}
+
+.galleryNode:hover,
+.galleryNode:focus-visible {
+  filter: invert(1);
+  transform: scale(1.12);
+}
+
+.galleryNodeActive:hover .galleryNodeX,
+.galleryNodeActive:focus-visible .galleryNodeX {
+  transform: translate(-50%, -50%) rotate(6deg) scale(1.1);
+}
+
+.equipmentGallery {
+  left: 0;
+  top: 14.65%;
+  width: 100%;
+  height: 28.2%;
+  --gallery-gap: 3.65%;
+}
+
+.equipmentGalleryNavigator {
+  left: 50%;
+  top: 45.6%;
+  transform: translateX(-50%);
+  --node-size: clamp(0.92rem, 1.42vw, 1.72rem);
+  --active-node-size: 136%;
+  --node-gap: clamp(0.34rem, 0.62vw, 0.82rem);
+}
+
+.eventsGallery {
+  left: 0;
+  top: 17.64%;
+  width: 100%;
+  height: 38.29%;
+  --gallery-gap: 3.1%;
+}
+
+.eventsGalleryNavigator {
+  left: 50%;
+  top: 58.15%;
+  transform: translateX(-50%);
+  --node-size: clamp(0.94rem, 1.48vw, 1.78rem);
+  --active-node-size: 136%;
+  --node-gap: clamp(0.42rem, 0.72vw, 0.96rem);
+}
+
+.eventsGalleryNavigator .galleryArrowIcon {
+  filter: brightness(0) invert(1);
+}
+
+.eventsGalleryNavigator .galleryNodeIcon,
+.eventsGalleryNavigator .galleryNodeX {
+  filter: none;
+}
+
+.footerSection {
+  border-top: clamp(1px, 0.08vw, 2px) solid #f36600;
+}
+
+.footerLogo {
+  position: absolute;
+  top: 22.38%;
+  right: 7.32%;
+  z-index: 3;
+  display: block;
+  width: auto;
+  height: 55.25%;
+  user-select: none;
+  pointer-events: none;
+}
+
+.footerNativeNav {
+  pointer-events: none;
+}
+
+.footerTextColumn {
+  position: absolute;
+  top: 18.1%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2.7%;
+  width: 26%;
+  height: 74%;
+  pointer-events: auto;
+}
+
+.footerTextColumnLeft {
+  left: 2.64%;
+}
+
+.footerTextColumnRight {
+  left: 40.95%;
+}
+
+.footerTextLink {
+  display: block;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #f00;
+  cursor: pointer;
+  font: inherit;
+  font-size: clamp(1.45rem, 4.52vw, 6.2rem);
+  line-height: 0.95;
+  letter-spacing: 0.006em;
+  text-align: left;
+  text-decoration: none;
+  -webkit-text-fill-color: #f00;
+  -webkit-text-stroke: clamp(0.6px, 0.136vw, 2px) #f00;
+  paint-order: stroke fill;
+  transform-origin: left center;
+  transition:
+    opacity 130ms ease,
+    transform 145ms ease,
+    -webkit-text-stroke-color 130ms ease;
+}
+
+.footerTextLink:hover,
+.footerTextLink:focus-visible {
+  transform: translateY(-0.8px) scale(1.04);
+}
+
+.footerTextLinkMuted {
+  color: #d35f5f;
+  -webkit-text-fill-color: #d35f5f;
+  -webkit-text-stroke: clamp(0.9px, 0.235vw, 3.1px) #d35f5f;
+}
+
+.stateReadout {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.page[data-layout="phone"] {
+  min-width: 0;
+  width: 100%;
+  background: #f6f4ee;
+}
+
+.page[data-layout="phone"] .appNavSidebar {
+  width: min(92vw, 24rem) !important;
+  max-width: 92vw;
+}
+
+.page[data-layout="phone"] .appNavTop {
+  padding-inline: 1rem;
+}
+
+.page[data-layout="phone"] .appNavSection {
+  padding-inline: 1rem;
+}
+
+.page[data-layout="phone"] .appNavLink span {
+  font-size: clamp(1.1rem, 5vw, 1.45rem);
+}
+
+.page[data-layout="phone"] .appNavLink small {
+  font-size: clamp(0.82rem, 3.7vw, 1rem);
+}
+
+.page[data-layout="phone"] .navToggle {
+  left: max(0.7rem, env(safe-area-inset-left));
+  top: max(0.7rem, env(safe-area-inset-top));
+  width: 1.15rem;
+}
+
+.page[data-layout="phone"] .navToggle[aria-expanded="true"] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.mobileFullSection {
+  width: 100%;
+  max-width: none;
+  margin-inline: 0;
+}
+
+.mobileAnchor {
+  position: absolute;
+  left: 0;
+  top: var(--anchor-top);
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+}
+
+.mobileVolunteerHotspots,
+.mobilePrintHotspots,
+.mobileEquipmentHotspots,
+.mobileFooterHotspots {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+}
+
+.mobileGetInvolvedHotspot {
+  left: 4.25%;
+  top: 20.94%;
+  width: 33.1%;
+  height: 0.68%;
+}
+
+.mobileVolunteerEmailHotspot {
+  left: 39.1%;
+  top: 20.98%;
+  width: 55%;
+  height: 0.62%;
+}
+
+.page[data-layout="phone"] .mobilePrintHotspots {
+  inset: 0;
+}
+
+.page[data-layout="phone"] .collectHotspot {
+  left: 5.34%;
+  top: 31.74%;
+  width: 48.5%;
+  height: 1.45%;
+}
+
+.page[data-layout="phone"] .designHotspot {
+  left: 6.1%;
+  top: 33.22%;
+  width: 49%;
+  height: 1.45%;
+}
+
+.page[data-layout="phone"] .courseHotspot {
+  left: 9.36%;
+  top: 34.4%;
+  width: 52%;
+  height: 1.12%;
+}
+
+.page[data-layout="phone"] .guideHotspot {
+  left: 9.36%;
+  top: 35.45%;
+  width: 60%;
+  height: 1.04%;
+}
+
+.page[data-layout="phone"] .orderHotspot {
+  left: 9.36%;
+  top: 36.53%;
+  width: 33%;
+  height: 1.1%;
+}
+
+.page[data-layout="phone"] .printHoverArrow {
+  left: 9.36%;
+  width: 7.8%;
+  height: 2.8%;
+}
+
+:global(#mobile-site) .textOverlay :is(:global(#path26992-1), :global(#path26990-1), :global(#path26994-1), :global(#path26996-6), :global(#path26998-3), :global(#path27000-6), :global(#path11107-0)),
+:global(#mobile-site) .textOverlay :is(:global(#text19471-5), :global(#text19577-2), :global(#text26953-8), :global(#text26975-4), :global(#text8401-8)) {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition:
+    transform 150ms ease,
+    opacity 150ms ease;
+}
+
+:global(#mobile-site):has(.collectHotspot:hover) .textOverlay :is(:global(#path26992-1), :global(#path26990-1)),
+:global(#mobile-site):has(.collectHotspot:focus-visible) .textOverlay :is(:global(#path26992-1), :global(#path26990-1)) {
+  transform: rotate(-1.1deg) scale(1.045);
+}
+
+:global(#mobile-site):has(.collectHotspot:hover) .textOverlay :global(#text19471-5),
+:global(#mobile-site):has(.collectHotspot:focus-visible) .textOverlay :global(#text19471-5) {
+  transform: translateY(-0.8px) scale(1.055);
+}
+
+:global(#mobile-site):has(.designHotspot:hover) .textOverlay :is(:global(#path26994-1), :global(#path26996-6)),
+:global(#mobile-site):has(.designHotspot:focus-visible) .textOverlay :is(:global(#path26994-1), :global(#path26996-6)) {
+  transform: rotate(1.35deg) scale(1.04);
+}
+
+:global(#mobile-site):has(.designHotspot:hover) .textOverlay :global(#text19577-2),
+:global(#mobile-site):has(.designHotspot:focus-visible) .textOverlay :global(#text19577-2) {
+  transform: translate(0.6px, -0.7px) scale(1.05);
+}
+
+:global(#mobile-site):has(.courseHotspot:hover) .textOverlay :global(#path26998-3),
+:global(#mobile-site):has(.courseHotspot:focus-visible) .textOverlay :global(#path26998-3) {
+  transform: rotate(-0.85deg) scale(1.045);
+}
+
+:global(#mobile-site):has(.courseHotspot:hover) .textOverlay :global(#text26953-8),
+:global(#mobile-site):has(.courseHotspot:focus-visible) .textOverlay :global(#text26953-8) {
+  transform: translate(0.5px, -0.6px) scale(1.055);
+}
+
+:global(#mobile-site):has(.guideHotspot:hover) .textOverlay :global(#path27000-6),
+:global(#mobile-site):has(.guideHotspot:focus-visible) .textOverlay :global(#path27000-6) {
+  transform: rotate(0.95deg) scale(1.04);
+}
+
+:global(#mobile-site):has(.guideHotspot:hover) .textOverlay :global(#text26975-4),
+:global(#mobile-site):has(.guideHotspot:focus-visible) .textOverlay :global(#text26975-4) {
+  transform: translate(0.4px, -0.6px) scale(1.05);
+}
+
+:global(#mobile-site):has(.orderHotspot:hover) .textOverlay :global(#path11107-0),
+:global(#mobile-site):has(.orderHotspot:focus-visible) .textOverlay :global(#path11107-0) {
+  transform: rotate(-1.45deg) scale(1.055);
+}
+
+:global(#mobile-site):has(.orderHotspot:hover) .textOverlay :global(#text8401-8),
+:global(#mobile-site):has(.orderHotspot:focus-visible) .textOverlay :global(#text8401-8) {
+  transform: translate(0.4px, -0.5px) scale(1.06);
+}
+
+.page[data-layout="phone"] .equipmentGallery {
+  left: 0;
+  top: 48.85%;
+  width: 100%;
+  height: 6.35%;
+  --gallery-gap: 9.5%;
+}
+
+.page[data-layout="phone"] .equipmentGalleryNavigator {
+  left: 50%;
+  top: 55.42%;
+  transform: translateX(-50%);
+  --node-size: 0.74rem;
+  --node-gap: 0.26rem;
+  --active-node-size: 134%;
+  --arrow-width: 1.25rem;
+  --arrow-height: 0.78rem;
+}
+
+.page[data-layout="phone"] .borrowEquipment {
+  left: 5.6%;
+  top: 57.98%;
+  width: 89.1%;
+  height: 1.1%;
+}
+
+.page[data-layout="phone"] .eventsGallery {
+  left: 0;
+  top: 81.48%;
+  width: 100%;
+  height: 8.39%;
+  --gallery-gap: 8%;
+}
+
+.page[data-layout="phone"] .eventsGalleryNavigator {
+  left: 50%;
+  top: 90.26%;
+  transform: translateX(-50%);
+  --node-size: 0.74rem;
+  --node-gap: 0.25rem;
+  --active-node-size: 134%;
+  --arrow-width: 1.35rem;
+  --arrow-height: 0.8rem;
+}
+
+.page[data-layout="phone"] .galleryCaption {
+  font-size: clamp(1.25rem, 8vw, 2.5rem);
+  -webkit-text-stroke-width: 0.8px;
+}
+
+.page[data-layout="phone"] .gallerySubtitle {
+  font-size: clamp(0.6rem, 3.2vw, 0.95rem);
+}
+
+.mobileFooterWhatsapp,
+.mobileFooterDiscord,
+.mobileFooterEmail,
+.mobileFooterSu,
+.mobileFooterInstagram,
+.mobileFooterPrint,
+.mobileFooterAdmin,
+.mobileFooterBorrow,
+.mobileFooterVolunteer {
+  height: 0.7%;
+}
+
+.mobileFooterWhatsapp,
+.mobileFooterDiscord,
+.mobileFooterEmail,
+.mobileFooterSu,
+.mobileFooterInstagram {
+  left: 5.7%;
+  width: 30.4%;
+}
+
+.mobileFooterPrint,
+.mobileFooterAdmin,
+.mobileFooterBorrow,
+.mobileFooterVolunteer {
+  left: 53%;
+  width: 31%;
+}
+
+.mobileFooterWhatsapp,
+.mobileFooterPrint {
+  top: 95.68%;
+}
+
+.mobileFooterDiscord,
+.mobileFooterAdmin {
+  top: 96.48%;
+}
+
+.mobileFooterEmail,
+.mobileFooterBorrow {
+  top: 97.28%;
+}
+
+.mobileFooterSu,
+.mobileFooterVolunteer {
+  top: 98.09%;
+}
+
+.mobileFooterInstagram {
+  top: 98.88%;
+}
+
+.page[data-layout="phone"] .textOverlay :global(#text2896),
+.page[data-layout="phone"] .textOverlay :global(#text3106),
+.page[data-layout="phone"] .textOverlay :global(#text3110),
+.page[data-layout="phone"] .textOverlay :global(#text6431),
+.page[data-layout="phone"] .textOverlay :global(#text6435),
+.page[data-layout="phone"] .textOverlay :global(#text2896-1),
+.page[data-layout="phone"] .textOverlay :global(#text3106-8),
+.page[data-layout="phone"] .textOverlay :global(#text3110-5),
+.page[data-layout="phone"] .textOverlay :global(#text6435-5),
+.page[data-layout="phone"] .textOverlay :global(#text2896) tspan,
+.page[data-layout="phone"] .textOverlay :global(#text3106) tspan,
+.page[data-layout="phone"] .textOverlay :global(#text3110) tspan,
+.page[data-layout="phone"] .textOverlay :global(#text6431) tspan,
+.page[data-layout="phone"] .textOverlay :global(#text6435) tspan,
+.page[data-layout="phone"] .textOverlay :global(#text2896-1) tspan,
+.page[data-layout="phone"] .textOverlay :global(#text3106-8) tspan,
+.page[data-layout="phone"] .textOverlay :global(#text3110-5) tspan,
+.page[data-layout="phone"] .textOverlay :global(#text6435-5) tspan {
+  fill: #ff0000 !important;
+  stroke: #ff0000 !important;
+  paint-order: stroke fill;
+}
+
+.page[data-layout="phone"] .textOverlay :global(#text2896-6),
+.page[data-layout="phone"] .textOverlay :global(#text2896-6) tspan {
+  fill: #d35f5f !important;
+  stroke: #d35f5f !important;
+  paint-order: stroke fill;
+}
+
+@media (max-width: 860px) {
+  .page {
+    min-width: 760px;
+  }
+
+  .page[data-layout="phone"] {
+    min-width: 0;
+  }
+
+  .page[data-layout="phone"] .appNavSidebar {
+    width: min(92vw, 24rem) !important;
+    max-width: 92vw;
+  }
+}

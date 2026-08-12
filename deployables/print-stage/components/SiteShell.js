@@ -230,7 +230,7 @@ export default function SiteShell({ children, title = "3D Printer" }) {
             <button
               type="button"
               className={styles.signInButton}
-              onClick={() => router.push("/auth/signin?callbackUrl=%2Ffiles")}
+              onClick={() => router.push(`/auth/signin?callbackUrl=${encodeURIComponent(router.asPath || "/")}`)}
             >
               Sign in
             </button>

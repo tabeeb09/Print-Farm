@@ -1,0 +1,1294 @@
+{
+  "source": "C:\\website\\mobile site.svg",
+  "exportWidth": 720,
+  "pages": [
+    [
+      "mobileFullExpanded",
+      "mobile-full-background.png",
+      "mobile-full-expanded-foreground.svg",
+      [],
+      [
+        0.0,
+        0.0,
+        95.300006,
+        1012.0
+      ]
+    ],
+    [
+      "mobileFullCollapsed",
+      "mobile-full-background.png",
+      "mobile-full-collapsed-foreground.svg",
+      [
+        "g26965-4",
+        "path26998-3",
+        "text26953-8",
+        "g26971-7",
+        "path27000-6",
+        "text26975-4",
+        "path11107-0",
+        "g8397-8",
+        "text8401-8"
+      ],
+      [
+        0.0,
+        0.0,
+        95.300006,
+        1012.0
+      ]
+    ]
+  ],
+  "removedGlobalIds": [
+    "g26965-4",
+    "g26971-7",
+    "g8397-8",
+    "text33293",
+    "text33293-1",
+    "path33160",
+    "path33162",
+    "path33166",
+    "path33168",
+    "path33160-8",
+    "path33162-6",
+    "path33166-4",
+    "path33168-1",
+    "path33235",
+    "path33295",
+    "path33297",
+    "path33299",
+    "path33235-5",
+    "path33295-0",
+    "path33297-8",
+    "path33299-8"
+  ],
+  "liveVectorIds": {
+    "mobileFullExpanded": [
+      "rect69142-6",
+      "rect22483-3",
+      "path23972-0",
+      "path26996-6",
+      "path26990-1",
+      "path26992-1",
+      "path26994-1",
+      "path26998-3",
+      "path27000-6",
+      "path11107-0",
+      "g8246"
+    ],
+    "mobileFullCollapsed": [
+      "rect69142-6",
+      "rect22483-3",
+      "path23972-0",
+      "path26996-6",
+      "path26990-1",
+      "path26992-1",
+      "path26994-1",
+      "g8246"
+    ]
+  },
+  "removedBackgroundOnlyIds": {
+    "mobileFullExpanded": [
+      "image40215",
+      "image93619",
+      "image94949",
+      "image95691",
+      "g7194",
+      "g12276",
+      "g33164-8",
+      "g33170-3",
+      "path33235-5",
+      "text33293-1",
+      "path33295-0",
+      "path33297-8",
+      "path33299-8",
+      "path40516"
+    ],
+    "mobileFullCollapsed": [
+      "image40215",
+      "image93619",
+      "image94949",
+      "image95691",
+      "g7194",
+      "g12276",
+      "g33164-8",
+      "g33170-3",
+      "path33235-5",
+      "text33293-1",
+      "path33295-0",
+      "path33297-8",
+      "path33299-8",
+      "path40516"
+    ]
+  },
+  "textNodes": [
+    {
+      "page": "mobileFullExpanded",
+      "id": "text2896",
+      "text": "Whatsapp",
+      "fontFamily": "GENISO",
+      "fontSize": "6.90278px",
+      "stroke": "#ff0000",
+      "strokeWidth": "0.208312",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text3106",
+      "text": "Discord",
+      "fontFamily": "GENISO",
+      "fontSize": "6.90278px",
+      "stroke": "#ff0000",
+      "strokeWidth": "0.208312",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text3110",
+      "text": "Email",
+      "fontFamily": "GENISO",
+      "fontSize": "6.90278px",
+      "stroke": "#ff0000",
+      "strokeWidth": "0.208312",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text6431",
+      "text": "SU",
+      "fontFamily": "GENISO",
+      "fontSize": "6.90278px",
+      "stroke": "#ff0000",
+      "strokeWidth": "0.208312",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text6435",
+      "text": "Instagram",
+      "fontFamily": "GENISO",
+      "fontSize": "6.90278px",
+      "stroke": "#ff0000",
+      "strokeWidth": "0.208312",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text2896-1",
+      "text": "Print",
+      "fontFamily": "GENISO",
+      "fontSize": "6.90278px",
+      "stroke": "#ff0000",
+      "strokeWidth": "0.208312",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text3106-8",
+      "text": "Admin",
+      "fontFamily": "GENISO",
+      "fontSize": "6.90278px",
+      "stroke": "#ff0000",
+      "strokeWidth": "0.208312",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text3110-5",
+      "text": "Borrow",
+      "fontFamily": "GENISO",
+      "fontSize": "6.90278px",
+      "stroke": "#ff0000",
+      "strokeWidth": "0.208312",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text2896-6",
+      "text": "4E 2.29",
+      "fontFamily": "GENISO",
+      "fontSize": "6.90278px",
+      "stroke": "#d35f5f",
+      "strokeWidth": "0.358826",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text6435-5",
+      "text": "Volunteer",
+      "fontFamily": "GENISO",
+      "fontSize": "6.90278px",
+      "stroke": "#ff0000",
+      "strokeWidth": "0.208312",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text32633-1",
+      "text": "Tabeeb Rahman all rights reserved",
+      "fontFamily": "GENISO",
+      "fontSize": "2.05168px",
+      "stroke": "#000000",
+      "strokeWidth": "0.100613",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text8660-5-1",
+      "text": "Events",
+      "fontFamily": "GENISO",
+      "fontSize": "17.6389px",
+      "stroke": "#ffffff",
+      "strokeWidth": "1.076",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text13191",
+      "text": "Checkout what We've been upto, and look out for upcomming events.",
+      "fontFamily": "GENISO",
+      "fontSize": "22.8904px",
+      "stroke": "none",
+      "strokeWidth": "0.804",
+      "transform": "matrix(0.37073632,0,0,0.37073632,-4.9624799,327.58709)"
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text99774",
+      "text": "Equipment",
+      "fontFamily": "GENISO",
+      "fontSize": "17.7299px",
+      "stroke": "#f36600",
+      "strokeWidth": "0.420417",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text13735",
+      "text": "Pay attenton to safety breifings and please be kind to our volunteers",
+      "fontFamily": "GENISO",
+      "fontSize": "6.11951px",
+      "stroke": "#008000",
+      "strokeWidth": "0.309927",
+      "transform": "matrix(0.87062388,0,0,0.87062388,3.828247,79.506843)"
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text13743-1",
+      "text": "Borrow Equipment",
+      "fontFamily": "GENISO",
+      "fontSize": "29.9861px",
+      "stroke": "#000000",
+      "strokeWidth": "0.804",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text88522",
+      "text": "3D Printers",
+      "fontFamily": "GENISO",
+      "fontSize": "8.83932px",
+      "stroke": "#000000",
+      "strokeWidth": "0.215099",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text88535",
+      "text": "2\u00d7 Bambu Lab X1C with AMS Ultimaker S5 with dual extrusion Markforged Mark 2 carbon fibre composite 3\u00d7 Ender 3 V3 SE 3D printers",
+      "fontFamily": "GENISO",
+      "fontSize": "4.00916px",
+      "stroke": "#000000",
+      "strokeWidth": "0.213171",
+      "transform": "translate(0.49784403,18.853954)"
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text99949",
+      "text": "+",
+      "fontFamily": "GENISO",
+      "fontSize": "8.56557px",
+      "stroke": "#f36600",
+      "strokeWidth": "0.208438",
+      "transform": "scale(0.96866044,1.0323535)"
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text99953",
+      "text": "+",
+      "fontFamily": "GENISO",
+      "fontSize": "8.56557px",
+      "stroke": "#f36600",
+      "strokeWidth": "0.208438",
+      "transform": "scale(0.96866044,1.0323535)"
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text99957",
+      "text": "+",
+      "fontFamily": "GENISO",
+      "fontSize": "8.56557px",
+      "stroke": "#f36600",
+      "strokeWidth": "0.208438",
+      "transform": "scale(0.96866044,1.0323535)"
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text99961",
+      "text": "+",
+      "fontFamily": "GENISO",
+      "fontSize": "8.56557px",
+      "stroke": "#f36600",
+      "strokeWidth": "0.208438",
+      "transform": "scale(0.96866044,1.0323535)"
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text88547",
+      "text": "Laser Cutter",
+      "fontFamily": "GENISO",
+      "fontSize": "8.83932px",
+      "stroke": "#000000",
+      "strokeWidth": "0.215099",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text99953-0",
+      "text": "+",
+      "fontFamily": "GENISO",
+      "fontSize": "8.99044px",
+      "stroke": "#f36600",
+      "strokeWidth": "0.218777",
+      "transform": "scale(1.0115204,0.9886108)"
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text100782",
+      "text": "XTool P2 laser cutter with extractor fan and fire suppression system",
+      "fontFamily": "GENISO",
+      "fontSize": "10.5833px",
+      "stroke": "#000000",
+      "strokeWidth": "0.597",
+      "transform": "matrix(0.38548148,0,0,0.38548148,-509.24507,236.84238)"
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text88405",
+      "text": "Other Equipment",
+      "fontFamily": "GENISO",
+      "fontSize": "8.81944px",
+      "stroke": "#000000",
+      "strokeWidth": "0.18766",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text102385",
+      "text": "Belt sander Pillar drill RS 30V 5A power supply Soldering iron Raspberry Pi dev kit Arduino dev kit Dewalt drill Dremel rotary tool Vice and drill parts",
+      "fontFamily": "GENISO",
+      "fontSize": "10.5833px",
+      "stroke": "#000000",
+      "strokeWidth": "0.558001",
+      "transform": "matrix(0.38548148,0,0,0.38548148,-438.93936,223.10788)"
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text102421",
+      "text": "3D scanner Brother sewing machine Multimeters (\u00d72) Oscilloscope Hot glue guns Electronics, servo motors Lithium Batteries Poster printer and large rotary paper cutter",
+      "fontFamily": "GENISO",
+      "fontSize": "10.5833px",
+      "stroke": "#000000",
+      "strokeWidth": "0.558001",
+      "transform": "matrix(0.38548148,0,0,0.38548148,-128.24129,320.45713)"
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text30634",
+      "text": "+",
+      "fontFamily": "GENISO",
+      "fontSize": "8.83932px",
+      "stroke": "#f36600",
+      "strokeWidth": "0.215099",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text30638",
+      "text": "+",
+      "fontFamily": "GENISO",
+      "fontSize": "8.83932px",
+      "stroke": "#f36600",
+      "strokeWidth": "0.215099",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text30642",
+      "text": "+",
+      "fontFamily": "GENISO",
+      "fontSize": "8.83932px",
+      "stroke": "#f36600",
+      "strokeWidth": "0.215099",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text30646",
+      "text": "+",
+      "fontFamily": "GENISO",
+      "fontSize": "8.83932px",
+      "stroke": "#f36600",
+      "strokeWidth": "0.215099",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text30650",
+      "text": "+",
+      "fontFamily": "GENISO",
+      "fontSize": "8.83932px",
+      "stroke": "#f36600",
+      "strokeWidth": "0.215099",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text30654",
+      "text": "+",
+      "fontFamily": "GENISO",
+      "fontSize": "8.83932px",
+      "stroke": "#f36600",
+      "strokeWidth": "0.215099",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text30658",
+      "text": "+",
+      "fontFamily": "GENISO",
+      "fontSize": "8.83932px",
+      "stroke": "#f36600",
+      "strokeWidth": "0.215099",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text30662",
+      "text": "+",
+      "fontFamily": "GENISO",
+      "fontSize": "8.83932px",
+      "stroke": "#f36600",
+      "strokeWidth": "0.215099",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text30666",
+      "text": "+",
+      "fontFamily": "GENISO",
+      "fontSize": "8.83932px",
+      "stroke": "#f36600",
+      "strokeWidth": "0.215099",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text30674",
+      "text": "+",
+      "fontFamily": "GENISO",
+      "fontSize": "8.83932px",
+      "stroke": "#f36600",
+      "strokeWidth": "0.215099",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text30678",
+      "text": "+",
+      "fontFamily": "GENISO",
+      "fontSize": "8.83932px",
+      "stroke": "#f36600",
+      "strokeWidth": "0.215099",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text30682",
+      "text": "+",
+      "fontFamily": "GENISO",
+      "fontSize": "8.83932px",
+      "stroke": "#f36600",
+      "strokeWidth": "0.215099",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text30686",
+      "text": "+",
+      "fontFamily": "GENISO",
+      "fontSize": "8.83932px",
+      "stroke": "#f36600",
+      "strokeWidth": "0.215099",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text30690",
+      "text": "+",
+      "fontFamily": "GENISO",
+      "fontSize": "8.83932px",
+      "stroke": "#f36600",
+      "strokeWidth": "0.215099",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text30694",
+      "text": "+",
+      "fontFamily": "GENISO",
+      "fontSize": "8.83932px",
+      "stroke": "#f36600",
+      "strokeWidth": "0.215099",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text30698",
+      "text": "+",
+      "fontFamily": "GENISO",
+      "fontSize": "8.83932px",
+      "stroke": "#f36600",
+      "strokeWidth": "0.215099",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text30702",
+      "text": "+",
+      "fontFamily": "GENISO",
+      "fontSize": "8.83932px",
+      "stroke": "#f36600",
+      "strokeWidth": "0.215099",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text8660-5-2-4",
+      "text": "Print",
+      "fontFamily": "GENISO",
+      "fontSize": "17.6389px",
+      "stroke": "#ffff00",
+      "strokeWidth": "1.48715",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text19471-5",
+      "text": "Collect",
+      "fontFamily": "GENISO",
+      "fontSize": "10.7385px",
+      "stroke": "#ffffff",
+      "strokeWidth": "0.698712",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text19577-2",
+      "text": "Design",
+      "fontFamily": "GENISO",
+      "fontSize": "10.7385px",
+      "stroke": "#ffffff",
+      "strokeWidth": "0.698712",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text26953-8",
+      "text": "CS Course",
+      "fontFamily": "GENISO",
+      "fontSize": "6.98735px",
+      "stroke": "#ffffff",
+      "strokeWidth": "0.454638",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text26975-4",
+      "text": "3D Print Guide",
+      "fontFamily": "GENISO",
+      "fontSize": "6.98735px",
+      "stroke": "#ffffff",
+      "strokeWidth": "0.454638",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text8401-8",
+      "text": "Order",
+      "fontFamily": "GENISO",
+      "fontSize": "6.98735px",
+      "stroke": "#ffffff",
+      "strokeWidth": "0.454638",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text85135",
+      "text": "Get Involved:",
+      "fontFamily": "'Artifakt Element'",
+      "fontSize": "8.70839px",
+      "stroke": "#000000",
+      "strokeWidth": "0.610265",
+      "transform": "matrix(0.51374747,0,0,0.51374747,-188.03531,185.98561)"
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text79630",
+      "text": "Interested in technology, design, business, or hands-on making? There's a need for people like you. You'll work on sponsorships, grants, stock, finances, maintenance, improvements. and more.",
+      "fontFamily": "'Artifakt Element'",
+      "fontSize": "8.70839px",
+      "stroke": "#000000",
+      "strokeWidth": "0.610265",
+      "transform": "matrix(0.43882671,0,0,0.43882671,-159.33345,160.18852)"
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text8654-6-4",
+      "text": "Volunteer",
+      "fontFamily": "GENISO",
+      "fontSize": "17.6389px",
+      "stroke": "#078989",
+      "strokeWidth": "0.83433",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text86031",
+      "text": "su-makerspace@bath.ac.uk",
+      "fontFamily": "GENISO",
+      "fontSize": "4.51567px",
+      "stroke": "#000000",
+      "strokeWidth": "0.25242",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text7120-1",
+      "text": "9AM - 7PM",
+      "fontFamily": "GENISO",
+      "fontSize": "8.16864px",
+      "stroke": "#000000",
+      "strokeWidth": "0.389422",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text6902-1",
+      "text": "University of Bath's student-run workshop",
+      "fontFamily": "GENISO",
+      "fontSize": "9.45504px",
+      "stroke": "#000000",
+      "strokeWidth": "0.433294",
+      "transform": "matrix(0.91382164,0,0,0.91382164,-337.50285,-13.137841)"
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text7116-3",
+      "text": "4E 2.29",
+      "fontFamily": "GENISO",
+      "fontSize": "8.04352px",
+      "stroke": "#000000",
+      "strokeWidth": "0.386565",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text11699-4",
+      "text": "We provide interdisclipinary acess to a wide variety of tools to all students, researchers, & staff associated with the University of Bath",
+      "fontFamily": "'Artifakt Element'",
+      "fontSize": "8.70839px",
+      "stroke": "#000000",
+      "strokeWidth": "0.404094",
+      "transform": "matrix(0.3959822,0,0,0.3959822,-141.08752,39.376501)"
+    },
+    {
+      "page": "mobileFullExpanded",
+      "id": "text659-6",
+      "text": "BATH MAKERSPACE",
+      "fontFamily": "GENISO",
+      "fontSize": "10.0553px",
+      "stroke": "#000000",
+      "strokeWidth": "0.36598",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text2896",
+      "text": "Whatsapp",
+      "fontFamily": "GENISO",
+      "fontSize": "6.90278px",
+      "stroke": "#ff0000",
+      "strokeWidth": "0.208312",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text3106",
+      "text": "Discord",
+      "fontFamily": "GENISO",
+      "fontSize": "6.90278px",
+      "stroke": "#ff0000",
+      "strokeWidth": "0.208312",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text3110",
+      "text": "Email",
+      "fontFamily": "GENISO",
+      "fontSize": "6.90278px",
+      "stroke": "#ff0000",
+      "strokeWidth": "0.208312",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text6431",
+      "text": "SU",
+      "fontFamily": "GENISO",
+      "fontSize": "6.90278px",
+      "stroke": "#ff0000",
+      "strokeWidth": "0.208312",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text6435",
+      "text": "Instagram",
+      "fontFamily": "GENISO",
+      "fontSize": "6.90278px",
+      "stroke": "#ff0000",
+      "strokeWidth": "0.208312",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text2896-1",
+      "text": "Print",
+      "fontFamily": "GENISO",
+      "fontSize": "6.90278px",
+      "stroke": "#ff0000",
+      "strokeWidth": "0.208312",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text3106-8",
+      "text": "Admin",
+      "fontFamily": "GENISO",
+      "fontSize": "6.90278px",
+      "stroke": "#ff0000",
+      "strokeWidth": "0.208312",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text3110-5",
+      "text": "Borrow",
+      "fontFamily": "GENISO",
+      "fontSize": "6.90278px",
+      "stroke": "#ff0000",
+      "strokeWidth": "0.208312",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text2896-6",
+      "text": "4E 2.29",
+      "fontFamily": "GENISO",
+      "fontSize": "6.90278px",
+      "stroke": "#d35f5f",
+      "strokeWidth": "0.358826",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text6435-5",
+      "text": "Volunteer",
+      "fontFamily": "GENISO",
+      "fontSize": "6.90278px",
+      "stroke": "#ff0000",
+      "strokeWidth": "0.208312",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text32633-1",
+      "text": "Tabeeb Rahman all rights reserved",
+      "fontFamily": "GENISO",
+      "fontSize": "2.05168px",
+      "stroke": "#000000",
+      "strokeWidth": "0.100613",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text8660-5-1",
+      "text": "Events",
+      "fontFamily": "GENISO",
+      "fontSize": "17.6389px",
+      "stroke": "#ffffff",
+      "strokeWidth": "1.076",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text13191",
+      "text": "Checkout what We've been upto, and look out for upcomming events.",
+      "fontFamily": "GENISO",
+      "fontSize": "22.8904px",
+      "stroke": "none",
+      "strokeWidth": "0.804",
+      "transform": "matrix(0.37073632,0,0,0.37073632,-4.9624799,327.58709)"
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text99774",
+      "text": "Equipment",
+      "fontFamily": "GENISO",
+      "fontSize": "17.7299px",
+      "stroke": "#f36600",
+      "strokeWidth": "0.420417",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text13735",
+      "text": "Pay attenton to safety breifings and please be kind to our volunteers",
+      "fontFamily": "GENISO",
+      "fontSize": "6.11951px",
+      "stroke": "#008000",
+      "strokeWidth": "0.309927",
+      "transform": "matrix(0.87062388,0,0,0.87062388,3.828247,79.506843)"
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text13743-1",
+      "text": "Borrow Equipment",
+      "fontFamily": "GENISO",
+      "fontSize": "29.9861px",
+      "stroke": "#000000",
+      "strokeWidth": "0.804",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text88522",
+      "text": "3D Printers",
+      "fontFamily": "GENISO",
+      "fontSize": "8.83932px",
+      "stroke": "#000000",
+      "strokeWidth": "0.215099",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text88535",
+      "text": "2\u00d7 Bambu Lab X1C with AMS Ultimaker S5 with dual extrusion Markforged Mark 2 carbon fibre composite 3\u00d7 Ender 3 V3 SE 3D printers",
+      "fontFamily": "GENISO",
+      "fontSize": "4.00916px",
+      "stroke": "#000000",
+      "strokeWidth": "0.213171",
+      "transform": "translate(0.49784403,18.853954)"
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text99949",
+      "text": "+",
+      "fontFamily": "GENISO",
+      "fontSize": "8.56557px",
+      "stroke": "#f36600",
+      "strokeWidth": "0.208438",
+      "transform": "scale(0.96866044,1.0323535)"
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text99953",
+      "text": "+",
+      "fontFamily": "GENISO",
+      "fontSize": "8.56557px",
+      "stroke": "#f36600",
+      "strokeWidth": "0.208438",
+      "transform": "scale(0.96866044,1.0323535)"
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text99957",
+      "text": "+",
+      "fontFamily": "GENISO",
+      "fontSize": "8.56557px",
+      "stroke": "#f36600",
+      "strokeWidth": "0.208438",
+      "transform": "scale(0.96866044,1.0323535)"
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text99961",
+      "text": "+",
+      "fontFamily": "GENISO",
+      "fontSize": "8.56557px",
+      "stroke": "#f36600",
+      "strokeWidth": "0.208438",
+      "transform": "scale(0.96866044,1.0323535)"
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text88547",
+      "text": "Laser Cutter",
+      "fontFamily": "GENISO",
+      "fontSize": "8.83932px",
+      "stroke": "#000000",
+      "strokeWidth": "0.215099",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text99953-0",
+      "text": "+",
+      "fontFamily": "GENISO",
+      "fontSize": "8.99044px",
+      "stroke": "#f36600",
+      "strokeWidth": "0.218777",
+      "transform": "scale(1.0115204,0.9886108)"
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text100782",
+      "text": "XTool P2 laser cutter with extractor fan and fire suppression system",
+      "fontFamily": "GENISO",
+      "fontSize": "10.5833px",
+      "stroke": "#000000",
+      "strokeWidth": "0.597",
+      "transform": "matrix(0.38548148,0,0,0.38548148,-509.24507,236.84238)"
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text88405",
+      "text": "Other Equipment",
+      "fontFamily": "GENISO",
+      "fontSize": "8.81944px",
+      "stroke": "#000000",
+      "strokeWidth": "0.18766",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text102385",
+      "text": "Belt sander Pillar drill RS 30V 5A power supply Soldering iron Raspberry Pi dev kit Arduino dev kit Dewalt drill Dremel rotary tool Vice and drill parts",
+      "fontFamily": "GENISO",
+      "fontSize": "10.5833px",
+      "stroke": "#000000",
+      "strokeWidth": "0.558001",
+      "transform": "matrix(0.38548148,0,0,0.38548148,-438.93936,223.10788)"
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text102421",
+      "text": "3D scanner Brother sewing machine Multimeters (\u00d72) Oscilloscope Hot glue guns Electronics, servo motors Lithium Batteries Poster printer and large rotary paper cutter",
+      "fontFamily": "GENISO",
+      "fontSize": "10.5833px",
+      "stroke": "#000000",
+      "strokeWidth": "0.558001",
+      "transform": "matrix(0.38548148,0,0,0.38548148,-128.24129,320.45713)"
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text30634",
+      "text": "+",
+      "fontFamily": "GENISO",
+      "fontSize": "8.83932px",
+      "stroke": "#f36600",
+      "strokeWidth": "0.215099",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text30638",
+      "text": "+",
+      "fontFamily": "GENISO",
+      "fontSize": "8.83932px",
+      "stroke": "#f36600",
+      "strokeWidth": "0.215099",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text30642",
+      "text": "+",
+      "fontFamily": "GENISO",
+      "fontSize": "8.83932px",
+      "stroke": "#f36600",
+      "strokeWidth": "0.215099",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text30646",
+      "text": "+",
+      "fontFamily": "GENISO",
+      "fontSize": "8.83932px",
+      "stroke": "#f36600",
+      "strokeWidth": "0.215099",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text30650",
+      "text": "+",
+      "fontFamily": "GENISO",
+      "fontSize": "8.83932px",
+      "stroke": "#f36600",
+      "strokeWidth": "0.215099",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text30654",
+      "text": "+",
+      "fontFamily": "GENISO",
+      "fontSize": "8.83932px",
+      "stroke": "#f36600",
+      "strokeWidth": "0.215099",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text30658",
+      "text": "+",
+      "fontFamily": "GENISO",
+      "fontSize": "8.83932px",
+      "stroke": "#f36600",
+      "strokeWidth": "0.215099",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text30662",
+      "text": "+",
+      "fontFamily": "GENISO",
+      "fontSize": "8.83932px",
+      "stroke": "#f36600",
+      "strokeWidth": "0.215099",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text30666",
+      "text": "+",
+      "fontFamily": "GENISO",
+      "fontSize": "8.83932px",
+      "stroke": "#f36600",
+      "strokeWidth": "0.215099",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text30674",
+      "text": "+",
+      "fontFamily": "GENISO",
+      "fontSize": "8.83932px",
+      "stroke": "#f36600",
+      "strokeWidth": "0.215099",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text30678",
+      "text": "+",
+      "fontFamily": "GENISO",
+      "fontSize": "8.83932px",
+      "stroke": "#f36600",
+      "strokeWidth": "0.215099",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text30682",
+      "text": "+",
+      "fontFamily": "GENISO",
+      "fontSize": "8.83932px",
+      "stroke": "#f36600",
+      "strokeWidth": "0.215099",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text30686",
+      "text": "+",
+      "fontFamily": "GENISO",
+      "fontSize": "8.83932px",
+      "stroke": "#f36600",
+      "strokeWidth": "0.215099",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text30690",
+      "text": "+",
+      "fontFamily": "GENISO",
+      "fontSize": "8.83932px",
+      "stroke": "#f36600",
+      "strokeWidth": "0.215099",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text30694",
+      "text": "+",
+      "fontFamily": "GENISO",
+      "fontSize": "8.83932px",
+      "stroke": "#f36600",
+      "strokeWidth": "0.215099",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text30698",
+      "text": "+",
+      "fontFamily": "GENISO",
+      "fontSize": "8.83932px",
+      "stroke": "#f36600",
+      "strokeWidth": "0.215099",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text30702",
+      "text": "+",
+      "fontFamily": "GENISO",
+      "fontSize": "8.83932px",
+      "stroke": "#f36600",
+      "strokeWidth": "0.215099",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text8660-5-2-4",
+      "text": "Print",
+      "fontFamily": "GENISO",
+      "fontSize": "17.6389px",
+      "stroke": "#ffff00",
+      "strokeWidth": "1.48715",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text19471-5",
+      "text": "Collect",
+      "fontFamily": "GENISO",
+      "fontSize": "10.7385px",
+      "stroke": "#ffffff",
+      "strokeWidth": "0.698712",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text19577-2",
+      "text": "Design",
+      "fontFamily": "GENISO",
+      "fontSize": "10.7385px",
+      "stroke": "#ffffff",
+      "strokeWidth": "0.698712",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text85135",
+      "text": "Get Involved:",
+      "fontFamily": "'Artifakt Element'",
+      "fontSize": "8.70839px",
+      "stroke": "#000000",
+      "strokeWidth": "0.610265",
+      "transform": "matrix(0.51374747,0,0,0.51374747,-188.03531,185.98561)"
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text79630",
+      "text": "Interested in technology, design, business, or hands-on making? There's a need for people like you. You'll work on sponsorships, grants, stock, finances, maintenance, improvements. and more.",
+      "fontFamily": "'Artifakt Element'",
+      "fontSize": "8.70839px",
+      "stroke": "#000000",
+      "strokeWidth": "0.610265",
+      "transform": "matrix(0.43882671,0,0,0.43882671,-159.33345,160.18852)"
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text8654-6-4",
+      "text": "Volunteer",
+      "fontFamily": "GENISO",
+      "fontSize": "17.6389px",
+      "stroke": "#078989",
+      "strokeWidth": "0.83433",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text86031",
+      "text": "su-makerspace@bath.ac.uk",
+      "fontFamily": "GENISO",
+      "fontSize": "4.51567px",
+      "stroke": "#000000",
+      "strokeWidth": "0.25242",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text7120-1",
+      "text": "9AM - 7PM",
+      "fontFamily": "GENISO",
+      "fontSize": "8.16864px",
+      "stroke": "#000000",
+      "strokeWidth": "0.389422",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text6902-1",
+      "text": "University of Bath's student-run workshop",
+      "fontFamily": "GENISO",
+      "fontSize": "9.45504px",
+      "stroke": "#000000",
+      "strokeWidth": "0.433294",
+      "transform": "matrix(0.91382164,0,0,0.91382164,-337.50285,-13.137841)"
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text7116-3",
+      "text": "4E 2.29",
+      "fontFamily": "GENISO",
+      "fontSize": "8.04352px",
+      "stroke": "#000000",
+      "strokeWidth": "0.386565",
+      "transform": ""
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text11699-4",
+      "text": "We provide interdisclipinary acess to a wide variety of tools to all students, researchers, & staff associated with the University of Bath",
+      "fontFamily": "'Artifakt Element'",
+      "fontSize": "8.70839px",
+      "stroke": "#000000",
+      "strokeWidth": "0.404094",
+      "transform": "matrix(0.3959822,0,0,0.3959822,-141.08752,39.376501)"
+    },
+    {
+      "page": "mobileFullCollapsed",
+      "id": "text659-6",
+      "text": "BATH MAKERSPACE",
+      "fontFamily": "GENISO",
+      "fontSize": "10.0553px",
+      "stroke": "#000000",
+      "strokeWidth": "0.36598",
+      "transform": ""
+    }
+  ]
+}

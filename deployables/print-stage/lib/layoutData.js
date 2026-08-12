@@ -1,5 +1,6 @@
 export const menuItems = [
   { href: "/", title: "Home", label: "Index" },
+  { href: "/#events", title: "Events", label: "Makerspace calendar", section: "events" },
   { href: "/files", title: "Submit prints", label: "Upload and quote" },
   { href: "/print-queue", title: "Print farm queue", label: "Operator panel", adminOnly: true },
   { href: "/admin/printers", title: "Printers", label: "LAN worker config", adminOnly: true },

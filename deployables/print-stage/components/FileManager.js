@@ -340,7 +340,7 @@ export default function FileManager() {
     }
   }
 
-  async function updatePrintState(fileId, method) {
+  async function updatePrintState(fileId, method, body = null) {
     setPrintingId(fileId);
     setError(null);
     setNotice(null);
@@ -348,6 +348,12 @@ export default function FileManager() {
     try {
       const response = await fetch(`/api/files/${encodeURIComponent(fileId)}/print`, {
         method,
+        ...(body
+          ? {
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(body),
+            }
+          : {}),
       });
       const payload = await response.json();
 
@@ -364,8 +370,8 @@ export default function FileManager() {
     }
   }
 
-  async function handleRequestPrint(fileId) {
-    await updatePrintState(fileId, "POST");
+  async function handleRequestPrint(fileId, paymentMode = null) {
+    await updatePrintState(fileId, "POST", paymentMode ? { paymentMode } : null);
   }
 
   async function handleCancelPrint(fileId) {
@@ -506,7 +512,7 @@ export default function FileManager() {
         </p>
         {!actorState.paymentsEnabled ? (
           <p style={{ margin: 0, color: "#8a6500" }}>
-            Checkout is currently unavailable. Models can still be uploaded and prepared for later submission.
+            Stripe checkout is currently disabled. You can still upload, process, and choose pay upon collection.
           </p>
         ) : null}
         <input
@@ -571,7 +577,7 @@ export default function FileManager() {
                 const processing = isFileProcessing(file);
                 const processingSummary = getProcessingSummary(file);
                 const needsProcessingCheck = file.extractionStatus !== "verified" && !processing;
-                const paymentRequired = file.paymentStatus !== "paid";
+                const paymentRequired = file.paymentStatus !== "paid" && file.paymentStatus !== "pay_on_collection";
                 const quote = file.paymentQuote;
 
                 return (
@@ -616,12 +622,14 @@ export default function FileManager() {
                         ) : null}
                         {file.paymentStatus === "paid" ? (
                           <small style={{ color: "#2d6a4f" }}>Payment received</small>
+                        ) : file.paymentStatus === "pay_on_collection" ? (
+                          <small style={{ color: "#2d6a4f" }}>Payment due upon collection</small>
                         ) : !actorState.paymentsEnabled ? (
-                          <small style={{ color: "#8a6500" }}>Checkout is not configured yet</small>
+                          <small style={{ color: "#8a6500" }}>Stripe checkout is disabled; pay upon collection is available</small>
                         ) : file.paymentStatus === "checkout_pending" ? (
                           <small style={{ color: "#8a6500" }}>Checkout started, payment still pending</small>
                         ) : (
-                          <small style={{ color: "#8a6500" }}>Payment required before joining the print queue</small>
+                          <small style={{ color: "#8a6500" }}>Choose pay upon collection to join the print queue</small>
                         )}
                       </div>
                     </td>
@@ -660,14 +668,24 @@ export default function FileManager() {
                             </button>
                           ) : null}
                           {paymentRequired ? (
-                            <button
-                              type="button"
-                              onClick={() => setPaymentTargetFile(file)}
-                              disabled={checkoutLoadingId === file.id || !printEligibility.canPrint || !quote || !actorState.paymentsEnabled}
-                              title={printEligibility.reason || undefined}
-                            >
-                              {checkoutLoadingId === file.id ? "Preparing..." : "Pay to print"}
-                            </button>
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handleRequestPrint(file.id, "pay_on_collection")}
+                                disabled={printingId === file.id || !printEligibility.canPrint || !quote}
+                                title={printEligibility.reason || undefined}
+                              >
+                                {printingId === file.id ? "Queueing..." : "Pay upon collection"}
+                              </button>
+                              <button
+                                type="button"
+                                disabled
+                                title="Stripe checkout is temporarily disabled."
+                                style={{ opacity: 0.55, cursor: "not-allowed" }}
+                              >
+                                Pay with Stripe
+                              </button>
+                            </>
                           ) : (
                             <button
                               type="button"

@@ -18,9 +18,10 @@ export default async function handler(req, res) {
   }
 
   try {
+    const paymentMode = req.body?.paymentMode === "pay_on_collection" ? "pay_on_collection" : null;
     const result =
       req.method === "POST"
-        ? await requestPrint(actor, req.query.id)
+        ? await requestPrint(actor, req.query.id, { paymentMode })
         : await cancelPrint(actor, req.query.id);
     await recordAuditEvent(actor, {
       action: req.method === "POST" ? "print.request" : "print.cancel",
@@ -29,6 +30,7 @@ export default async function handler(req, res) {
       metadata: {
         originalFilename: result.originalFilename,
         printStatus: result.printStatus,
+        paymentMode,
       },
     });
     return res.status(200).json({ file: result });
