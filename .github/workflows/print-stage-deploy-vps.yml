@@ -26,7 +26,7 @@ concurrency:
 jobs:
   deploy-ssh:
     name: deploy
-    if: ${{ vars.PRINT_DEPLOY_MODE == 'ssh' }}
+    if: ${{ github.event_name == 'push' || vars.PRINT_DEPLOY_MODE == 'ssh' }}
     runs-on: ${{ fromJSON(vars.PRINT_DEPLOY_RUNNER_LABELS || '["ubuntu-latest"]') }}
     env:
       DEPLOY_PATH: /srv/print/repo
@@ -47,6 +47,7 @@ jobs:
           fi
 
       - name: Check deployment secrets
+        id: secrets
         env:
           DEPLOY_HOST: ${{ secrets.PRINT_DEPLOY_HOST || secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.PRINT_DEPLOY_USER || secrets.DEPLOY_USER }}
@@ -61,11 +62,14 @@ jobs:
           test -n "$DEPLOY_SSH_PRIVATE_KEY" || test -n "$DEPLOY_SSH_PRIVATE_KEY_B64" || missing+=("PRINT_DEPLOY_SSH_PRIVATE_KEY(_B64) or DEPLOY_SSH_PRIVATE_KEY(_B64)")
           test -n "$DEPLOY_SSH_KNOWN_HOSTS" || test -n "$DEPLOY_SSH_KNOWN_HOSTS_B64" || missing+=("PRINT_DEPLOY_SSH_KNOWN_HOSTS(_B64) or DEPLOY_SSH_KNOWN_HOSTS(_B64)")
           if ((${#missing[@]})); then
-            printf '::error::Print SSH deploy requires these GitHub secrets: %s\n' "${missing[*]}"
-            exit 1
+            printf '::warning::Print SSH deploy skipped because these GitHub secrets are missing: %s\n' "${missing[*]}"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+          echo "ready=true" >> "$GITHUB_OUTPUT"
 
       - name: Configure SSH key
+        if: steps.secrets.outputs.ready == 'true'
         env:
           SSH_PRIVATE_KEY: ${{ secrets.PRINT_DEPLOY_SSH_PRIVATE_KEY || secrets.DEPLOY_SSH_PRIVATE_KEY }}
           SSH_PRIVATE_KEY_B64: ${{ secrets.PRINT_DEPLOY_SSH_PRIVATE_KEY_B64 || secrets.DEPLOY_SSH_PRIVATE_KEY_B64 }}
@@ -87,6 +91,7 @@ jobs:
           chmod 600 ~/.ssh/known_hosts
 
       - name: Deploy print stage over SSH
+        if: steps.secrets.outputs.ready == 'true'
         env:
           DEPLOY_HOST: ${{ secrets.PRINT_DEPLOY_HOST || secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.PRINT_DEPLOY_USER || secrets.DEPLOY_USER }}
@@ -96,7 +101,7 @@ jobs:
 
   deploy-local:
     name: deploy local self-hosted
-    if: ${{ vars.PRINT_DEPLOY_MODE != 'ssh' }}
+    if: ${{ github.event_name != 'push' && vars.PRINT_DEPLOY_MODE != 'ssh' }}
     runs-on: ${{ fromJSON(vars.PRINT_DEPLOY_RUNNER_LABELS || vars.DEPLOY_RUNNER_LABELS || '["self-hosted","linux","website-deploy","private-network"]') }}
     env:
       DEPLOY_PATH: /srv/print/repo
