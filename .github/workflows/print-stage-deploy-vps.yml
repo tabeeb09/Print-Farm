@@ -1,6 +1,14 @@
 name: Print Stage Deploy To VPS
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/print-stage-deploy-vps.yml"
+      - "deployables/print-stage/**"
+      - "scripts/bootstrap-print-vps.sh"
+      - "scripts/live-print-stage-deploy.sh"
   workflow_dispatch:
     inputs:
       ref:
