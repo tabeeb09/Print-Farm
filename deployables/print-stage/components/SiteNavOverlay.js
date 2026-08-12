@@ -69,12 +69,13 @@ export function SiteNavOverlay({ open, onClose, onSectionNavigate }) {
   const { data: session } = useSession();
   const [hasDelegatedPeopleAdmin, setHasDelegatedPeopleAdmin] = useState(false);
   const [inventoryTree, setInventoryTree] = useState(null);
-  const roles = Array.isArray(session?.user?.roles)
-    ? session.user.roles.map(normalizeRole).filter(Boolean)
+  const activeSession = session?.expired || !session?.user ? null : session;
+  const roles = Array.isArray(activeSession?.user?.roles)
+    ? activeSession.user.roles.map(normalizeRole).filter(Boolean)
     : [];
-  const userEmail = normalizeEmail(session?.user?.email);
+  const userEmail = normalizeEmail(activeSession?.user?.email);
   const isSuperadmin =
-    Boolean(session?.user?.isSuperadmin) || DEV_SUPERADMIN_EMAILS.includes(userEmail);
+    Boolean(activeSession?.user?.isSuperadmin) || DEV_SUPERADMIN_EMAILS.includes(userEmail);
   const isQueueAdmin =
     isSuperadmin || ["owner", "technician", "print_admin"].some((role) => roles.includes(role));
   const isOpenBaoAdmin =
@@ -115,7 +116,7 @@ export function SiteNavOverlay({ open, onClose, onSectionNavigate }) {
     let cancelled = false;
 
     async function checkDelegatedPeopleAdmin() {
-      if (!open || !session || isHrAdmin) {
+      if (!open || !activeSession || isHrAdmin) {
         setHasDelegatedPeopleAdmin(false);
         return;
       }
@@ -141,13 +142,13 @@ export function SiteNavOverlay({ open, onClose, onSectionNavigate }) {
     return () => {
       cancelled = true;
     };
-  }, [isHrAdmin, open, session?.user?.email]);
+  }, [isHrAdmin, open, activeSession?.user?.email]);
 
   useEffect(() => {
     let cancelled = false;
 
     async function loadInventoryTree() {
-      if (!open || !session || !isAssetAdmin) {
+      if (!open || !activeSession || !isAssetAdmin) {
         setInventoryTree(null);
         return;
       }
@@ -171,11 +172,11 @@ export function SiteNavOverlay({ open, onClose, onSectionNavigate }) {
     return () => {
       cancelled = true;
     };
-  }, [isAssetAdmin, open, session?.user?.email]);
+  }, [isAssetAdmin, open, activeSession?.user?.email]);
 
   async function handleSignOut() {
-    const logoutUrl = session?.keycloakLogoutUrl;
-    const provider = session?.provider;
+    const logoutUrl = activeSession?.keycloakLogoutUrl;
+    const provider = activeSession?.provider;
 
     if (provider === "keycloak" && logoutUrl) {
       await signOut({ redirect: false, callbackUrl: "/" });
@@ -257,12 +258,22 @@ export function SiteNavOverlay({ open, onClose, onSectionNavigate }) {
               ) : null}
             </Fragment>
           ))}
+          {activeSession ? (
+            <button
+              type="button"
+              className={`${shellStyles.navLink} ${overlayStyles.appNavLink} ${overlayStyles.appNavActionLink}`}
+              onClick={handleSignOut}
+            >
+              <span>Sign out</span>
+              <small>End this session</small>
+            </button>
+          ) : null}
         </nav>
 
         <div className={overlayStyles.appNavAccount}>
-          {session ? (
+          {activeSession ? (
             <>
-              <span>{session.user?.email ?? "Signed in"}</span>
+              <span>{activeSession.user?.email ?? "Signed in"}</span>
               <button type="button" className={shellStyles.signInButton} onClick={handleSignOut}>
                 Sign out
               </button>

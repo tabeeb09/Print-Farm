@@ -510,6 +510,11 @@ function PageSection({ id, className = "", children, ...props }) {
   );
 }
 
+function InlineSvgAsset({ className, markup }) {
+  if (!markup) return null;
+  return <div className={className} aria-hidden="true" dangerouslySetInnerHTML={{ __html: markup }} />;
+}
+
 function MobileAnchor({ id, top }) {
   return <div id={id} className={styles.mobileAnchor} style={{ "--anchor-top": top }} aria-hidden="true" />;
 }
@@ -523,16 +528,12 @@ function MobileMakerspaceContent({
   setEventSlide,
   printHoverKey,
   setPrintHoverKey,
+  mobileWelcomeMarkup,
 }) {
   return (
     <PageSection id="mobile-site" className={styles.mobileFullSection} data-slide-equipment={equipmentSlide} data-slide-events={eventSlide}>
       <MobileDesignPlate designOpen={designOpen} />
-      <img
-        className={styles.mobileWelcomeBox}
-        src="/makerspace-design/generated/mobile-welcome-text-box.svg"
-        alt=""
-        aria-hidden="true"
-      />
+      <InlineSvgAsset className={styles.mobileWelcomeBox} markup={mobileWelcomeMarkup} />
       <MobileAnchor id="home" top="0%" />
       <MobileAnchor id="volunteer" top="16.131%" />
       <MobileAnchor id="print" top="28.98%" />
@@ -662,7 +663,7 @@ function MobileMakerspaceContent({
   );
 }
 
-export default function Home() {
+export default function Home({ mobileWelcomeMarkup }) {
   const [designOpen, setDesignOpen] = useState(false);
   const [equipmentSlide, setEquipmentSlide] = useState(0);
   const [eventSlide, setEventSlide] = useState(0);
@@ -750,6 +751,7 @@ export default function Home() {
           setEventSlide={setEventSlide}
           printHoverKey={printHoverKey}
           setPrintHoverKey={setPrintHoverKey}
+          mobileWelcomeMarkup={mobileWelcomeMarkup}
         />
       ) : (
         <>
@@ -919,4 +921,18 @@ export default function Home() {
       )}
     </main>
   );
+}
+
+export async function getStaticProps() {
+  const [{ readFile }, path] = await Promise.all([import("node:fs/promises"), import("node:path")]);
+  const rawMobileWelcomeMarkup = await readFile(
+    path.join(process.cwd(), "public", "makerspace-design", "generated", "mobile-welcome-text-box.svg"),
+    "utf8"
+  );
+
+  return {
+    props: {
+      mobileWelcomeMarkup: rawMobileWelcomeMarkup.replace(/^\s*<\?xml[^>]*>\s*/i, ""),
+    },
+  };
 }

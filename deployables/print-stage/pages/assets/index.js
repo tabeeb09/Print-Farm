@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth/next";
 
 import AssetClient from "../../components/assets/AssetClient";
 import SiteShell from "../../components/SiteShell";
+import { toFileActor } from "../../lib/auth";
 import { authOptions } from "../../lib/authOptions";
 
 export default function AssetLoansPage() {
@@ -18,7 +19,8 @@ export default function AssetLoansPage() {
 
 export async function getServerSideProps(context) {
   const session = await getServerSession(context.req, context.res, authOptions);
-  if (!session) {
+  const actor = toFileActor(session);
+  if (!actor) {
     return {
       redirect: {
         destination: "/auth/signin?callbackUrl=%2Fassets",

@@ -228,14 +228,26 @@
 }
 
 .appNavLink {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 0.2rem;
+  box-sizing: border-box;
   border-color: transparent;
   color: #171b1f;
   font-family: "Artifakt Element", "Makerspace Geniso", sans-serif;
   background: transparent;
+  text-align: left;
   transition:
     background-color 120ms ease,
     border-color 120ms ease,
     transform 140ms ease;
+}
+
+.appNavActionLink {
+  border: 1px solid transparent;
+  padding: 0.85rem 0.9rem;
+  cursor: pointer;
 }
 
 .appNavLink span {
@@ -426,6 +438,32 @@
   width: 87.1%;
   height: 6.05%;
   pointer-events: none;
+}
+
+.mobileWelcomeBox :global(svg) {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.mobileWelcomeBox :global(text),
+.mobileWelcomeBox :global(tspan) {
+  paint-order: stroke fill;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  text-rendering: geometricPrecision;
+  font-synthesis: none;
+}
+
+.mobileWelcomeBox :global(text[style*="font-family:GENISO"]),
+.mobileWelcomeBox :global(tspan[style*="font-family:GENISO"]) {
+  font-family: "GENISO", "Makerspace Geniso", monospace !important;
+}
+
+.mobileWelcomeBox :global(text[style*="Artifakt Element"]),
+.mobileWelcomeBox :global(tspan[style*="Artifakt Element"]) {
+  font-family: "Artifakt Element", sans-serif !important;
 }
 
 .hotspot {

@@ -16,6 +16,10 @@ const optionalUrl = z.preprocess(
 const envSchema = z.object({
   NEXTAUTH_URL: optionalUrl,
   NEXTAUTH_SECRET: optionalNonEmptyString,
+  NEXTAUTH_SESSION_MAX_AGE_SECONDS: z.coerce.number().int().positive().default(8 * 60 * 60),
+  NEXTAUTH_SESSION_UPDATE_AGE_SECONDS: z.coerce.number().int().positive().default(15 * 60),
+  NEXTAUTH_SESSION_POLICY_VERSION: z.string().default("strict-session-v1"),
+  NEXTAUTH_PROVIDER_REFRESH_SKEW_SECONDS: z.coerce.number().int().positive().default(60),
   KEYCLOAK_ISSUER: optionalUrl,
   KEYCLOAK_CLIENT_ID: optionalNonEmptyString,
   KEYCLOAK_CLIENT_SECRET: optionalNonEmptyString,

@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth/next";
 
 import FileManager from "../components/FileManager";
 import { authOptions } from "../lib/authOptions";
+import { toFileActor } from "../lib/auth";
 import { env } from "../lib/env";
 import SiteShell from "../components/SiteShell";
 
@@ -46,8 +47,9 @@ export default function FilesPage({ uploadLimitBytes }) {
 
 export async function getServerSideProps(context) {
   const session = await getServerSession(context.req, context.res, authOptions);
+  const actor = toFileActor(session);
 
-  if (!session) {
+  if (!actor) {
     return {
       redirect: {
         destination: "/auth/signin?callbackUrl=%2Ffiles",

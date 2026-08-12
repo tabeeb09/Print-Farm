@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { signIn } from "next-auth/react";
 
 import { env } from "../../lib/env";
 
@@ -9,15 +10,12 @@ const providerLabels = {
 
 export default function SignInPage({ providers = [], callbackUrl = "/" }) {
   function handleProviderSignIn(provider) {
-    const params = new URLSearchParams({ callbackUrl });
-
     if (provider.id === "keycloakGoogle") {
-      params.set("kc_idp_hint", "google");
-      window.location.assign(`/api/auth/signin/keycloak?${params.toString()}`);
+      signIn("keycloak", { callbackUrl }, { kc_idp_hint: "google" });
       return;
     }
 
-    window.location.assign(`/api/auth/signin/${provider.id}?${params.toString()}`);
+    signIn(provider.id, { callbackUrl });
   }
 
   return (

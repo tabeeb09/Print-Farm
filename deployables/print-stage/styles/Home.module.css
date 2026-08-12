@@ -135,6 +135,15 @@
   text-decoration: none;
 }
 
+.navActionLink {
+  width: 100%;
+  box-sizing: border-box;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
 .navLinkActive {
   border-color: rgba(23, 27, 31, 0.14);
   background: #fffdf8;

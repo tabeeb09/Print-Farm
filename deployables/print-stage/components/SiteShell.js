@@ -49,12 +49,13 @@ export default function SiteShell({ children, title = "3D Printer" }) {
   const [collapsed, setCollapsed] = useState(false);
   const [hasDelegatedPeopleAdmin, setHasDelegatedPeopleAdmin] = useState(false);
   const [inventoryTree, setInventoryTree] = useState(null);
-  const roles = Array.isArray(session?.user?.roles)
-    ? session.user.roles.map(normalizeRole).filter(Boolean)
+  const activeSession = session?.expired || !session?.user ? null : session;
+  const roles = Array.isArray(activeSession?.user?.roles)
+    ? activeSession.user.roles.map(normalizeRole).filter(Boolean)
     : [];
-  const userEmail = normalizeEmail(session?.user?.email);
+  const userEmail = normalizeEmail(activeSession?.user?.email);
   const isSuperadmin =
-    Boolean(session?.user?.isSuperadmin) || DEV_SUPERADMIN_EMAILS.includes(userEmail);
+    Boolean(activeSession?.user?.isSuperadmin) || DEV_SUPERADMIN_EMAILS.includes(userEmail);
   const isQueueAdmin =
     isSuperadmin ||
     ["owner", "technician", "print_admin"].some((role) => roles.includes(role));
@@ -84,7 +85,7 @@ export default function SiteShell({ children, title = "3D Printer" }) {
     let cancelled = false;
 
     async function checkDelegatedPeopleAdmin() {
-      if (!session || isHrAdmin) {
+      if (!activeSession || isHrAdmin) {
         setHasDelegatedPeopleAdmin(false);
         return;
       }
@@ -110,13 +111,13 @@ export default function SiteShell({ children, title = "3D Printer" }) {
     return () => {
       cancelled = true;
     };
-  }, [isHrAdmin, session?.user?.email]);
+  }, [isHrAdmin, activeSession?.user?.email]);
 
   useEffect(() => {
     let cancelled = false;
 
     async function loadInventoryTree() {
-      if (!session || !isAssetAdmin || collapsed) {
+      if (!activeSession || !isAssetAdmin || collapsed) {
         setInventoryTree(null);
         return;
       }
@@ -140,11 +141,11 @@ export default function SiteShell({ children, title = "3D Printer" }) {
     return () => {
       cancelled = true;
     };
-  }, [collapsed, isAssetAdmin, session?.user?.email]);
+  }, [collapsed, isAssetAdmin, activeSession?.user?.email]);
 
   async function handleSignOut() {
-    const logoutUrl = session?.keycloakLogoutUrl;
-    const provider = session?.provider;
+    const logoutUrl = activeSession?.keycloakLogoutUrl;
+    const provider = activeSession?.provider;
 
     if (provider === "keycloak" && logoutUrl) {
       await signOut({ redirect: false, callbackUrl: "/" });
@@ -201,9 +202,15 @@ export default function SiteShell({ children, title = "3D Printer" }) {
                     </Link>
                     <InventorySidebarTree groups={inventoryTree.groups} router={router} />
                   </div>
-                ) : null}
-              </Fragment>
-            ))}
+              ) : null}
+            </Fragment>
+          ))}
+          {activeSession ? (
+            <button type="button" className={`${styles.navLink} ${styles.navActionLink}`} onClick={handleSignOut}>
+              <span>Sign out</span>
+              <small>End this session</small>
+            </button>
+          ) : null}
           </nav>
         ) : (
           <div className={styles.collapsedRail}>
@@ -219,9 +226,9 @@ export default function SiteShell({ children, title = "3D Printer" }) {
           {title}
         </Link>
         <div className={styles.headerActions}>
-          {session ? (
+          {activeSession ? (
             <>
-              <span className={styles.headerUser}>{session.user?.email ?? "Signed in"}</span>
+              <span className={styles.headerUser}>{activeSession.user?.email ?? "Signed in"}</span>
               <button type="button" className={styles.signInButton} onClick={handleSignOut}>
                 Sign out
               </button>
