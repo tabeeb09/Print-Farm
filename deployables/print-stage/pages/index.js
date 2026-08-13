@@ -57,7 +57,7 @@ const mobileEventCards = eventCards.map((item) => ({
   displayRatio: mobileEventCardRatio,
 }));
 
-const galleryCycles = 3;
+const galleryCycles = 9;
 const homeNavItems = [
   { label: "Print", section: "print", tone: "#ffff00", width: "14.45%" },
   { label: "Volunteer", section: "volunteer", tone: "#078989", width: "28.39%" },
@@ -236,20 +236,24 @@ function Hotspot({
   controls,
   expanded,
   onPointerEnter,
+  onPointerDown,
   onFocus,
   onBlur,
+  activePress = false,
 }) {
   const props = Component === "button" ? { type: "button" } : { href };
 
   return (
     <Component
       {...props}
-      className={`${styles.hotspot} ${label ? styles.labelHotspot : ""} ${className || ""}`}
+      className={`${styles.hotspot} ${label ? styles.labelHotspot : ""} ${activePress ? styles.mobilePressed : ""} ${className || ""}`}
       data-label={label || children}
       data-print-key={printKey || undefined}
+      data-mobile-pressed={activePress ? "true" : undefined}
       style={tone ? { "--tone": tone } : undefined}
       onClick={onClick}
       onPointerEnter={onPointerEnter}
+      onPointerDown={onPointerDown}
       onFocus={onFocus}
       onBlur={onBlur}
       aria-label={children}
@@ -338,6 +342,7 @@ function GalleryCarousel({
   const [autoPaused, setAutoPaused] = useState(false);
   const [transitionSuppressed, setTransitionSuppressed] = useState(false);
   const virtualIndexRef = useRef(virtualIndex);
+  const swipeRef = useRef(null);
   const currentIndex = mod(virtualIndex, itemCount);
   const widthPercents = items.map((item) => item.widthPercent);
   const cycleWidth = widthPercents.reduce((sum, width) => sum + width, 0) + gapPercent * itemCount;
@@ -357,17 +362,69 @@ function GalleryCarousel({
   }
 
   function move(delta) {
-    const centeredVirtualIndex = itemCount + mod(virtualIndexRef.current, itemCount);
-    setVirtual(centeredVirtualIndex + delta);
+    setVirtual(virtualIndexRef.current + delta);
   }
 
   function select(targetIndex) {
-    const centeredVirtualIndex = itemCount + mod(virtualIndexRef.current, itemCount);
-    const candidates = [targetIndex, itemCount + targetIndex, itemCount * 2 + targetIndex];
+    const candidates = Array.from({ length: galleryCycles }, (_, cycle) => cycle * itemCount + targetIndex);
     const nearest = candidates.reduce((best, candidate) =>
-      Math.abs(candidate - centeredVirtualIndex) < Math.abs(best - centeredVirtualIndex) ? candidate : best
+      Math.abs(candidate - virtualIndexRef.current) < Math.abs(best - virtualIndexRef.current) ? candidate : best
     );
     setVirtual(nearest);
+  }
+
+  function handleSwipeStart(event) {
+    if (event.pointerType === "mouse") return;
+    swipeRef.current = {
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+    };
+    setAutoPaused(true);
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  }
+
+  function handleSwipeEnd(event) {
+    const swipe = swipeRef.current;
+    if (!swipe || swipe.pointerId !== event.pointerId) return;
+    swipeRef.current = null;
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+
+    const dx = event.clientX - swipe.x;
+    const dy = event.clientY - swipe.y;
+    if (Math.abs(dx) >= 36 && Math.abs(dx) > Math.abs(dy) * 1.18) {
+      move(dx < 0 ? 1 : -1);
+    }
+  }
+
+  function handleSwipeCancel(event) {
+    if (swipeRef.current?.pointerId === event.pointerId) {
+      swipeRef.current = null;
+    }
+  }
+
+  function handleTouchStart(event) {
+    const touch = event.touches?.[0];
+    if (!touch) return;
+    swipeRef.current = {
+      pointerId: "touch",
+      x: touch.clientX,
+      y: touch.clientY,
+    };
+    setAutoPaused(true);
+  }
+
+  function handleTouchEnd(event) {
+    const swipe = swipeRef.current;
+    const touch = event.changedTouches?.[0];
+    if (!swipe || swipe.pointerId !== "touch" || !touch) return;
+    swipeRef.current = null;
+
+    const dx = touch.clientX - swipe.x;
+    const dy = touch.clientY - swipe.y;
+    if (Math.abs(dx) >= 36 && Math.abs(dx) > Math.abs(dy) * 1.18) {
+      move(dx < 0 ? 1 : -1);
+    }
   }
 
   useEffect(() => {
@@ -382,12 +439,16 @@ function GalleryCarousel({
   }, [autoAdvanceMs, autoPaused, itemCount]);
 
   useEffect(() => {
-    if (itemCount <= 1 || (virtualIndex >= itemCount && virtualIndex < itemCount * 2)) {
+    const middleCycle = Math.floor(galleryCycles / 2);
+    const lowerSafeBound = itemCount * (middleCycle - 1);
+    const upperSafeBound = itemCount * (middleCycle + 2);
+
+    if (itemCount <= 1 || (virtualIndex >= lowerSafeBound && virtualIndex < upperSafeBound)) {
       return undefined;
     }
 
     const timeout = window.setTimeout(() => {
-      const centeredVirtualIndex = itemCount + mod(virtualIndexRef.current, itemCount);
+      const centeredVirtualIndex = itemCount * middleCycle + mod(virtualIndexRef.current, itemCount);
       virtualIndexRef.current = centeredVirtualIndex;
       setTransitionSuppressed(true);
       setVirtualIndex(centeredVirtualIndex);
@@ -408,6 +469,14 @@ function GalleryCarousel({
         aria-label={`${label} gallery`}
         onPointerEnter={() => setAutoPaused(true)}
         onPointerLeave={() => setAutoPaused(false)}
+        onPointerDown={handleSwipeStart}
+        onPointerUp={handleSwipeEnd}
+        onPointerCancel={handleSwipeCancel}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={() => {
+          if (swipeRef.current?.pointerId === "touch") swipeRef.current = null;
+        }}
         onFocusCapture={() => setAutoPaused(true)}
         onBlurCapture={() => setAutoPaused(false)}
       >
@@ -530,8 +599,42 @@ function MobileMakerspaceContent({
   setPrintHoverKey,
   mobileWelcomeMarkup,
 }) {
+  const [mobilePressedKey, setMobilePressedKey] = useState(null);
+  const mobilePressTimeoutRef = useRef(null);
+
+  function flashMobilePress(key, options = {}) {
+    if (mobilePressTimeoutRef.current) {
+      window.clearTimeout(mobilePressTimeoutRef.current);
+    }
+    setMobilePressedKey(key);
+    if (options.printKey) {
+      setPrintHoverKey(options.printKey);
+    }
+    mobilePressTimeoutRef.current = window.setTimeout(() => {
+      setMobilePressedKey(null);
+      if (options.printKey) {
+        setPrintHoverKey(null);
+      }
+    }, options.duration || 210);
+  }
+
+  useEffect(() => {
+    return () => {
+      if (mobilePressTimeoutRef.current) {
+        window.clearTimeout(mobilePressTimeoutRef.current);
+      }
+    };
+  }, []);
+
   return (
-    <PageSection id="mobile-site" className={styles.mobileFullSection} data-slide-equipment={equipmentSlide} data-slide-events={eventSlide}>
+    <PageSection
+      id="mobile-site"
+      className={styles.mobileFullSection}
+      data-slide-equipment={equipmentSlide}
+      data-slide-events={eventSlide}
+      data-design-open={designOpen ? "true" : undefined}
+      data-borrow-pressed={mobilePressedKey === "mobile-borrow-equipment" ? "true" : undefined}
+    >
       <MobileDesignPlate designOpen={designOpen} />
       <InlineSvgAsset className={styles.mobileWelcomeBox} markup={mobileWelcomeMarkup} />
       <MobileAnchor id="home" top="0%" />
@@ -542,7 +645,14 @@ function MobileMakerspaceContent({
       <MobileAnchor id="footer" top="95.294%" />
 
       <div className={styles.mobileVolunteerHotspots}>
-        <Hotspot as="a" className={styles.mobileGetInvolvedHotspot} href={MAKERSPACE_VOLUNTEER_URL}>
+        <Hotspot
+          as="a"
+          className={styles.mobileGetInvolvedHotspot}
+          href={MAKERSPACE_VOLUNTEER_URL}
+          onPointerDown={() => flashMobilePress("get-involved")}
+          onClick={(event) => event.currentTarget.blur?.()}
+          activePress={mobilePressedKey === "get-involved"}
+        >
           Get Involved
         </Hotspot>
         <Hotspot as="a" className={styles.mobileVolunteerEmailHotspot} href="mailto:su-makerspace@bath.ac.uk">
@@ -553,10 +663,6 @@ function MobileMakerspaceContent({
       <div
         className={styles.mobilePrintHotspots}
         aria-label="Print menu controls"
-        onPointerMove={(event) => {
-          const item = event.target.closest("[data-print-key]");
-          setPrintHoverKey(item?.dataset.printKey || null);
-        }}
         onPointerLeave={() => setPrintHoverKey(null)}
       >
         <PrintHoverArrow activeKey={printHoverKey} mobile />
@@ -564,18 +670,16 @@ function MobileMakerspaceContent({
           as="a"
           className={styles.collectHotspot}
           href={MY_BOOKINGS_URL}
-          onPointerEnter={() => setPrintHoverKey(null)}
-          onFocus={() => setPrintHoverKey(null)}
-          onBlur={() => setPrintHoverKey(null)}
+          onPointerDown={() => flashMobilePress("collect")}
+          activePress={mobilePressedKey === "collect"}
         >
           Collect
         </Hotspot>
         <Hotspot
           className={styles.designHotspot}
           onClick={() => setDesignOpen((open) => !open)}
-          onPointerEnter={() => setPrintHoverKey(null)}
-          onFocus={() => setPrintHoverKey(null)}
-          onBlur={() => setPrintHoverKey(null)}
+          onPointerDown={() => flashMobilePress("design")}
+          activePress={mobilePressedKey === "design" || designOpen}
           controls="mobile-design-print-menu"
           expanded={designOpen}
         >
@@ -588,7 +692,8 @@ function MobileMakerspaceContent({
               className={styles.courseHotspot}
               href={CS_COURSE_URL}
               printKey="course"
-              onPointerEnter={() => setPrintHoverKey("course")}
+              onPointerDown={() => flashMobilePress("course", { printKey: "course" })}
+              activePress={mobilePressedKey === "course"}
               onFocus={() => setPrintHoverKey("course")}
               onBlur={() => setPrintHoverKey(null)}
             >
@@ -599,7 +704,8 @@ function MobileMakerspaceContent({
               className={styles.guideHotspot}
               href={PRINT_GUIDE_URL}
               printKey="guide"
-              onPointerEnter={() => setPrintHoverKey("guide")}
+              onPointerDown={() => flashMobilePress("guide", { printKey: "guide" })}
+              activePress={mobilePressedKey === "guide"}
               onFocus={() => setPrintHoverKey("guide")}
               onBlur={() => setPrintHoverKey(null)}
             >
@@ -610,7 +716,8 @@ function MobileMakerspaceContent({
               className={styles.orderHotspot}
               href={ORDER_PRINT_URL}
               printKey="order"
-              onPointerEnter={() => setPrintHoverKey("order")}
+              onPointerDown={() => flashMobilePress("order", { printKey: "order" })}
+              activePress={mobilePressedKey === "order"}
               onFocus={() => setPrintHoverKey("order")}
               onBlur={() => setPrintHoverKey(null)}
             >
@@ -631,7 +738,13 @@ function MobileMakerspaceContent({
         gapPercent={9.5}
       />
       <div className={styles.mobileEquipmentHotspots} aria-label="Equipment controls">
-        <Hotspot as="a" className={styles.borrowEquipment} href={BORROW_ITEMS_URL} label="Borrow Equipment">
+        <Hotspot
+          as="a"
+          className={styles.mobileBorrowEquipment}
+          href={BORROW_ITEMS_URL}
+          onPointerDown={() => flashMobilePress("mobile-borrow-equipment")}
+          onClick={(event) => event.currentTarget.blur?.()}
+        >
           Borrow Equipment
         </Hotspot>
       </div>
@@ -649,15 +762,15 @@ function MobileMakerspaceContent({
       />
 
       <div className={styles.mobileFooterHotspots} aria-label="Footer links">
-        <Hotspot as="a" className={styles.mobileFooterWhatsapp} href={MAKERSPACE_WHATSAPP_URL}>Whatsapp</Hotspot>
-        <Hotspot as="a" className={styles.mobileFooterDiscord} href={MAKERSPACE_DISCORD_URL}>Discord</Hotspot>
-        <Hotspot as="a" className={styles.mobileFooterEmail} href="mailto:su-makerspace@bath.ac.uk">Email</Hotspot>
-        <Hotspot as="a" className={styles.mobileFooterSu} href={MAKERSPACE_SU_URL}>SU</Hotspot>
-        <Hotspot as="a" className={styles.mobileFooterInstagram} href={MAKERSPACE_INSTAGRAM_URL}>Instagram</Hotspot>
-        <Hotspot as="a" className={styles.mobileFooterPrint} href={ORDER_PRINT_URL}>Print</Hotspot>
-        <Hotspot as="a" className={styles.mobileFooterAdmin} href={ADMIN_URL}>Admin</Hotspot>
-        <Hotspot as="a" className={styles.mobileFooterBorrow} href={BORROW_ITEMS_URL}>Borrow</Hotspot>
-        <Hotspot as="a" className={styles.mobileFooterVolunteer} href={MAKERSPACE_VOLUNTEER_URL}>Volunteer</Hotspot>
+        <Hotspot as="a" className={styles.mobileFooterWhatsapp} href={MAKERSPACE_WHATSAPP_URL} onPointerDown={() => flashMobilePress("footer-whatsapp")} activePress={mobilePressedKey === "footer-whatsapp"}>Whatsapp</Hotspot>
+        <Hotspot as="a" className={styles.mobileFooterDiscord} href={MAKERSPACE_DISCORD_URL} onPointerDown={() => flashMobilePress("footer-discord")} activePress={mobilePressedKey === "footer-discord"}>Discord</Hotspot>
+        <Hotspot as="a" className={styles.mobileFooterEmail} href="mailto:su-makerspace@bath.ac.uk" onPointerDown={() => flashMobilePress("footer-email")} activePress={mobilePressedKey === "footer-email"}>Email</Hotspot>
+        <Hotspot as="a" className={styles.mobileFooterSu} href={MAKERSPACE_SU_URL} onPointerDown={() => flashMobilePress("footer-su")} activePress={mobilePressedKey === "footer-su"}>SU</Hotspot>
+        <Hotspot as="a" className={styles.mobileFooterInstagram} href={MAKERSPACE_INSTAGRAM_URL} onPointerDown={() => flashMobilePress("footer-instagram")} activePress={mobilePressedKey === "footer-instagram"}>Instagram</Hotspot>
+        <Hotspot as="a" className={styles.mobileFooterPrint} href={ORDER_PRINT_URL} onPointerDown={() => flashMobilePress("footer-print")} activePress={mobilePressedKey === "footer-print"}>Print</Hotspot>
+        <Hotspot as="a" className={styles.mobileFooterAdmin} href={ADMIN_URL} onPointerDown={() => flashMobilePress("footer-admin")} activePress={mobilePressedKey === "footer-admin"}>Admin</Hotspot>
+        <Hotspot as="a" className={styles.mobileFooterBorrow} href={BORROW_ITEMS_URL} onPointerDown={() => flashMobilePress("footer-borrow")} activePress={mobilePressedKey === "footer-borrow"}>Borrow</Hotspot>
+        <Hotspot as="a" className={styles.mobileFooterVolunteer} href={MAKERSPACE_VOLUNTEER_URL} onPointerDown={() => flashMobilePress("footer-volunteer")} activePress={mobilePressedKey === "footer-volunteer"}>Volunteer</Hotspot>
       </div>
     </PageSection>
   );
@@ -711,7 +824,14 @@ export default function Home({ mobileWelcomeMarkup }) {
   }, []);
 
   return (
-    <main className={styles.page} data-layout={isPhoneLayout ? "phone" : "desktop"}>
+    <main
+      className={styles.page}
+      data-layout={isPhoneLayout ? "phone" : "desktop"}
+      onContextMenu={(event) => {
+        if (event.target.closest?.("a, button, input, textarea, select")) return;
+        event.preventDefault();
+      }}
+    >
       <Head>
         <title>Bath Makerspace</title>
         <meta
@@ -721,7 +841,9 @@ export default function Home({ mobileWelcomeMarkup }) {
         <link rel="preload" href="/makerspace-design/fonts/GENISO.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
         <link rel="preload" href="/makerspace-design/fonts/ArtifaktElementMedium.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
         <link rel="preload" href="/makerspace-design/fonts/ArtifaktElementBold.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
-        <link rel="icon" href="/favicon.ico" />
+        <link rel="icon" href="/favicon.svg?v=2" type="image/svg+xml" />
+        <link rel="shortcut icon" href="/favicon.svg?v=2" type="image/svg+xml" />
+        <link rel="apple-touch-icon" href="/makerspace-design/assets/footer-logo.png" />
       </Head>
 
       {!siteNavOpen && (

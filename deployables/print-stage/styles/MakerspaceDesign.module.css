@@ -60,6 +60,14 @@
   font-family: "Makerspace Geniso", "GENISO", monospace;
   font-synthesis: none;
   scroll-behavior: auto;
+  -webkit-touch-callout: none;
+  user-select: none;
+}
+
+.page img,
+.page svg {
+  -webkit-user-drag: none;
+  user-select: none;
 }
 
 .navToggle {
@@ -426,10 +434,10 @@
   pointer-events: none;
 }
 
-:global(#mobile-site [id="g14779"]),
-:global(#mobile-site [id="g14779"] *),
-:global(#mobile-site [id="g7919"]),
-:global(#mobile-site [id="g7919"] *) {
+:global(#mobile-site) .textOverlay :global(#g14779),
+:global(#mobile-site) .textOverlay :global(#g14779) *,
+:global(#mobile-site) .textOverlay :global(#g7919),
+:global(#mobile-site) .textOverlay :global(#g7919) * {
   display: none !important;
   opacity: 0 !important;
   pointer-events: none !important;
@@ -972,6 +980,7 @@
   z-index: 2;
   overflow: hidden;
   pointer-events: auto;
+  touch-action: pan-y;
 }
 
 .galleryTrack {
@@ -1331,9 +1340,9 @@
 }
 
 .page[data-layout="phone"] .navToggle {
-  left: max(0.7rem, env(safe-area-inset-left));
+  left: max(0.48rem, env(safe-area-inset-left));
   top: max(0.7rem, env(safe-area-inset-top));
-  width: 1.15rem;
+  width: 0.794rem;
 }
 
 .page[data-layout="phone"] .navToggle[aria-expanded="true"] {
@@ -1510,6 +1519,40 @@
   height: 1.1%;
 }
 
+.page[data-layout="phone"] .mobileBorrowEquipment {
+  left: 5.6%;
+  top: 57.98%;
+  width: 89.1%;
+  height: 1.1%;
+  transform: none !important;
+  scale: 1 !important;
+}
+
+.page[data-layout="phone"] .mobileBorrowEquipment:hover,
+.page[data-layout="phone"] .mobileBorrowEquipment:focus-visible,
+.page[data-layout="phone"] .mobileBorrowEquipment:active {
+  transform: none !important;
+  scale: 1 !important;
+}
+
+:global(#mobile-site[data-borrow-pressed="true"]) .textOverlay :global(#g8246) {
+  opacity: 0.86;
+}
+
+.page[data-layout="phone"] .mobileBorrowEquipment::before,
+.page[data-layout="phone"] .mobileBorrowEquipment::after,
+.page[data-layout="phone"] .mobileBorrowEquipment:hover::before,
+.page[data-layout="phone"] .mobileBorrowEquipment:hover::after,
+.page[data-layout="phone"] .mobileBorrowEquipment:focus-visible::before,
+.page[data-layout="phone"] .mobileBorrowEquipment:focus-visible::after,
+.page[data-layout="phone"] .mobileBorrowEquipment:active::before,
+.page[data-layout="phone"] .mobileBorrowEquipment:active::after {
+  content: none !important;
+  display: none !important;
+  opacity: 0 !important;
+  transform: none !important;
+}
+
 .page[data-layout="phone"] .eventsGallery {
   left: 0;
   top: 81.48%;
@@ -1634,4 +1677,391 @@
     width: min(92vw, 24rem) !important;
     max-width: 92vw;
   }
+}
+
+.page[data-layout="phone"] :is(
+  a,
+  button,
+  .hotspot,
+  .galleryArrow,
+  .galleryNode,
+  .outlineButton,
+  .fixedSectionNavItem,
+  .appNavLink,
+  .appNavClose,
+  .navToggle
+) {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  user-select: none;
+}
+
+.page[data-layout="phone"] .labelHotspot:active::before,
+.page[data-layout="phone"] .labelHotspot:active::after {
+  opacity: 1;
+  transform: scale(1.035);
+}
+
+.page[data-layout="phone"] .outlineButton:active {
+  background: var(--button-tone);
+  transform: scale(1.018);
+}
+
+.page[data-layout="phone"] .outlineButton:active span {
+  color: var(--button-contrast, #f6f4ee);
+  -webkit-text-fill-color: var(--button-contrast, #f6f4ee);
+  -webkit-text-stroke-color: var(--button-contrast, #f6f4ee);
+  transform: scale(1.008);
+}
+
+.page[data-layout="phone"] .mobileGetInvolvedHotspot:active {
+  transform: translateY(-0.8px) scale(1.04);
+}
+
+.page[data-layout="phone"] .mobileGetInvolvedHotspot:active span {
+  fill: #fff !important;
+  color: #fff !important;
+  -webkit-text-fill-color: #fff;
+  transform: translate(-50%, -50%) scale(1.03);
+}
+
+:global(#mobile-site):has(.mobileGetInvolvedHotspot:active) .textOverlay :global(#text85135) {
+  transform: translateY(-0.8px) scale(1.04);
+}
+
+:global(#mobile-site):has(.mobileGetInvolvedHotspot:active) .textOverlay :global(#text85135),
+:global(#mobile-site):has(.mobileGetInvolvedHotspot:active) .textOverlay :global(#text85135) tspan {
+  fill: #fff !important;
+  stroke: #fff !important;
+  color: #fff !important;
+  -webkit-text-fill-color: #fff;
+  paint-order: stroke fill;
+}
+
+:global(#mobile-site):has(.collectHotspot:active) .textOverlay :is(:global(#path26992-1), :global(#path26990-1)) {
+  transform: rotate(-1.1deg) scale(1.045);
+}
+
+:global(#mobile-site):has(.collectHotspot:active) .textOverlay :global(#text19471-5) {
+  transform: translateY(-0.8px) scale(1.055);
+}
+
+:global(#mobile-site):has(.designHotspot:active) .textOverlay :is(:global(#path26994-1), :global(#path26996-6)) {
+  transform: rotate(1.35deg) scale(1.04);
+}
+
+:global(#mobile-site):has(.designHotspot:active) .textOverlay :global(#text19577-2) {
+  transform: translate(0.6px, -0.7px) scale(1.05);
+}
+
+:global(#mobile-site):has(.courseHotspot:active) .textOverlay :global(#path26998-3) {
+  transform: rotate(-0.85deg) scale(1.045);
+}
+
+:global(#mobile-site):has(.courseHotspot:active) .textOverlay :global(#text26953-8) {
+  transform: translate(0.5px, -0.6px) scale(1.055);
+}
+
+:global(#mobile-site):has(.guideHotspot:active) .textOverlay :global(#path27000-6) {
+  transform: rotate(0.95deg) scale(1.04);
+}
+
+:global(#mobile-site):has(.guideHotspot:active) .textOverlay :global(#text26975-4) {
+  transform: translate(0.4px, -0.6px) scale(1.05);
+}
+
+:global(#mobile-site):has(.orderHotspot:active) .textOverlay :global(#path11107-0) {
+  transform: rotate(-1.45deg) scale(1.055);
+}
+
+:global(#mobile-site):has(.orderHotspot:active) .textOverlay :global(#text8401-8) {
+  transform: translate(0.4px, -0.5px) scale(1.06);
+}
+
+.page[data-layout="phone"] .galleryArrow:active,
+.page[data-layout="phone"] .galleryNode:active {
+  filter: invert(1);
+  transform: scale(1.12);
+}
+
+.page[data-layout="phone"] .galleryNodeActive:active .galleryNodeX {
+  transform: translate(-50%, -50%) rotate(6deg) scale(1.1);
+}
+
+.page[data-layout="phone"] .borrowEquipment.mobilePressed::before,
+.page[data-layout="phone"] .borrowEquipment.mobilePressed::after {
+  display: none;
+  opacity: 0;
+  transform: none;
+}
+
+:global(#mobile-site):has(.borrowEquipment.mobilePressed) .textOverlay :global(#g8246) {
+  transform-box: fill-box;
+  transform-origin: center;
+  transform: none;
+}
+
+.page[data-layout="phone"] .textOverlay :is(
+  :global(#text2896),
+  :global(#text3106),
+  :global(#text3110),
+  :global(#text6431),
+  :global(#text6435),
+  :global(#text2896-1),
+  :global(#text3106-8),
+  :global(#text3110-5),
+  :global(#text6435-5),
+  :global(#text2896-6)
+) {
+  transform-box: fill-box;
+  transform-origin: left center;
+  transition:
+    transform 145ms ease,
+    fill 130ms ease,
+    stroke 130ms ease;
+}
+
+:global(#mobile-site):has(.mobileFooterWhatsapp.mobilePressed) .textOverlay :global(#text2896),
+:global(#mobile-site):has(.mobileFooterDiscord.mobilePressed) .textOverlay :global(#text3106),
+:global(#mobile-site):has(.mobileFooterEmail.mobilePressed) .textOverlay :global(#text3110),
+:global(#mobile-site):has(.mobileFooterSu.mobilePressed) .textOverlay :global(#text6431),
+:global(#mobile-site):has(.mobileFooterInstagram.mobilePressed) .textOverlay :global(#text6435),
+:global(#mobile-site):has(.mobileFooterPrint.mobilePressed) .textOverlay :global(#text2896-1),
+:global(#mobile-site):has(.mobileFooterAdmin.mobilePressed) .textOverlay :global(#text3106-8),
+:global(#mobile-site):has(.mobileFooterBorrow.mobilePressed) .textOverlay :global(#text3110-5),
+:global(#mobile-site):has(.mobileFooterVolunteer.mobilePressed) .textOverlay :global(#text6435-5) {
+  fill: #ffffff !important;
+  stroke: #ffffff !important;
+  transform: translateY(-0.8px) scale(1.04);
+}
+
+.page[data-layout="phone"] .labelHotspot:hover::before,
+.page[data-layout="phone"] .labelHotspot:hover::after,
+.page[data-layout="phone"] .labelHotspot:focus-visible::before,
+.page[data-layout="phone"] .labelHotspot:focus-visible::after {
+  opacity: 0;
+  transform: none;
+}
+
+.page[data-layout="phone"] .labelHotspot.mobilePressed::before,
+.page[data-layout="phone"] .labelHotspot.mobilePressed::after {
+  opacity: 1;
+  transform: scale(1.035);
+}
+
+.page[data-layout="phone"] .galleryArrow:hover,
+.page[data-layout="phone"] .galleryNode:hover,
+.page[data-layout="phone"] .galleryArrow:focus-visible,
+.page[data-layout="phone"] .galleryNode:focus-visible {
+  filter: none;
+  transform: none;
+}
+
+.page[data-layout="phone"] .galleryArrow:active,
+.page[data-layout="phone"] .galleryNode:active {
+  filter: invert(1);
+  transform: scale(1.12);
+}
+
+.page[data-layout="phone"] .galleryNodeActive:hover .galleryNodeX,
+.page[data-layout="phone"] .galleryNodeActive:focus-visible .galleryNodeX {
+  transform: translate(-50%, -50%);
+}
+
+.page[data-layout="phone"] .galleryNodeActive:active .galleryNodeX {
+  transform: translate(-50%, -50%) rotate(6deg) scale(1.1);
+}
+
+:global(#mobile-site):has(.mobileGetInvolvedHotspot:hover) .textOverlay :global(#text85135),
+:global(#mobile-site):has(.mobileGetInvolvedHotspot:focus-visible) .textOverlay :global(#text85135) {
+  transform: none;
+}
+
+:global(#mobile-site):has(.mobileGetInvolvedHotspot:hover) .textOverlay :global(#text85135),
+:global(#mobile-site):has(.mobileGetInvolvedHotspot:hover) .textOverlay :global(#text85135) tspan,
+:global(#mobile-site):has(.mobileGetInvolvedHotspot:focus-visible) .textOverlay :global(#text85135),
+:global(#mobile-site):has(.mobileGetInvolvedHotspot:focus-visible) .textOverlay :global(#text85135) tspan {
+  fill: #000 !important;
+  stroke: none !important;
+  color: #000 !important;
+  -webkit-text-fill-color: #000;
+}
+
+:global(#mobile-site):has(.mobileGetInvolvedHotspot.mobilePressed) .textOverlay :global(#text85135) {
+  transform: translateY(-0.8px) scale(1.04);
+}
+
+:global(#mobile-site):has(.mobileGetInvolvedHotspot.mobilePressed) .textOverlay :global(#text85135),
+:global(#mobile-site):has(.mobileGetInvolvedHotspot.mobilePressed) .textOverlay :global(#text85135) tspan {
+  fill: #fff !important;
+  stroke: #fff !important;
+  color: #fff !important;
+  -webkit-text-fill-color: #fff;
+  paint-order: stroke fill;
+}
+
+:global(#mobile-site):has(.collectHotspot:hover) .textOverlay :is(:global(#path26992-1), :global(#path26990-1)),
+:global(#mobile-site):has(.designHotspot:hover) .textOverlay :is(:global(#path26994-1), :global(#path26996-6)),
+:global(#mobile-site):has(.courseHotspot:hover) .textOverlay :global(#path26998-3),
+:global(#mobile-site):has(.guideHotspot:hover) .textOverlay :global(#path27000-6),
+:global(#mobile-site):has(.orderHotspot:hover) .textOverlay :global(#path11107-0),
+:global(#mobile-site):has(.collectHotspot:focus-visible) .textOverlay :is(:global(#path26992-1), :global(#path26990-1)),
+:global(#mobile-site):has(.designHotspot:focus-visible) .textOverlay :is(:global(#path26994-1), :global(#path26996-6)),
+:global(#mobile-site):has(.courseHotspot:focus-visible) .textOverlay :global(#path26998-3),
+:global(#mobile-site):has(.guideHotspot:focus-visible) .textOverlay :global(#path27000-6),
+:global(#mobile-site):has(.orderHotspot:focus-visible) .textOverlay :global(#path11107-0),
+:global(#mobile-site):has(.collectHotspot:hover) .textOverlay :global(#text19471-5),
+:global(#mobile-site):has(.designHotspot:hover) .textOverlay :global(#text19577-2),
+:global(#mobile-site):has(.courseHotspot:hover) .textOverlay :global(#text26953-8),
+:global(#mobile-site):has(.guideHotspot:hover) .textOverlay :global(#text26975-4),
+:global(#mobile-site):has(.orderHotspot:hover) .textOverlay :global(#text8401-8),
+:global(#mobile-site):has(.collectHotspot:focus-visible) .textOverlay :global(#text19471-5),
+:global(#mobile-site):has(.designHotspot:focus-visible) .textOverlay :global(#text19577-2),
+:global(#mobile-site):has(.courseHotspot:focus-visible) .textOverlay :global(#text26953-8),
+:global(#mobile-site):has(.guideHotspot:focus-visible) .textOverlay :global(#text26975-4),
+:global(#mobile-site):has(.orderHotspot:focus-visible) .textOverlay :global(#text8401-8) {
+  transform: none;
+}
+
+:global(#mobile-site):has(.collectHotspot.mobilePressed) .textOverlay :is(:global(#path26992-1), :global(#path26990-1)) {
+  transform: rotate(-1.1deg) scale(1.045);
+}
+
+:global(#mobile-site):has(.collectHotspot.mobilePressed) .textOverlay :global(#text19471-5) {
+  transform: translateY(-0.8px) scale(1.055);
+}
+
+:global(#mobile-site):has(.designHotspot.mobilePressed) .textOverlay :is(:global(#path26994-1), :global(#path26996-6)),
+:global(#mobile-site[data-design-open="true"]) .textOverlay :is(:global(#path26994-1), :global(#path26996-6)) {
+  transform: rotate(1.35deg) scale(1.04);
+}
+
+:global(#mobile-site):has(.designHotspot.mobilePressed) .textOverlay :global(#text19577-2),
+:global(#mobile-site[data-design-open="true"]) .textOverlay :global(#text19577-2) {
+  transform: translate(0.6px, -0.7px) scale(1.05);
+}
+
+:global(#mobile-site):has(.courseHotspot.mobilePressed) .textOverlay :global(#path26998-3) {
+  transform: rotate(-0.85deg) scale(1.045);
+}
+
+:global(#mobile-site):has(.courseHotspot.mobilePressed) .textOverlay :global(#text26953-8) {
+  transform: translate(0.5px, -0.6px) scale(1.055);
+}
+
+:global(#mobile-site):has(.guideHotspot.mobilePressed) .textOverlay :global(#path27000-6) {
+  transform: rotate(0.95deg) scale(1.04);
+}
+
+:global(#mobile-site):has(.guideHotspot.mobilePressed) .textOverlay :global(#text26975-4) {
+  transform: translate(0.4px, -0.6px) scale(1.05);
+}
+
+:global(#mobile-site):has(.orderHotspot.mobilePressed) .textOverlay :global(#path11107-0) {
+  transform: rotate(-1.45deg) scale(1.055);
+}
+
+:global(#mobile-site):has(.orderHotspot.mobilePressed) .textOverlay :global(#text8401-8) {
+  transform: translate(0.4px, -0.5px) scale(1.06);
+}
+
+.page[data-layout="phone"] .borrowEquipment.labelHotspot::before,
+.page[data-layout="phone"] .borrowEquipment.labelHotspot::after,
+.page[data-layout="phone"] .borrowEquipment.labelHotspot:hover::before,
+.page[data-layout="phone"] .borrowEquipment.labelHotspot:hover::after,
+.page[data-layout="phone"] .borrowEquipment.labelHotspot:focus-visible::before,
+.page[data-layout="phone"] .borrowEquipment.labelHotspot:focus-visible::after,
+.page[data-layout="phone"] .borrowEquipment.labelHotspot.mobilePressed::before,
+.page[data-layout="phone"] .borrowEquipment.labelHotspot.mobilePressed::after,
+.page[data-layout="phone"] .borrowEquipment.labelHotspot:active::before,
+.page[data-layout="phone"] .borrowEquipment.labelHotspot:active::after {
+  display: none !important;
+  opacity: 0 !important;
+  transform: none !important;
+}
+
+:global(#mobile-site):has(.borrowEquipment:hover) .textOverlay :global(#g8246),
+:global(#mobile-site):has(.borrowEquipment:focus-visible) .textOverlay :global(#g8246),
+:global(#mobile-site):has(.borrowEquipment:active) .textOverlay :global(#g8246),
+:global(#mobile-site):has(.borrowEquipment.mobilePressed) .textOverlay :global(#g8246) {
+  scale: 1 !important;
+  transform: none !important;
+}
+
+.page[data-layout="phone"] :global(#equipment):has(.borrowEquipment:hover) .textOverlay :global(#g2258),
+.page[data-layout="phone"] :global(#equipment):has(.borrowEquipment:focus-visible) .textOverlay :global(#g2258),
+.page[data-layout="phone"] :global(#equipment):has(.borrowEquipment:active) .textOverlay :global(#g2258),
+.page[data-layout="phone"] :global(#equipment):has(.borrowEquipment.mobilePressed) .textOverlay :global(#g2258),
+.page[data-layout="phone"] :global(#equipment):has(.borrowEquipment:hover) .textOverlay :global(#g8246),
+.page[data-layout="phone"] :global(#equipment):has(.borrowEquipment:focus-visible) .textOverlay :global(#g8246),
+.page[data-layout="phone"] :global(#equipment):has(.borrowEquipment:active) .textOverlay :global(#g8246),
+.page[data-layout="phone"] :global(#equipment):has(.borrowEquipment.mobilePressed) .textOverlay :global(#g8246) {
+  scale: 1 !important;
+  transform: none !important;
+}
+
+.page[data-layout="phone"] .borrowEquipment::before,
+.page[data-layout="phone"] .borrowEquipment::after,
+.page[data-layout="phone"] .borrowEquipment:hover::before,
+.page[data-layout="phone"] .borrowEquipment:hover::after,
+.page[data-layout="phone"] .borrowEquipment:focus-visible::before,
+.page[data-layout="phone"] .borrowEquipment:focus-visible::after,
+.page[data-layout="phone"] .borrowEquipment:active::before,
+.page[data-layout="phone"] .borrowEquipment:active::after,
+.page[data-layout="phone"] .borrowEquipment.mobilePressed::before,
+.page[data-layout="phone"] .borrowEquipment.mobilePressed::after {
+  content: none !important;
+  display: none !important;
+  opacity: 0 !important;
+  transform: none !important;
+}
+
+/* Phone taps should be momentary presses, not sticky browser hover states. */
+.page[data-layout="phone"] .navToggle {
+  width: 0.715rem;
+}
+
+.page[data-layout="phone"] .mobileGetInvolvedHotspot:hover,
+.page[data-layout="phone"] .mobileGetInvolvedHotspot:focus-visible {
+  transform: none !important;
+}
+
+.page[data-layout="phone"] .mobileGetInvolvedHotspot:hover span,
+.page[data-layout="phone"] .mobileGetInvolvedHotspot:focus-visible span {
+  fill: #000 !important;
+  color: #000 !important;
+  -webkit-text-fill-color: #000;
+  transform: translate(-50%, -50%) !important;
+}
+
+.page[data-layout="phone"] .mobileGetInvolvedHotspot.mobilePressed {
+  transform: translateY(-0.8px) scale(1.04) !important;
+}
+
+.page[data-layout="phone"] .mobileGetInvolvedHotspot.mobilePressed span {
+  fill: #fff !important;
+  color: #fff !important;
+  -webkit-text-fill-color: #fff;
+  transform: translate(-50%, -50%) scale(1.03) !important;
+}
+
+.page[data-layout="phone"] .borrowEquipment,
+.page[data-layout="phone"] .borrowEquipment:hover,
+.page[data-layout="phone"] .borrowEquipment:focus-visible,
+.page[data-layout="phone"] .borrowEquipment:active,
+.page[data-layout="phone"] .borrowEquipment.mobilePressed {
+  scale: 1 !important;
+  transform: none !important;
+}
+
+:global(#mobile-site):has(.borrowEquipment:hover) .textOverlay :global(#g8246),
+:global(#mobile-site):has(.borrowEquipment:focus-visible) .textOverlay :global(#g8246),
+:global(#mobile-site):has(.borrowEquipment:active) .textOverlay :global(#g8246) {
+  scale: 1 !important;
+  transform: none !important;
+}
+
+:global(#mobile-site):has(.borrowEquipment.mobilePressed) .textOverlay :global(#g8246) {
+  scale: 1 !important;
+  transform: none !important;
 }

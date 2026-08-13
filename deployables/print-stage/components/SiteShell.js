@@ -171,9 +171,14 @@ export default function SiteShell({ children, title = "3D Printer" }) {
 
           {!collapsed ? (
             <Link href="/" className={styles.brand}>
-              <span className={styles.brandMark}>3D</span>
+              <img
+                className={styles.brandLogo}
+                src="/makerspace-design/assets/footer-logo.png"
+                alt=""
+                aria-hidden="true"
+              />
               <span className={styles.brandCopy}>
-                <strong>3D Printer</strong>
+                <strong>Bath Makerspace</strong>
                 <small>Print portal</small>
               </span>
             </Link>
@@ -215,7 +220,7 @@ export default function SiteShell({ children, title = "3D Printer" }) {
         ) : (
           <div className={styles.collapsedRail}>
             <Link href="/" aria-label="Home" className={styles.collapsedIcon}>
-              <span />
+              <img src="/makerspace-design/assets/footer-logo.png" alt="" aria-hidden="true" />
             </Link>
           </div>
         )}
@@ -248,7 +253,7 @@ export default function SiteShell({ children, title = "3D Printer" }) {
       <main className={styles.main}>{children}</main>
 
       <footer className={styles.footer}>
-        <span>3D printer project portal</span>
+        <span>Bath Makerspace print portal</span>
       </footer>
     </div>
   );
