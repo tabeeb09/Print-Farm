@@ -841,8 +841,8 @@ export default function Home({ mobileWelcomeMarkup }) {
         <link rel="preload" href="/makerspace-design/fonts/GENISO.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
         <link rel="preload" href="/makerspace-design/fonts/ArtifaktElementMedium.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
         <link rel="preload" href="/makerspace-design/fonts/ArtifaktElementBold.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
-        <link rel="icon" href="/favicon.svg?v=2" type="image/svg+xml" />
-        <link rel="shortcut icon" href="/favicon.svg?v=2" type="image/svg+xml" />
+        <link rel="icon" href="/makerspace-design/assets/footer-logo-white.png?v=4" type="image/png" />
+        <link rel="shortcut icon" href="/makerspace-design/assets/footer-logo-white.png?v=4" type="image/png" />
         <link rel="apple-touch-icon" href="/makerspace-design/assets/footer-logo.png" />
       </Head>
 

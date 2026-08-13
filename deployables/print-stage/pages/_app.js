@@ -14,8 +14,8 @@ export default function App({ Component, pageProps: { session, ...pageProps } })
     return (
       <SessionContext.Provider value={serverSessionValue}>
         <Head>
-          <link rel="icon" href="/favicon.svg?v=2" type="image/svg+xml" />
-          <link rel="shortcut icon" href="/favicon.svg?v=2" type="image/svg+xml" />
+          <link rel="icon" href="/makerspace-design/assets/footer-logo-white.png?v=4" type="image/png" />
+          <link rel="shortcut icon" href="/makerspace-design/assets/footer-logo-white.png?v=4" type="image/png" />
           <link rel="apple-touch-icon" href="/makerspace-design/assets/footer-logo.png" />
         </Head>
         <Component {...pageProps} />
@@ -26,8 +26,8 @@ export default function App({ Component, pageProps: { session, ...pageProps } })
   return (
     <SessionProvider session={session}>
       <Head>
-        <link rel="icon" href="/favicon.svg?v=2" type="image/svg+xml" />
-        <link rel="shortcut icon" href="/favicon.svg?v=2" type="image/svg+xml" />
+        <link rel="icon" href="/makerspace-design/assets/footer-logo-white.png?v=4" type="image/png" />
+        <link rel="shortcut icon" href="/makerspace-design/assets/footer-logo-white.png?v=4" type="image/png" />
         <link rel="apple-touch-icon" href="/makerspace-design/assets/footer-logo.png" />
       </Head>
       <Component {...pageProps} />
